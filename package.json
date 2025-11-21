@@ -1,0 +1,11 @@
+{
+  "name": "tmgmt-tests",
+  "version": "1.0.0",
+  "description": "End-to-end tests for TMGMT plugin",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.0"
+  }
+}

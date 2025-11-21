@@ -1,0 +1,438 @@
+<?php
+
+class TMGMT_Event_Meta_Boxes {
+
+    public function __construct() {
+        add_action('add_meta_boxes', array($this, 'add_meta_boxes'));
+        add_action('save_post', array($this, 'save_meta_boxes'));
+    }
+
+    /**
+     * Returns all registered fields for the Event CPT.
+     * Used for validation and admin UI.
+     * 
+     * @return array
+     */
+    public static function get_registered_fields() {
+        return array(
+            'tmgmt_event_date' => 'Datum der Veranstaltung',
+            'tmgmt_event_start_time' => 'Geplante Auftrittszeit',
+            'tmgmt_event_arrival_time' => 'Späteste Anreisezeit',
+            'tmgmt_event_departure_time' => 'Späteste Abreisezeit',
+            'tmgmt_venue_street' => 'Veranstaltungsort: Straße',
+            'tmgmt_venue_number' => 'Veranstaltungsort: Nr.',
+            'tmgmt_venue_zip' => 'Veranstaltungsort: PLZ',
+            'tmgmt_venue_city' => 'Veranstaltungsort: Ort',
+            'tmgmt_venue_country' => 'Veranstaltungsort: Land',
+            'tmgmt_geo_lat' => 'Geodaten: Latitude',
+            'tmgmt_geo_lng' => 'Geodaten: Longitude',
+            'tmgmt_arrival_notes' => 'Hinweise Anreise / Bus',
+            'tmgmt_contact_salutation' => 'Kontakt: Anrede',
+            'tmgmt_contact_firstname' => 'Kontakt: Vorname',
+            'tmgmt_contact_lastname' => 'Kontakt: Nachname',
+            'tmgmt_contact_company' => 'Kontakt: Firma / Verein',
+            'tmgmt_contact_street' => 'Kontakt: Straße',
+            'tmgmt_contact_number' => 'Kontakt: Nr.',
+            'tmgmt_contact_zip' => 'Kontakt: PLZ',
+            'tmgmt_contact_city' => 'Kontakt: Ort',
+            'tmgmt_contact_country' => 'Kontakt: Land',
+            'tmgmt_contact_email_contract' => 'Kontakt: E-Mail (Vertrag)',
+            'tmgmt_contact_phone_contract' => 'Kontakt: Telefon (Vertrag)',
+            'tmgmt_contact_email_tech' => 'Kontakt: E-Mail (Technik)',
+            'tmgmt_contact_phone_tech' => 'Kontakt: Telefon (Technik)',
+            'tmgmt_contact_email_program' => 'Kontakt: E-Mail (Programm)',
+            'tmgmt_contact_phone_program' => 'Kontakt: Telefon (Programm)',
+            'tmgmt_inquiry_date' => 'Anfrage vom',
+            'tmgmt_fee' => 'Vereinbarte Gage',
+            'tmgmt_deposit' => 'Anzahlung',
+        );
+    }
+
+    public function add_meta_boxes() {
+        add_meta_box(
+            'tmgmt_event_details',
+            'Veranstaltungsdaten',
+            array($this, 'render_event_details_box'),
+            'event',
+            'normal',
+            'high'
+        );
+
+        add_meta_box(
+            'tmgmt_contact_details',
+            'Kontaktdaten',
+            array($this, 'render_contact_details_box'),
+            'event',
+            'normal',
+            'high'
+        );
+
+        add_meta_box(
+            'tmgmt_inquiry_details',
+            'Anfragedaten',
+            array($this, 'render_inquiry_details_box'),
+            'event',
+            'side',
+            'default'
+        );
+
+        add_meta_box(
+            'tmgmt_contract_details',
+            'Vertragsdaten',
+            array($this, 'render_contract_details_box'),
+            'event',
+            'side',
+            'default'
+        );
+
+        add_meta_box(
+            'tmgmt_event_log',
+            'Verlauf / Logbuch',
+            array($this, 'render_log_box'),
+            'event',
+            'normal',
+            'low'
+        );
+    }
+
+    public function render_log_box($post) {
+        $log_manager = new TMGMT_Log_Manager();
+        $log_manager->render_log_table($post->ID);
+    }
+
+    public function render_event_details_box($post) {
+        wp_nonce_field('tmgmt_save_event_meta', 'tmgmt_event_meta_nonce');
+        
+        // Retrieve existing values
+        $date = get_post_meta($post->ID, '_tmgmt_event_date', true);
+        $start_time = get_post_meta($post->ID, '_tmgmt_event_start_time', true);
+        $arrival_time = get_post_meta($post->ID, '_tmgmt_event_arrival_time', true);
+        $departure_time = get_post_meta($post->ID, '_tmgmt_event_departure_time', true);
+        
+        $venue_street = get_post_meta($post->ID, '_tmgmt_venue_street', true);
+        $venue_number = get_post_meta($post->ID, '_tmgmt_venue_number', true);
+        $venue_zip = get_post_meta($post->ID, '_tmgmt_venue_zip', true);
+        $venue_city = get_post_meta($post->ID, '_tmgmt_venue_city', true);
+        $venue_country = get_post_meta($post->ID, '_tmgmt_venue_country', true);
+        
+        $geo_lat = get_post_meta($post->ID, '_tmgmt_geo_lat', true);
+        $geo_lng = get_post_meta($post->ID, '_tmgmt_geo_lng', true);
+        
+        $arrival_notes = get_post_meta($post->ID, '_tmgmt_arrival_notes', true);
+
+        ?>
+        <style>
+            .tmgmt-row { display: flex; gap: 15px; margin-bottom: 10px; flex-wrap: wrap; }
+            .tmgmt-field { flex: 1; min-width: 200px; }
+            .tmgmt-field label { display: block; font-weight: 600; margin-bottom: 5px; }
+            .tmgmt-field input, .tmgmt-field textarea { width: 100%; }
+            .tmgmt-section-title { font-weight: bold; border-bottom: 1px solid #ccc; margin: 15px 0 10px; padding-bottom: 5px; }
+            #tmgmt-map { height: 300px; width: 100%; margin-top: 10px; border: 1px solid #ccc; display: none; }
+        </style>
+
+        <div class="tmgmt-row">
+            <div class="tmgmt-field">
+                <label for="tmgmt_event_date">Datum der Veranstaltung</label>
+                <input type="date" id="tmgmt_event_date" name="tmgmt_event_date" value="<?php echo esc_attr($date); ?>">
+            </div>
+            <div class="tmgmt-field">
+                <label for="tmgmt_event_start_time">Geplante Auftrittszeit</label>
+                <input type="time" id="tmgmt_event_start_time" name="tmgmt_event_start_time" value="<?php echo esc_attr($start_time); ?>">
+            </div>
+        </div>
+        <div class="tmgmt-row">
+            <div class="tmgmt-field">
+                <label for="tmgmt_event_arrival_time">Späteste Anreisezeit</label>
+                <input type="time" id="tmgmt_event_arrival_time" name="tmgmt_event_arrival_time" value="<?php echo esc_attr($arrival_time); ?>">
+            </div>
+            <div class="tmgmt-field">
+                <label for="tmgmt_event_departure_time">Späteste Abreisezeit</label>
+                <input type="time" id="tmgmt_event_departure_time" name="tmgmt_event_departure_time" value="<?php echo esc_attr($departure_time); ?>">
+            </div>
+        </div>
+
+        <div class="tmgmt-section-title">Adresse Veranstaltungsort</div>
+        <div class="tmgmt-row">
+            <div class="tmgmt-field" style="flex: 3;">
+                <label for="tmgmt_venue_street">Straße</label>
+                <input type="text" id="tmgmt_venue_street" name="tmgmt_venue_street" value="<?php echo esc_attr($venue_street); ?>">
+            </div>
+            <div class="tmgmt-field" style="flex: 1;">
+                <label for="tmgmt_venue_number">Nr.</label>
+                <input type="text" id="tmgmt_venue_number" name="tmgmt_venue_number" value="<?php echo esc_attr($venue_number); ?>">
+            </div>
+        </div>
+        <div class="tmgmt-row">
+            <div class="tmgmt-field" style="flex: 1;">
+                <label for="tmgmt_venue_zip">PLZ</label>
+                <input type="text" id="tmgmt_venue_zip" name="tmgmt_venue_zip" value="<?php echo esc_attr($venue_zip); ?>">
+            </div>
+            <div class="tmgmt-field" style="flex: 2;">
+                <label for="tmgmt_venue_city">Ort</label>
+                <input type="text" id="tmgmt_venue_city" name="tmgmt_venue_city" value="<?php echo esc_attr($venue_city); ?>">
+            </div>
+            <div class="tmgmt-field" style="flex: 2;">
+                <label for="tmgmt_venue_country">Land</label>
+                <input type="text" id="tmgmt_venue_country" name="tmgmt_venue_country" value="<?php echo esc_attr($venue_country); ?>">
+            </div>
+        </div>
+
+        <div class="tmgmt-section-title">Geodaten</div>
+        <div class="tmgmt-row">
+            <div class="tmgmt-field">
+                <label for="tmgmt_geo_lat">Latitude</label>
+                <input type="text" id="tmgmt_geo_lat" name="tmgmt_geo_lat" value="<?php echo esc_attr($geo_lat); ?>" readonly>
+            </div>
+            <div class="tmgmt-field">
+                <label for="tmgmt_geo_lng">Longitude</label>
+                <input type="text" id="tmgmt_geo_lng" name="tmgmt_geo_lng" value="<?php echo esc_attr($geo_lng); ?>" readonly>
+            </div>
+            <div class="tmgmt-field" style="display: flex; align-items: flex-end;">
+                <button type="button" id="tmgmt-geocode-btn" class="button button-secondary">Adresse auflösen</button>
+            </div>
+        </div>
+        
+        <div id="tmgmt-map-container">
+            <div id="tmgmt-map"></div>
+        </div>
+
+        <div class="tmgmt-section-title">Hinweise</div>
+        <div class="tmgmt-row">
+            <div class="tmgmt-field">
+                <label for="tmgmt_arrival_notes">Hinweise Anreise / Bus</label>
+                <textarea id="tmgmt_arrival_notes" name="tmgmt_arrival_notes" rows="4"><?php echo esc_textarea($arrival_notes); ?></textarea>
+            </div>
+        </div>
+        <?php
+    }
+
+    public function render_contact_details_box($post) {
+        $salutation = get_post_meta($post->ID, '_tmgmt_contact_salutation', true);
+        $firstname = get_post_meta($post->ID, '_tmgmt_contact_firstname', true);
+        $lastname = get_post_meta($post->ID, '_tmgmt_contact_lastname', true);
+        $company = get_post_meta($post->ID, '_tmgmt_contact_company', true);
+        
+        $contact_street = get_post_meta($post->ID, '_tmgmt_contact_street', true);
+        $contact_number = get_post_meta($post->ID, '_tmgmt_contact_number', true);
+        $contact_zip = get_post_meta($post->ID, '_tmgmt_contact_zip', true);
+        $contact_city = get_post_meta($post->ID, '_tmgmt_contact_city', true);
+        $contact_country = get_post_meta($post->ID, '_tmgmt_contact_country', true);
+
+        $email_contract = get_post_meta($post->ID, '_tmgmt_contact_email_contract', true);
+        $phone_contract = get_post_meta($post->ID, '_tmgmt_contact_phone_contract', true);
+        
+        $name_tech = get_post_meta($post->ID, '_tmgmt_contact_name_tech', true);
+        $email_tech = get_post_meta($post->ID, '_tmgmt_contact_email_tech', true);
+        $phone_tech = get_post_meta($post->ID, '_tmgmt_contact_phone_tech', true);
+        
+        $name_program = get_post_meta($post->ID, '_tmgmt_contact_name_program', true);
+        $email_program = get_post_meta($post->ID, '_tmgmt_contact_email_program', true);
+        $phone_program = get_post_meta($post->ID, '_tmgmt_contact_phone_program', true);
+        ?>
+        
+        <div class="tmgmt-row">
+            <div class="tmgmt-field">
+                <label for="tmgmt_contact_salutation">Anrede</label>
+                <input type="text" id="tmgmt_contact_salutation" name="tmgmt_contact_salutation" value="<?php echo esc_attr($salutation); ?>">
+            </div>
+            <div class="tmgmt-field">
+                <label for="tmgmt_contact_firstname">Vorname</label>
+                <input type="text" id="tmgmt_contact_firstname" name="tmgmt_contact_firstname" value="<?php echo esc_attr($firstname); ?>">
+            </div>
+            <div class="tmgmt-field">
+                <label for="tmgmt_contact_lastname">Nachname</label>
+                <input type="text" id="tmgmt_contact_lastname" name="tmgmt_contact_lastname" value="<?php echo esc_attr($lastname); ?>">
+            </div>
+        </div>
+        <div class="tmgmt-row">
+            <div class="tmgmt-field">
+                <label for="tmgmt_contact_company">Firma / Verein</label>
+                <input type="text" id="tmgmt_contact_company" name="tmgmt_contact_company" value="<?php echo esc_attr($company); ?>">
+            </div>
+        </div>
+
+        <div class="tmgmt-section-title">Postadresse (Kontaktperson)</div>
+        <div class="tmgmt-row">
+            <div class="tmgmt-field" style="flex: 3;">
+                <label for="tmgmt_contact_street">Straße</label>
+                <input type="text" id="tmgmt_contact_street" name="tmgmt_contact_street" value="<?php echo esc_attr($contact_street); ?>">
+            </div>
+            <div class="tmgmt-field" style="flex: 1;">
+                <label for="tmgmt_contact_number">Nr.</label>
+                <input type="text" id="tmgmt_contact_number" name="tmgmt_contact_number" value="<?php echo esc_attr($contact_number); ?>">
+            </div>
+        </div>
+        <div class="tmgmt-row">
+            <div class="tmgmt-field" style="flex: 1;">
+                <label for="tmgmt_contact_zip">PLZ</label>
+                <input type="text" id="tmgmt_contact_zip" name="tmgmt_contact_zip" value="<?php echo esc_attr($contact_zip); ?>">
+            </div>
+            <div class="tmgmt-field" style="flex: 2;">
+                <label for="tmgmt_contact_city">Ort</label>
+                <input type="text" id="tmgmt_contact_city" name="tmgmt_contact_city" value="<?php echo esc_attr($contact_city); ?>">
+            </div>
+            <div class="tmgmt-field" style="flex: 2;">
+                <label for="tmgmt_contact_country">Land</label>
+                <input type="text" id="tmgmt_contact_country" name="tmgmt_contact_country" value="<?php echo esc_attr($contact_country); ?>">
+            </div>
+        </div>
+
+        <div class="tmgmt-section-title">Kommunikation</div>
+        <div class="tmgmt-row">
+            <div class="tmgmt-field">
+                <label for="tmgmt_contact_email_contract">E-Mail (Vertrag)</label>
+                <input type="email" id="tmgmt_contact_email_contract" name="tmgmt_contact_email_contract" value="<?php echo esc_attr($email_contract); ?>">
+            </div>
+            <div class="tmgmt-field">
+                <label for="tmgmt_contact_phone_contract">Telefon (Vertrag)</label>
+                <input type="tel" id="tmgmt_contact_phone_contract" name="tmgmt_contact_phone_contract" value="<?php echo esc_attr($phone_contract); ?>">
+            </div>
+        </div>
+        <div class="tmgmt-row">
+            <div class="tmgmt-field">
+                <label for="tmgmt_contact_name_tech">Name (Technik)</label>
+                <input type="text" id="tmgmt_contact_name_tech" name="tmgmt_contact_name_tech" value="<?php echo esc_attr($name_tech); ?>">
+            </div>
+            <div class="tmgmt-field">
+                <label for="tmgmt_contact_email_tech">E-Mail (Technik)</label>
+                <input type="email" id="tmgmt_contact_email_tech" name="tmgmt_contact_email_tech" value="<?php echo esc_attr($email_tech); ?>">
+            </div>
+            <div class="tmgmt-field">
+                <label for="tmgmt_contact_phone_tech">Telefon (Technik)</label>
+                <input type="tel" id="tmgmt_contact_phone_tech" name="tmgmt_contact_phone_tech" value="<?php echo esc_attr($phone_tech); ?>">
+            </div>
+        </div>
+        <div class="tmgmt-row">
+            <div class="tmgmt-field">
+                <label for="tmgmt_contact_name_program">Name (Programm)</label>
+                <input type="text" id="tmgmt_contact_name_program" name="tmgmt_contact_name_program" value="<?php echo esc_attr($name_program); ?>">
+            </div>
+            <div class="tmgmt-field">
+                <label for="tmgmt_contact_email_program">E-Mail (Programm)</label>
+                <input type="email" id="tmgmt_contact_email_program" name="tmgmt_contact_email_program" value="<?php echo esc_attr($email_program); ?>">
+            </div>
+            <div class="tmgmt-field">
+                <label for="tmgmt_contact_phone_program">Telefon (Programm)</label>
+                <input type="tel" id="tmgmt_contact_phone_program" name="tmgmt_contact_phone_program" value="<?php echo esc_attr($phone_program); ?>">
+            </div>
+        </div>
+        <?php
+    }
+
+    public function render_inquiry_details_box($post) {
+        $inquiry_date = get_post_meta($post->ID, '_tmgmt_inquiry_date', true);
+        $status = get_post_meta($post->ID, '_tmgmt_status', true);
+        $statuses = TMGMT_Event_Status::get_all_statuses();
+
+        // If no status is set (new post), select the first one (lowest order ID)
+        if (empty($status) && !empty($statuses)) {
+            // get_all_statuses returns array ordered by menu_order ASC
+            $status = array_key_first($statuses);
+        }
+        ?>
+        <div class="tmgmt-field" style="margin-bottom: 10px;">
+            <label for="tmgmt_inquiry_date">Anfrage vom</label>
+            <input type="datetime-local" id="tmgmt_inquiry_date" name="tmgmt_inquiry_date" value="<?php echo esc_attr($inquiry_date); ?>" style="width:100%">
+        </div>
+        <div class="tmgmt-field">
+            <label for="tmgmt_status">Status</label>
+            <select id="tmgmt_status" name="tmgmt_status" style="width:100%">
+                <option value="">-- Bitte wählen --</option>
+                <?php foreach ($statuses as $key => $label) : ?>
+                    <option value="<?php echo esc_attr($key); ?>" <?php selected($status, $key); ?>>
+                        <?php echo esc_html($label); ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <?php
+    }
+
+    public function render_contract_details_box($post) {
+        $fee = get_post_meta($post->ID, '_tmgmt_fee', true);
+        $deposit = get_post_meta($post->ID, '_tmgmt_deposit', true);
+        ?>
+        <div class="tmgmt-field" style="margin-bottom: 10px;">
+            <label for="tmgmt_fee">Vereinbarte Gage (€)</label>
+            <input type="number" step="0.01" id="tmgmt_fee" name="tmgmt_fee" value="<?php echo esc_attr($fee); ?>" style="width:100%">
+        </div>
+        <div class="tmgmt-field">
+            <label for="tmgmt_deposit">Anzahlung (€)</label>
+            <input type="number" step="0.01" id="tmgmt_deposit" name="tmgmt_deposit" value="<?php echo esc_attr($deposit); ?>" style="width:100%">
+        </div>
+        <?php
+    }
+
+    public function save_meta_boxes($post_id) {
+        if (!isset($_POST['tmgmt_event_meta_nonce']) || !wp_verify_nonce($_POST['tmgmt_event_meta_nonce'], 'tmgmt_save_event_meta')) {
+            return;
+        }
+
+        if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
+            return;
+        }
+
+        if (!current_user_can('edit_post', $post_id)) {
+            return;
+        }
+
+        // Check for Status Change and Log it
+        $old_status = get_post_meta($post_id, '_tmgmt_status', true);
+        $new_status = isset($_POST['tmgmt_status']) ? sanitize_text_field($_POST['tmgmt_status']) : '';
+
+        if ($old_status !== $new_status && !empty($new_status)) {
+            $log_manager = new TMGMT_Log_Manager();
+            
+            // Get Log Template from Status Definition
+            $args = array(
+                'name'        => $new_status,
+                'post_type'   => 'tmgmt_status_def',
+                'post_status' => 'publish',
+                'numberposts' => 1
+            );
+            $status_posts = get_posts($args);
+            
+            $message = 'Status geändert auf: ' . TMGMT_Event_Status::get_label($new_status);
+            
+            if (!empty($status_posts)) {
+                $template = get_post_meta($status_posts[0]->ID, '_tmgmt_log_template', true);
+                if (!empty($template)) {
+                    $message = $template;
+                }
+            }
+
+            $log_manager->log($post_id, 'status_change', $message);
+        }
+
+        $fields = array(
+            // Event Details
+            'tmgmt_event_date', 'tmgmt_event_start_time', 'tmgmt_event_arrival_time', 'tmgmt_event_departure_time',
+            'tmgmt_venue_street', 'tmgmt_venue_number', 'tmgmt_venue_zip', 'tmgmt_venue_city', 'tmgmt_venue_country',
+            'tmgmt_geo_lat', 'tmgmt_geo_lng', 'tmgmt_arrival_notes',
+            // Contact Details
+            'tmgmt_contact_salutation', 'tmgmt_contact_firstname', 'tmgmt_contact_lastname', 'tmgmt_contact_company',
+            'tmgmt_contact_street', 'tmgmt_contact_number', 'tmgmt_contact_zip', 'tmgmt_contact_city', 'tmgmt_contact_country',
+            'tmgmt_contact_email_contract', 'tmgmt_contact_phone_contract',
+            'tmgmt_contact_name_tech', 'tmgmt_contact_email_tech', 'tmgmt_contact_phone_tech',
+            'tmgmt_contact_name_program', 'tmgmt_contact_email_program', 'tmgmt_contact_phone_program',
+            // Inquiry
+            'tmgmt_inquiry_date', 'tmgmt_status',
+            // Contract
+            'tmgmt_fee', 'tmgmt_deposit'
+        );
+
+        foreach ($fields as $field) {
+            if (isset($_POST[$field])) {
+                update_post_meta($post_id, '_' . $field, sanitize_text_field($_POST[$field]));
+            } else {
+                // Handle unchecked checkboxes or empty fields if necessary, 
+                // but for text inputs, if they are missing from POST it usually means they weren't on the form.
+                // However, if the user clears the input, it comes as empty string.
+                // If we want to delete meta when empty:
+                // delete_post_meta($post_id, '_' . $field);
+                // For now, updating with empty string is fine.
+                update_post_meta($post_id, '_' . $field, '');
+            }
+        }
+    }
+}
