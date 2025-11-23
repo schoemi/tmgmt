@@ -81,31 +81,93 @@ class TMGMT_REST_API {
             return new WP_Error('not_found', 'Event nicht gefunden', array('status' => 404));
         }
 
-        $updated = false;
         $log_manager = new TMGMT_Log_Manager();
+        $changes = array();
+
+        // Label Map for human readable names
+        $label_map = array(
+            'title' => 'Titel',
+            'content' => 'Notizen / Beschreibung',
+            'date' => 'Datum',
+            'start_time' => 'Startzeit',
+            'arrival_time' => 'Ankunftszeit',
+            'departure_time' => 'Abfahrtszeit',
+            'venue_name' => 'Location / Venue',
+            'venue_street' => 'Straße',
+            'venue_number' => 'Hausnummer',
+            'venue_zip' => 'PLZ',
+            'venue_city' => 'Stadt',
+            'venue_country' => 'Land',
+            'geo_lat' => 'Breitengrad',
+            'geo_lng' => 'Längengrad',
+            'arrival_notes' => 'Anreise Notizen',
+            'status' => 'Status',
+            'contact_salutation' => 'Anrede',
+            'contact_firstname' => 'Vorname',
+            'contact_lastname' => 'Nachname',
+            'contact_company' => 'Firma',
+            'contact_street' => 'Straße (Kontakt)',
+            'contact_number' => 'Hausnummer (Kontakt)',
+            'contact_zip' => 'PLZ (Kontakt)',
+            'contact_city' => 'Stadt (Kontakt)',
+            'contact_country' => 'Land (Kontakt)',
+            'contact_email' => 'E-Mail',
+            'contact_phone' => 'Telefon',
+            'contact_email_contract' => 'E-Mail (Vertrag)',
+            'contact_phone_contract' => 'Telefon (Vertrag)',
+            'contact_name_tech' => 'Name (Technik)',
+            'contact_email_tech' => 'E-Mail (Technik)',
+            'contact_phone_tech' => 'Telefon (Technik)',
+            'contact_name_program' => 'Name (Programm)',
+            'contact_email_program' => 'E-Mail (Programm)',
+            'contact_phone_program' => 'Telefon (Programm)',
+            'inquiry_date' => 'Anfragedatum',
+            'fee' => 'Gage',
+            'deposit' => 'Anzahlung',
+        );
 
         // 1. Update Core Post Data (Title, Content)
         $post_data = array('ID' => $event_id);
+        $post_updated = false;
+        
+        $suppress_log = isset($params['suppress_log']) ? $params['suppress_log'] : false;
+        $custom_old_value = isset($params['log_old_value']) ? $params['log_old_value'] : null;
+
         if (isset($params['title'])) {
-            $post_data['post_title'] = sanitize_text_field($params['title']);
-            $updated = true;
+            $new_title = sanitize_text_field($params['title']);
+            if ($post->post_title !== $new_title) {
+                if (!$suppress_log) {
+                    $old_title = ($custom_old_value !== null) ? $custom_old_value : $post->post_title;
+                    if ($old_title !== $new_title) {
+                        $changes[] = sprintf('Titel wurde von "%s" zu "%s" geändert', $old_title, $new_title);
+                    }
+                }
+                $post_data['post_title'] = $new_title;
+                $post_updated = true;
+            }
         }
         if (isset($params['content'])) {
-            $post_data['post_content'] = wp_kses_post($params['content']);
-            $updated = true;
+            $new_content = wp_kses_post($params['content']);
+            if ($post->post_content !== $new_content) {
+                if (!$suppress_log) {
+                    $changes[] = 'Notizen / Beschreibung wurde geändert';
+                }
+                $post_data['post_content'] = $new_content;
+                $post_updated = true;
+            }
         }
         
-        if ($updated) {
+        if ($post_updated) {
             wp_update_post($post_data);
         }
 
         // 2. Update Meta Data
-        // Map simple keys to internal meta keys
         $meta_map = array(
             'date'           => '_tmgmt_event_date',
             'start_time'     => '_tmgmt_event_start_time',
             'arrival_time'   => '_tmgmt_event_arrival_time',
             'departure_time' => '_tmgmt_event_departure_time',
+            'venue_name'     => '_tmgmt_venue_name',
             'venue_street'   => '_tmgmt_venue_street',
             'venue_number'   => '_tmgmt_venue_number',
             'venue_zip'      => '_tmgmt_venue_zip',
@@ -125,6 +187,8 @@ class TMGMT_REST_API {
             'contact_zip'        => '_tmgmt_contact_zip',
             'contact_city'       => '_tmgmt_contact_city',
             'contact_country'    => '_tmgmt_contact_country',
+            'contact_email'      => '_tmgmt_contact_email',
+            'contact_phone'      => '_tmgmt_contact_phone',
             'contact_email_contract' => '_tmgmt_contact_email_contract',
             'contact_phone_contract' => '_tmgmt_contact_phone_contract',
             'contact_name_tech'      => '_tmgmt_contact_name_tech',
@@ -143,25 +207,63 @@ class TMGMT_REST_API {
         foreach ($meta_map as $param_key => $meta_key) {
             if (isset($params[$param_key])) {
                 $new_value = sanitize_text_field($params[$param_key]);
+                $old_value = get_post_meta($event_id, $meta_key, true);
                 
-                // Special handling for Status to trigger logs
-                if ($param_key === 'status') {
-                    $old_status = get_post_meta($event_id, '_tmgmt_status', true);
-                    if ($old_status !== $new_value) {
-                        update_post_meta($event_id, $meta_key, $new_value);
-                        $log_manager->log($event_id, 'status_change', "Status via API geändert auf: " . TMGMT_Event_Status::get_label($new_value));
-                        
-                        // Trigger hook
-                        do_action('tmgmt_event_updated', $event_id, $params);
-                    }
-                } else {
+                // Always update if changed
+                if ($old_value !== $new_value) {
                     update_post_meta($event_id, $meta_key, $new_value);
+                }
+
+                // Logging Logic
+                if (!$suppress_log) {
+                    $label = isset($label_map[$param_key]) ? $label_map[$param_key] : $param_key;
+                    
+                    // Determine "Old Value" for Log
+                    // If custom_old_value is provided, use it. Otherwise use DB value.
+                    // Note: If we just updated the DB above, $old_value is the PREVIOUS DB value.
+                    // But if we are in a "blur" scenario where DB was already updated by auto-save,
+                    // $old_value might equal $new_value.
+                    // So we should rely on $custom_old_value if provided.
+                    
+                    $log_old_val = ($custom_old_value !== null) ? $custom_old_value : $old_value;
+                    
+                    // Only log if there is a difference between what we think is old and new
+                    if ($log_old_val !== $new_value) {
+                        // Special handling for Status
+                        if ($param_key === 'status') {
+                            $old_label = TMGMT_Event_Status::get_label($log_old_val);
+                            $new_label = TMGMT_Event_Status::get_label($new_value);
+                            $changes[] = sprintf('%s wurde von "%s" zu "%s" geändert', $label, $old_label, $new_label);
+                            
+                            // Trigger hook (only once per status change really, but here we might trigger it on blur too? 
+                            // Ideally status changes are not debounced so they don't use suppress_log=true usually)
+                            if ($old_value !== $new_value) {
+                                do_action('tmgmt_event_updated', $event_id, $params);
+                            }
+                        } else {
+                            // Truncate long values for log
+                            $log_old_str = strlen($log_old_val) > 50 ? substr($log_old_val, 0, 47) . '...' : $log_old_val;
+                            $log_new_str = strlen($new_value) > 50 ? substr($new_value, 0, 47) . '...' : $new_value;
+                            
+                            if (empty($log_old_val)) {
+                                $changes[] = sprintf('%s wurde auf "%s" gesetzt', $label, $log_new_str);
+                            } else if (empty($new_value)) {
+                                $changes[] = sprintf('%s wurde gelöscht (war "%s")', $label, $log_old_str);
+                            } else {
+                                $changes[] = sprintf('%s wurde von "%s" zu "%s" geändert', $label, $log_old_str, $log_new_str);
+                            }
+                        }
+                    }
                 }
             }
         }
 
-        // Log the API update itself
-        $log_manager->log($event_id, 'api_update', 'Event Daten via API aktualisiert.');
+        // Log changes
+        if (!empty($changes)) {
+            foreach ($changes as $change) {
+                $log_manager->log($event_id, 'api_update', $change);
+            }
+        }
 
         return new WP_REST_Response(array(
             'success' => true,

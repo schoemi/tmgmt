@@ -87,8 +87,8 @@
     margin: auto;
     padding: 0; /* Reset padding for header/footer structure */
     border: 1px solid #888;
-    width: 95%;
-    max-width: 1000px; /* Wider for 2 columns */
+    width: 80%;
+    max-width: 1600px
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     max-height: 90vh;

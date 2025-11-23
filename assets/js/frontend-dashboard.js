@@ -213,14 +213,6 @@ document.addEventListener('DOMContentLoaded', function() {
         inquiryHtml += createInput('Titel', 'title', data.title);
         inquiryHtml += createInput('Datum', 'date', meta.event_date, 'date');
         inquiryHtml += createInput('Startzeit', 'start_time', meta.event_start_time, 'time');
-        // Status is special, maybe read-only here if we use transitions? 
-        // Let's keep it as select for now, but transitions are preferred.
-        inquiryHtml += '<div class="tmgmt-form-group"><label>Status</label><select name="status">';
-        for (const [slug, label] of Object.entries(tmgmtData.statuses)) {
-            const selected = (meta.status === slug) ? 'selected' : '';
-            inquiryHtml += `<option value="${slug}" ${selected}>${label}</option>`;
-        }
-        inquiryHtml += '</select></div>';
 
         // 2. Veranstaltungsdaten
         let venueHtml = '';
@@ -260,6 +252,55 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // --- Right Column Content ---
 
+        // 0. Status & Actions Box (Non-Collapsible)
+        let statusBoxHtml = `
+            <div class="tmgmt-box" style="background:#fff; border:1px solid #dfe1e6; border-radius:4px; margin-bottom:15px; padding:15px;">
+                <div class="tmgmt-box-title" style="font-weight:600; margin-bottom:10px; font-size:1.1em;">Status & Aktionen</div>
+                <div class="tmgmt-box-content">
+                    <div class="tmgmt-form-group">
+                        <label>Aktueller Status</label>
+                        <select name="status">
+        `;
+        for (const [slug, label] of Object.entries(tmgmtData.statuses)) {
+            const selected = (meta.status === slug) ? 'selected' : '';
+            statusBoxHtml += `<option value="${slug}" ${selected}>${label}</option>`;
+        }
+        statusBoxHtml += `
+                        </select>
+                    </div>
+        `;
+
+        // Actions Logic
+        if (actions.length > 0) {
+            statusBoxHtml += '<div class="tmgmt-actions-container" style="margin-top:15px; padding-top:15px; border-top:1px solid #eee;">';
+            statusBoxHtml += '<label style="display:block; margin-bottom:8px; font-weight:500;">Mögliche Aktionen</label>';
+            
+            if (actions.length <= 3) {
+                actions.forEach(action => {
+                    if (action.target_status) {
+                        statusBoxHtml += `<button class="tmgmt-btn tmgmt-btn-secondary tmgmt-transition-btn" data-target="${action.target_status}" style="margin-right:5px; margin-bottom:5px;">${action.label}</button>`;
+                    }
+                });
+            } else {
+                statusBoxHtml += '<div style="display:flex; gap:5px;">';
+                statusBoxHtml += '<select id="tmgmt-action-select" style="flex:1; padding: 8px; border-radius: 4px; border: 1px solid #dfe1e6;">';
+                statusBoxHtml += '<option value="">-- Aktion wählen --</option>';
+                actions.forEach(action => {
+                    if (action.target_status) {
+                        statusBoxHtml += `<option value="${action.target_status}">${action.label}</option>`;
+                    }
+                });
+                statusBoxHtml += '</select>';
+                statusBoxHtml += '<button class="tmgmt-btn tmgmt-btn-secondary" id="tmgmt-run-action-btn">Ausführen</button>';
+                statusBoxHtml += '</div>';
+            }
+            statusBoxHtml += '</div>';
+        }
+        statusBoxHtml += `
+                </div>
+            </div>
+        `;
+
         // 1. Content / Notes
         let contentHtml = `
             <div class="tmgmt-form-group">
@@ -291,34 +332,14 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         logHtml += '</div>';
 
-        // --- Footer Actions ---
-        let actionsHtml = '';
-        if (actions.length > 0) {
-            if (actions.length <= 3) {
-                actions.forEach(action => {
-                    if (action.target_status) {
-                        actionsHtml += `<button class="tmgmt-btn tmgmt-btn-secondary tmgmt-transition-btn" data-target="${action.target_status}">${action.label}</button>`;
-                    }
-                });
-            } else {
-                actionsHtml += '<select id="tmgmt-action-select" style="padding: 8px; border-radius: 4px; border: 1px solid #dfe1e6;">';
-                actionsHtml += '<option value="">-- Aktion wählen --</option>';
-                actions.forEach(action => {
-                    if (action.target_status) {
-                        actionsHtml += `<option value="${action.target_status}">${action.label}</option>`;
-                    }
-                });
-                actionsHtml += '</select>';
-                actionsHtml += '<button class="tmgmt-btn tmgmt-btn-secondary" id="tmgmt-run-action-btn">Ausführen</button>';
-            }
-        }
+
 
         // --- Assemble HTML ---
         const html = `
             <div class="tmgmt-modal-header">
-                <div style="display:flex; align-items:center; gap:10px;">
-                    <h2>${data.title}</h2>
-                    <span id="tmgmt-save-status" style="font-size:0.85em; color:#666; font-weight:normal;"></span>
+                <div style="display:flex; align-items:center; gap:10px; flex:1;">
+                    <input type="text" name="header_title" value="${data.title}" class="tmgmt-header-input" style="font-size: 1.5em; font-weight: bold; border: none; background: transparent; width: 100%; outline: none;">
+                    <span id="tmgmt-save-status" style="font-size:0.85em; color:#666; font-weight:normal; white-space: nowrap;"></span>
                 </div>
                 <span class="tmgmt-close">&times;</span>
             </div>
@@ -330,6 +351,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     ${createSection('Vertragsdaten', contractHtml, true)}
                 </div>
                 <div class="tmgmt-col-right">
+                    ${statusBoxHtml}
                     ${createSection('Notizen', contentHtml)}
                     ${createSection('Karte', mapHtml)}
                     ${createSection('Logbuch', logHtml)}
@@ -337,7 +359,6 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
             <div class="tmgmt-modal-footer">
                 <div class="tmgmt-actions-left">
-                    ${actionsHtml}
                 </div>
                 <!-- Auto-Save enabled, no save button needed -->
             </div>
@@ -411,8 +432,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         statusIndicator.textContent = 'Gespeichert';
                         setTimeout(() => { statusIndicator.textContent = ''; }, 2000);
                     }
-                    // If status changed, reload board to reflect column change
-                    if (payload.status) {
+                    // If status or title changed, reload board
+                    if (payload.status || payload.title) {
                         loadBoard();
                     }
                 })
@@ -483,8 +504,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Attach Listeners to Inputs
         const inputs = modalContent.querySelectorAll('input, select, textarea');
+        const originalValues = {};
+
         inputs.forEach(input => {
             if (!input.name) return;
+
+            // Store original value on focus
+            input.addEventListener('focus', () => {
+                originalValues[input.name] = input.value;
+            });
 
             if (input.tagName === 'SELECT' || input.type === 'date' || input.type === 'time') {
                 input.addEventListener('change', () => {
@@ -494,11 +522,57 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Text inputs
                 input.addEventListener('input', () => {
                     if (statusIndicator) statusIndicator.textContent = '...';
-                    debouncedSave(input.name, input.value);
+                    
+                    let fieldName = input.name;
+                    let fieldValue = input.value;
+
+                    // Sync Title Fields
+                    if (input.name === 'title') {
+                        const headerInput = modalContent.querySelector('input[name="header_title"]');
+                        if (headerInput) headerInput.value = input.value;
+                    } else if (input.name === 'header_title') {
+                        fieldName = 'title';
+                        const titleInput = modalContent.querySelector('input[name="title"]');
+                        if (titleInput) titleInput.value = input.value;
+                    }
+
+                    // Save with suppress_log = true
+                    const payload = {};
+                    payload[fieldName] = fieldValue;
+                    payload['suppress_log'] = true;
+                    savePayload(payload);
 
                     // Trigger Geocode for address fields
                     if (['venue_street', 'venue_zip', 'venue_city', 'venue_country'].includes(input.name)) {
                         debouncedGeocode();
+                    }
+                });
+
+                // On Blur, check if changed from original and log
+                input.addEventListener('blur', () => {
+                    const oldVal = originalValues[input.name] || '';
+                    const newVal = input.value;
+                    
+                    let fieldName = input.name;
+                    if (fieldName === 'header_title') fieldName = 'title';
+
+                    if (oldVal !== newVal) {
+                        // Send update with log enabled and old value
+                        const payload = {};
+                        payload[fieldName] = newVal;
+                        payload['suppress_log'] = false;
+                        payload['log_old_value'] = oldVal;
+                        savePayload(payload);
+                        
+                        // Update original value
+                        originalValues[input.name] = newVal;
+                        
+                        // Sync original values to prevent double logging
+                        if (input.name === 'title') {
+                             originalValues['header_title'] = newVal;
+                        } else if (input.name === 'header_title') {
+                             originalValues['title'] = newVal;
+                        }
                     }
                 });
             }
