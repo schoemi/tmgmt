@@ -9,6 +9,27 @@ class TMGMT_REST_API {
     }
 
     public function register_routes() {
+        // Get Kanban Data
+        register_rest_route(self::NAMESPACE, '/kanban', array(
+            'methods'             => 'GET',
+            'callback'            => array($this, 'get_kanban_data'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
+        // Get Single Event
+        register_rest_route(self::NAMESPACE, '/events/(?P<id>\d+)', array(
+            'methods'             => 'GET',
+            'callback'            => array($this, 'get_event'),
+            'permission_callback' => array($this, 'check_permission'),
+            'args'                => array(
+                'id' => array(
+                    'validate_callback' => function($param, $request, $key) {
+                        return is_numeric($param);
+                    }
+                ),
+            ),
+        ));
+
         // Update Event
         register_rest_route(self::NAMESPACE, '/events/(?P<id>\d+)', array(
             'methods'             => 'POST',
@@ -43,10 +64,8 @@ class TMGMT_REST_API {
     }
 
     public function check_permission($request) {
-        // Basic permission check: User must be able to edit posts
-        // For external access (n8n), Application Passwords or Basic Auth is usually used.
-        // WordPress handles the auth before this callback if headers are present.
-        return current_user_can('edit_posts');
+        // Allow if user has specific capability OR is admin/editor
+        return current_user_can('edit_tmgmt_events') || current_user_can('edit_posts');
     }
 
     public function update_event($request) {
@@ -174,5 +193,122 @@ class TMGMT_REST_API {
             'success' => true,
             'message' => 'Log Eintrag erstellt'
         ), 200);
+    }
+
+    public function get_kanban_data($request) {
+        // 1. Get Columns
+        $columns = array();
+        $col_posts = get_posts(array(
+            'post_type' => 'tmgmt_kanban_col',
+            'posts_per_page' => -1,
+            'meta_key' => '_tmgmt_kanban_order',
+            'orderby' => 'meta_value_num',
+            'order' => 'ASC'
+        ));
+
+        foreach ($col_posts as $col) {
+            $status_ids = get_post_meta($col->ID, '_tmgmt_kanban_statuses', true);
+            if (!is_array($status_ids)) $status_ids = array();
+            
+            // Convert Status IDs to Slugs
+            $status_slugs = array();
+            foreach ($status_ids as $id) {
+                $p = get_post($id);
+                if ($p && $p->post_status === 'publish') {
+                    $status_slugs[] = $p->post_name;
+                }
+            }
+
+            $columns[] = array(
+                'id' => $col->ID,
+                'title' => $col->post_title,
+                'statuses' => $status_slugs
+            );
+        }
+
+        // 2. Get Events
+        $events = get_posts(array(
+            'post_type' => 'event',
+            'posts_per_page' => -1,
+            'post_status' => array('publish', 'future', 'draft', 'pending', 'private')
+        ));
+
+        $event_data = array();
+        foreach ($events as $event) {
+            $status = get_post_meta($event->ID, '_tmgmt_status', true);
+            $date = get_post_meta($event->ID, '_tmgmt_event_date', true);
+            $city = get_post_meta($event->ID, '_tmgmt_venue_city', true);
+            
+            $event_data[] = array(
+                'id' => $event->ID,
+                'title' => $event->post_title,
+                'status' => $status,
+                'date' => $date,
+                'city' => $city
+            );
+        }
+
+        return array(
+            'columns' => $columns,
+            'events' => $event_data,
+            'statuses' => TMGMT_Event_Status::get_all_statuses()
+        );
+    }
+
+    public function get_event($request) {
+        $event_id = $request['id'];
+        $post = get_post($event_id);
+        
+        if (!$post || $post->post_type !== 'event') {
+            return new WP_Error('not_found', 'Event nicht gefunden', array('status' => 404));
+        }
+
+        // Fetch all meta
+        $meta = get_post_meta($event_id);
+        $clean_meta = array();
+        foreach ($meta as $key => $values) {
+            if (strpos($key, '_tmgmt_') === 0) {
+                $clean_key = str_replace('_tmgmt_', '', $key);
+                $clean_meta[$clean_key] = $values[0];
+            }
+        }
+
+        // Fetch Logs
+        $log_manager = new TMGMT_Log_Manager();
+        $logs = $log_manager->get_logs($event_id);
+        // Format logs for frontend
+        $formatted_logs = array();
+        foreach ($logs as $log) {
+            $user_info = get_userdata($log->user_id);
+            $formatted_logs[] = array(
+                'id' => $log->id,
+                'date' => date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($log->created_at)),
+                'user' => $user_info ? $user_info->display_name : 'System',
+                'message' => $log->message,
+                'type' => $log->type
+            );
+        }
+
+        // Fetch Actions for current status
+        $current_status = isset($clean_meta['status']) ? $clean_meta['status'] : '';
+        $actions = array();
+        if ($current_status) {
+            $status_def = get_page_by_path($current_status, OBJECT, 'tmgmt_status_def');
+            if ($status_def) {
+                $raw_actions = get_post_meta($status_def->ID, '_tmgmt_status_actions', true);
+                if (is_array($raw_actions)) {
+                    $actions = $raw_actions;
+                }
+            }
+        }
+
+        return array(
+            'id' => $event_id,
+            'title' => $post->post_title,
+            'content' => $post->post_content,
+            'meta' => $clean_meta,
+            'logs' => $formatted_logs,
+            'actions' => $actions
+        );
     }
 }

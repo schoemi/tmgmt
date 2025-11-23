@@ -1,0 +1,317 @@
+/* Kanban Board Container */
+#tmgmt-kanban-app {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+    background: #f0f2f5;
+    padding: 20px;
+    min-height: 600px;
+    overflow-x: auto;
+}
+
+.tmgmt-board {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+    padding-bottom: 20px; /* Scrollbar space */
+}
+
+/* Columns */
+.tmgmt-column {
+    background: #ebecf0;
+    border-radius: 6px;
+    width: 300px;
+    min-width: 300px;
+    display: flex;
+    flex-direction: column;
+    max-height: 80vh;
+}
+
+.tmgmt-column-header {
+    padding: 12px 16px;
+    font-weight: 600;
+    color: #172b4d;
+    border-bottom: 1px solid #dfe1e6;
+}
+
+.tmgmt-column-body {
+    padding: 8px;
+    overflow-y: auto;
+    flex-grow: 1;
+    min-height: 50px;
+}
+
+/* Cards */
+.tmgmt-card {
+    background: #fff;
+    border-radius: 4px;
+    box-shadow: 0 1px 2px rgba(9, 30, 66, 0.25);
+    padding: 10px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: background 0.1s;
+}
+
+.tmgmt-card:hover {
+    background: #f4f5f7;
+}
+
+.tmgmt-card-title {
+    font-weight: 500;
+    margin-bottom: 5px;
+    color: #172b4d;
+}
+
+.tmgmt-card-meta {
+    font-size: 0.85em;
+    color: #5e6c84;
+    display: flex;
+    justify-content: space-between;
+}
+
+/* Modal */
+.tmgmt-modal {
+    position: fixed;
+    z-index: 10000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.tmgmt-modal-content {
+    background-color: #fefefe;
+    margin: auto;
+    padding: 0; /* Reset padding for header/footer structure */
+    border: 1px solid #888;
+    width: 95%;
+    max-width: 1000px; /* Wider for 2 columns */
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+.tmgmt-modal-header {
+    padding: 15px 20px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.tmgmt-modal-header h2 {
+    margin: 0;
+    font-size: 1.5em;
+}
+
+.tmgmt-close {
+    color: #aaa;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.tmgmt-close:hover,
+.tmgmt-close:focus {
+    color: black;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.tmgmt-modal-body {
+    padding: 20px;
+    overflow-y: auto;
+    flex-grow: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+}
+
+/* Sections */
+.tmgmt-section {
+    margin-bottom: 15px;
+    background: #fff;
+    border: 1px solid #dfe1e6;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.tmgmt-section-title {
+    font-size: 1em;
+    font-weight: 600;
+    padding: 10px 15px;
+    background: #f4f5f7;
+    color: #172b4d;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+}
+
+.tmgmt-section-title:hover {
+    background: #ebecf0;
+}
+
+.tmgmt-section-title::after {
+    content: '\25BC'; /* Down arrow */
+    font-size: 0.8em;
+    transition: transform 0.2s;
+}
+
+.tmgmt-section.collapsed .tmgmt-section-title::after {
+    transform: rotate(-90deg);
+}
+
+.tmgmt-section-content {
+    padding: 15px;
+    display: block;
+}
+
+.tmgmt-section.collapsed .tmgmt-section-content {
+    display: none;
+}
+
+/* Map */
+#tmgmt-map-container {
+    height: 250px;
+    width: 100%;
+    background: #eee;
+    border: 1px solid #dfe1e6;
+    border-radius: 4px;
+    margin-bottom: 15px;
+}
+
+/* Form Fields in Modal */
+.tmgmt-form-group {
+    margin-bottom: 15px;
+}
+
+.tmgmt-form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+    font-size: 0.9em;
+    color: #444;
+}
+
+.tmgmt-form-group input,
+.tmgmt-form-group select,
+.tmgmt-form-group textarea {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #dfe1e6;
+    border-radius: 4px;
+    box-sizing: border-box;
+    font-size: 14px;
+}
+
+/* Logbook */
+.tmgmt-logbook {
+    background: #f9f9f9;
+    border: 1px solid #eee;
+    border-radius: 4px;
+    padding: 10px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.tmgmt-log-entry {
+    padding: 8px 0;
+    border-bottom: 1px solid #eee;
+    font-size: 0.9em;
+}
+
+.tmgmt-log-entry:last-child {
+    border-bottom: none;
+}
+
+.tmgmt-log-meta {
+    font-size: 0.85em;
+    color: #888;
+    margin-bottom: 2px;
+}
+
+/* Footer */
+.tmgmt-modal-footer {
+    padding: 15px 20px;
+    border-top: 1px solid #eee;
+    background: #f9f9f9;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
+}
+
+.tmgmt-actions-left {
+    display: flex;
+    gap: 10px;
+}
+
+.tmgmt-btn {
+    background-color: #0079bf;
+    color: white;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.tmgmt-btn:hover {
+    background-color: #026aa7;
+}
+
+.tmgmt-btn-secondary {
+    background-color: #ebecf0;
+    color: #172b4d;
+}
+
+.tmgmt-btn-secondary:hover {
+    background-color: #dfe1e6;
+}
+
+.tmgmt-btn:disabled,
+.tmgmt-btn[disabled] {
+    background-color: #ccc;
+    color: #666;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* Mobile Adjustments */
+@media (max-width: 768px) {
+    .tmgmt-modal-body {
+        grid-template-columns: 1fr;
+    }
+    
+    .tmgmt-modal-footer {
+        flex-direction: column;
+        gap: 10px;
+        align-items: stretch;
+    }
+    
+    .tmgmt-actions-left {
+        flex-direction: column;
+    }
+}
+
+/* Mobile Adjustments */
+@media (max-width: 600px) {
+    #tmgmt-kanban-app {
+        padding: 10px;
+    }
+    
+    .tmgmt-column {
+        width: 85vw; /* Almost full width on mobile */
+        min-width: 85vw;
+    }
+}

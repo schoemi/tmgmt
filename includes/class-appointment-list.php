@@ -18,6 +18,9 @@ class TMGMT_Appointment_List {
     }
 
     public function render_list() {
+        // Handle Filter
+        $filter_val = isset($_GET['tmgmt_period']) ? sanitize_text_field($_GET['tmgmt_period']) : '';
+
         $args = array(
             'post_type'      => 'event',
             'posts_per_page' => -1,
@@ -27,7 +30,37 @@ class TMGMT_Appointment_List {
             'post_status'    => array('publish', 'future', 'draft', 'pending', 'private')
         );
 
+        // Apply Date Filter
+        if (!empty($filter_val)) {
+            if (strpos($filter_val, 'year_') === 0) {
+                $year = substr($filter_val, 5);
+                $args['meta_query'] = array(
+                    array(
+                        'key'     => '_tmgmt_event_date',
+                        'value'   => array($year . '-01-01', $year . '-12-31'),
+                        'compare' => 'BETWEEN',
+                        'type'    => 'DATE'
+                    )
+                );
+            } elseif (strpos($filter_val, 'session_') === 0) {
+                $start_year = substr($filter_val, 8);
+                $end_year = $start_year + 1;
+                $args['meta_query'] = array(
+                    array(
+                        'key'     => '_tmgmt_event_date',
+                        'value'   => array($start_year . '-07-01', $end_year . '-06-30'),
+                        'compare' => 'BETWEEN',
+                        'type'    => 'DATE'
+                    )
+                );
+            }
+        }
+
         $events = get_posts($args);
+
+        // Calculate available filters based on ALL events (not just filtered ones)
+        $all_dates = $this->get_all_event_dates();
+        $filters = $this->build_filters($all_dates);
 
         // Group by Date
         $grouped = array();
@@ -45,6 +78,40 @@ class TMGMT_Appointment_List {
         echo '<div class="wrap">';
         echo '<h1 class="wp-heading-inline">Terminliste</h1>';
         
+        // Render Filter Form
+        echo '<form method="get" style="margin: 20px 0; display: flex; align-items: center; gap: 10px;">';
+        echo '<input type="hidden" name="post_type" value="event">';
+        echo '<input type="hidden" name="page" value="tmgmt-appointment-list">';
+        echo '<select name="tmgmt_period">';
+        echo '<option value="">Alle Zeiträume</option>';
+        
+        if (!empty($filters['years'])) {
+            echo '<optgroup label="Jahre">';
+            foreach ($filters['years'] as $year) {
+                $val = 'year_' . $year;
+                $sel = ($filter_val === $val) ? 'selected' : '';
+                echo '<option value="' . esc_attr($val) . '" ' . $sel . '>' . esc_html($year) . '</option>';
+            }
+            echo '</optgroup>';
+        }
+
+        if (!empty($filters['sessions'])) {
+            echo '<optgroup label="Saisons (01.07. - 30.06.)">';
+            foreach ($filters['sessions'] as $year => $label) {
+                $val = 'session_' . $year;
+                $sel = ($filter_val === $val) ? 'selected' : '';
+                echo '<option value="' . esc_attr($val) . '" ' . $sel . '>' . esc_html($label) . '</option>';
+            }
+            echo '</optgroup>';
+        }
+
+        echo '</select>';
+        echo '<button type="submit" class="button">Filtern</button>';
+        if (!empty($filter_val)) {
+            echo '<a href="' . admin_url('edit.php?post_type=event&page=tmgmt-appointment-list') . '" class="button">Reset</a>';
+        }
+        echo '</form>';
+
         if (empty($events)) {
             echo '<p>Keine Termine gefunden.</p>';
             echo '</div>';
@@ -78,6 +145,51 @@ class TMGMT_Appointment_List {
 
         echo '</div>'; // .tmgmt-appointment-list
         echo '</div>'; // .wrap
+    }
+
+    private function get_all_event_dates() {
+        global $wpdb;
+        $dates = $wpdb->get_col("
+            SELECT meta_value 
+            FROM $wpdb->postmeta 
+            WHERE meta_key = '_tmgmt_event_date' 
+            AND meta_value != ''
+            ORDER BY meta_value ASC
+        ");
+        return array_unique($dates);
+    }
+
+    private function build_filters($dates) {
+        $years = array();
+        $sessions = array();
+
+        foreach ($dates as $date) {
+            $timestamp = strtotime($date);
+            $year = date('Y', $timestamp);
+            $month = date('n', $timestamp);
+
+            // Add to years
+            if (!in_array($year, $years)) {
+                $years[] = $year;
+            }
+
+            // Determine Session
+            // If month >= 7 (July), session starts this year.
+            // If month < 7 (Jan-Jun), session started previous year.
+            if ($month >= 7) {
+                $session_start = $year;
+            } else {
+                $session_start = $year - 1;
+            }
+            
+            $session_label = $session_start . '/' . ($session_start + 1);
+            $sessions[$session_start] = $session_label;
+        }
+
+        sort($years);
+        ksort($sessions);
+
+        return array('years' => $years, 'sessions' => $sessions);
     }
 
     private function render_event_item($event) {

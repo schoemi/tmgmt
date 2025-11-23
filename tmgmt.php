@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Töns Management
- * Description: Skeleton plugin rebuilt from scratch.
- * Version: 0.0.2
+ * Description: Gig Management Plugin for WordPress
+ * Version: 0.0.9
  */
 
 if (!defined('ABSPATH')) {
@@ -10,7 +10,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define Constants
-define('TMGMT_VERSION', '0.0.2');
+define( 'TMGMT_VERSION', '0.0.9' );
 define('TMGMT_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('TMGMT_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -27,6 +27,8 @@ require_once TMGMT_PLUGIN_DIR . 'includes/class-appointment-list.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-rest-api.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-assets.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-log-manager.php';
+require_once TMGMT_PLUGIN_DIR . 'includes/class-roles.php';
+require_once TMGMT_PLUGIN_DIR . 'includes/class-frontend-dashboard.php';
 
 // Initialize Plugin
 function tmgmt_init() {
@@ -40,6 +42,8 @@ function tmgmt_init() {
     new TMGMT_Appointment_List();
     new TMGMT_REST_API();
     new TMGMT_Assets();
+    new TMGMT_Roles();
+    new TMGMT_Frontend_Dashboard();
 }
 add_action('plugins_loaded', 'tmgmt_init');
 

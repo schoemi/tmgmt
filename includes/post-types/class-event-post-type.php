@@ -25,20 +25,20 @@ class TMGMT_Event_Post_Type {
 
     public function register_post_type() {
         $labels = array(
-            'name'               => __('Events', 'toens-mgmt'),
-            'singular_name'      => __('Event', 'toens-mgmt'),
-            'menu_name'          => __('Events', 'toens-mgmt'),
-            'name_admin_bar'     => __('Event', 'toens-mgmt'),
-            'add_new'            => __('Neues Event', 'toens-mgmt'),
-            'add_new_item'       => __('Neues Event hinzufügen', 'toens-mgmt'),
-            'new_item'           => __('Neues Event', 'toens-mgmt'),
-            'edit_item'          => __('Event bearbeiten', 'toens-mgmt'),
-            'view_item'          => __('Event ansehen', 'toens-mgmt'),
-            'all_items'          => __('Alle Events', 'toens-mgmt'),
-            'search_items'       => __('Events suchen', 'toens-mgmt'),
-            'parent_item_colon'  => __('Eltern-Event:', 'toens-mgmt'),
-            'not_found'          => __('Keine Events gefunden.', 'toens-mgmt'),
-            'not_found_in_trash' => __('Keine Events im Papierkorb gefunden.', 'toens-mgmt')
+            'name'               => __('Gigs', 'toens-mgmt'),
+            'singular_name'      => __('Gig', 'toens-mgmt'),
+            'menu_name'          => __('TMGMT', 'toens-mgmt'),
+            'name_admin_bar'     => __('Gig', 'toens-mgmt'),
+            'add_new'            => __('Neuer Gig', 'toens-mgmt'),
+            'add_new_item'       => __('Neuen Gig hinzufügen', 'toens-mgmt'),
+            'new_item'           => __('Neuer Gig', 'toens-mgmt'),
+            'edit_item'          => __('Gig bearbeiten', 'toens-mgmt'),
+            'view_item'          => __('Gig ansehen', 'toens-mgmt'),
+            'all_items'          => __('Alle Gigs', 'toens-mgmt'),
+            'search_items'       => __('Gigs suchen', 'toens-mgmt'),
+            'parent_item_colon'  => __('Eltern-Gig:', 'toens-mgmt'),
+            'not_found'          => __('Keine Gigs gefunden.', 'toens-mgmt'),
+            'not_found_in_trash' => __('Keine Gigs im Papierkorb gefunden.', 'toens-mgmt')
         );
 
         $args = array(
@@ -52,7 +52,7 @@ class TMGMT_Event_Post_Type {
             'has_archive'        => false,
             'hierarchical'       => false,
             'menu_position'      => 5,
-            'menu_icon'          => 'dashicons-calendar-alt',
+            'menu_icon'          => 'dashicons-admin-settings',
             'supports'           => array('title', 'editor', 'custom-fields'),
             'show_in_rest'       => false, // Disables Gutenberg Editor
         );
