@@ -41,21 +41,24 @@ class TMGMT_Action_Handler {
         }
 
         $status_def_id = $status_posts[0]->ID;
-        $actions = get_post_meta($status_def_id, '_tmgmt_status_actions', true);
+        $available_actions = get_post_meta($status_def_id, '_tmgmt_available_actions', true);
 
-        if (empty($actions) || !is_array($actions)) {
+        if (empty($available_actions) || !is_array($available_actions)) {
             echo '<p>Keine Aktionen für diesen Status definiert.</p>';
             return;
         }
 
         echo '<div class="tmgmt-actions-list">';
-        foreach ($actions as $index => $action) {
-            $label = isset($action['label']) ? $action['label'] : 'Aktion';
-            $type = isset($action['type']) ? $action['type'] : 'note';
+        foreach ($available_actions as $action_id) {
+            $action_post = get_post($action_id);
+            if (!$action_post || $action_post->post_status !== 'publish') continue;
+
+            $label = $action_post->post_title;
+            $type = get_post_meta($action_id, '_tmgmt_action_type', true);
             $btn_class = $type === 'webhook' ? 'button-primary' : 'button-secondary';
             
             echo '<button type="button" class="button ' . $btn_class . ' tmgmt-trigger-action" ';
-            echo 'data-index="' . $index . '" ';
+            echo 'data-id="' . $action_id . '" ';
             echo 'data-label="' . esc_attr($label) . '" ';
             echo 'data-type="' . esc_attr($type) . '" ';
             echo 'style="width:100%; margin-bottom:5px;">';
@@ -75,7 +78,7 @@ class TMGMT_Action_Handler {
         jQuery(document).ready(function($) {
             $('.tmgmt-trigger-action').on('click', function() {
                 var btn = $(this);
-                var index = btn.data('index');
+                var actionId = btn.data('id');
                 var type = btn.data('type');
                 var label = btn.data('label');
                 var eventId = <?php echo $post->ID; ?>;
@@ -92,7 +95,7 @@ class TMGMT_Action_Handler {
                         buttons: {
                             "Speichern & Ausführen": function() {
                                 var note = $('#tmgmt-action-note').val();
-                                executeAction(index, note, $(this));
+                                executeAction(actionId, note, $(this));
                             },
                             "Abbrechen": function() {
                                 $(this).dialog("close");
@@ -102,18 +105,18 @@ class TMGMT_Action_Handler {
                 } else {
                     // Webhook - Confirm?
                     if (confirm('Möchten Sie die Aktion "' + label + '" wirklich ausführen?')) {
-                        executeAction(index, '', null);
+                        executeAction(actionId, '', null);
                     }
                 }
 
-                function executeAction(index, note, dialog) {
+                function executeAction(actionId, note, dialog) {
                     // Show loading state?
                     btn.prop('disabled', true).text('Verarbeite...');
 
                     $.post(ajaxurl, {
                         action: 'tmgmt_execute_action',
                         event_id: eventId,
-                        action_index: index,
+                        action_id: actionId,
                         note: note,
                         nonce: '<?php echo wp_create_nonce('tmgmt_execute_action_nonce'); ?>'
                     }, function(response) {
@@ -141,38 +144,29 @@ class TMGMT_Action_Handler {
         check_ajax_referer('tmgmt_execute_action_nonce', 'nonce');
 
         $event_id = intval($_POST['event_id']);
-        $action_index = intval($_POST['action_index']);
+        $action_id = intval($_POST['action_id']);
         $note = isset($_POST['note']) ? sanitize_textarea_field($_POST['note']) : '';
 
-        // 1. Get Current Status
-        $status_slug = get_post_meta($event_id, '_tmgmt_status', true);
-        
-        // 2. Get Status Definition
-        $args = array(
-            'name'        => $status_slug,
-            'post_type'   => 'tmgmt_status_def',
-            'post_status' => 'publish',
-            'numberposts' => 1
-        );
-        $status_posts = get_posts($args);
-        if (empty($status_posts)) {
-            wp_send_json_error(array('message' => 'Status Definition nicht gefunden.'));
-        }
-        $status_def_id = $status_posts[0]->ID;
-
-        // 3. Get Action
-        $actions = get_post_meta($status_def_id, '_tmgmt_status_actions', true);
-        if (!isset($actions[$action_index])) {
+        // 1. Get Action Post
+        $action_post = get_post($action_id);
+        if (!$action_post || $action_post->post_type !== 'tmgmt_action') {
             wp_send_json_error(array('message' => 'Aktion nicht gefunden.'));
         }
-        $action = $actions[$action_index];
+
+        // 2. Get Action Meta
+        $action_type = get_post_meta($action_id, '_tmgmt_action_type', true);
+        $webhook_id = get_post_meta($action_id, '_tmgmt_action_webhook_id', true);
+        $email_template_id = get_post_meta($action_id, '_tmgmt_action_email_template_id', true);
+        $target_status = get_post_meta($action_id, '_tmgmt_action_target_status', true);
 
         $log_manager = new TMGMT_Log_Manager();
-        $log_message = "Aktion ausgeführt: " . $action['label'];
+        $log_message = "Aktion ausgeführt: " . $action_post->post_title;
+
+        // 3. Get Current Status (for validation if needed, or logging)
+        $status_slug = get_post_meta($event_id, '_tmgmt_status', true);
 
         // 4. Execute Logic based on Type
-        if ($action['type'] === 'webhook') {
-            $webhook_id = $action['webhook_id'];
+        if ($action_type === 'webhook') {
             $webhook_url = get_post_meta($webhook_id, '_tmgmt_webhook_url', true);
             $webhook_method = get_post_meta($webhook_id, '_tmgmt_webhook_method', true);
 
@@ -195,7 +189,6 @@ class TMGMT_Action_Handler {
                 );
             }
 
-            $response = wp_remote_request($webhook_url, $args); // Use original URL for POST, modified for GET? Wait.
             // Fix: For GET use $url, for POST use $webhook_url
             $request_url = ($webhook_method === 'GET') ? $url : $webhook_url;
             $response = wp_remote_request($request_url, $args);
@@ -215,6 +208,52 @@ class TMGMT_Action_Handler {
                 wp_send_json_error(array('message' => "Webhook Server Fehler ($code)"));
             }
 
+        } elseif ($action_type === 'email') {
+            // Email Logic
+            if (empty($email_template_id)) {
+                wp_send_json_error(array('message' => 'Keine E-Mail Vorlage ausgewählt.'));
+            }
+
+            $recipient_raw = get_post_meta($email_template_id, '_tmgmt_email_recipient', true);
+            $subject_raw = get_post_meta($email_template_id, '_tmgmt_email_subject', true);
+            $body_raw = get_post_meta($email_template_id, '_tmgmt_email_body', true);
+            $cc_raw = get_post_meta($email_template_id, '_tmgmt_email_cc', true);
+            $bcc_raw = get_post_meta($email_template_id, '_tmgmt_email_bcc', true);
+            $reply_to_raw = get_post_meta($email_template_id, '_tmgmt_email_reply_to', true);
+
+            $recipient = TMGMT_Placeholder_Parser::parse($recipient_raw, $event_id);
+            $subject = TMGMT_Placeholder_Parser::parse($subject_raw, $event_id);
+            $body = TMGMT_Placeholder_Parser::parse($body_raw, $event_id);
+            
+            // Optional Headers
+            $headers = array('Content-Type: text/html; charset=UTF-8');
+            
+            if (!empty($cc_raw)) {
+                $cc = TMGMT_Placeholder_Parser::parse($cc_raw, $event_id);
+                if (!empty($cc)) $headers[] = 'Cc: ' . $cc;
+            }
+            
+            if (!empty($bcc_raw)) {
+                $bcc = TMGMT_Placeholder_Parser::parse($bcc_raw, $event_id);
+                if (!empty($bcc)) $headers[] = 'Bcc: ' . $bcc;
+            }
+            
+            if (!empty($reply_to_raw)) {
+                $reply_to = TMGMT_Placeholder_Parser::parse($reply_to_raw, $event_id);
+                if (!empty($reply_to)) $headers[] = 'Reply-To: ' . $reply_to;
+            }
+
+            // Send
+            $sent = wp_mail($recipient, $subject, nl2br($body), $headers);
+
+            if ($sent) {
+                $log_message .= " - E-Mail gesendet an: $recipient";
+                $log_manager->log($event_id, 'email_sent', "E-Mail '$subject' an $recipient gesendet.");
+            } else {
+                $log_manager->log($event_id, 'email_error', "Fehler beim Senden der E-Mail an $recipient.");
+                wp_send_json_error(array('message' => 'E-Mail konnte nicht gesendet werden.'));
+            }
+
         } else {
             // Note Type
             if (!empty($note)) {
@@ -226,8 +265,7 @@ class TMGMT_Action_Handler {
         $log_manager->log($event_id, 'action', $log_message);
 
         // 5. Handle Status Change
-        if (!empty($action['target_status'])) {
-            $target_status = $action['target_status'];
+        if (!empty($target_status)) {
             if ($target_status !== $status_slug) {
                 update_post_meta($event_id, '_tmgmt_status', $target_status);
                 

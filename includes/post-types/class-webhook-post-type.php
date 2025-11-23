@@ -33,7 +33,7 @@ class TMGMT_Webhook_Post_Type {
             'public'             => false,
             'publicly_queryable' => false,
             'show_ui'            => true,
-            'show_in_menu'       => 'edit.php?post_type=event',
+            'show_in_menu'       => false,
             'query_var'          => true,
             'rewrite'            => array('slug' => 'webhook'),
             'capability_type'    => 'post',

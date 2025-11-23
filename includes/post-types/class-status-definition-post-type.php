@@ -36,7 +36,7 @@ class TMGMT_Status_Definition_Post_Type {
             'public'             => false,
             'publicly_queryable' => false,
             'show_ui'            => true,
-            'show_in_menu'       => 'edit.php?post_type=event', // Submenu of Events
+            'show_in_menu'       => false,
             'query_var'          => true,
             'rewrite'            => array('slug' => 'status-def'),
             'capability_type'    => 'post',
@@ -62,123 +62,44 @@ class TMGMT_Status_Definition_Post_Type {
         add_meta_box(
             'tmgmt_status_actions',
             'Verfügbare Aktionen',
-            array($this, 'render_actions_box'),
+            array($this, 'render_available_actions_box'),
             self::POST_TYPE,
             'normal',
             'high'
         );
     }
 
-    public function render_actions_box($post) {
-        $actions = get_post_meta($post->ID, '_tmgmt_status_actions', true);
-        if (!is_array($actions)) {
-            $actions = array();
+    public function render_available_actions_box($post) {
+        $available_actions = get_post_meta($post->ID, '_tmgmt_available_actions', true);
+        if (!is_array($available_actions)) {
+            $available_actions = array();
         }
 
-        // Get Webhooks
-        $webhooks = get_posts(array(
-            'post_type' => 'tmgmt_webhook',
+        $all_actions = get_posts(array(
+            'post_type' => 'tmgmt_action',
             'posts_per_page' => -1,
-            'post_status' => 'publish' // or 'any' if you want to allow drafts
+            'post_status' => 'publish',
+            'orderby' => 'title',
+            'order' => 'ASC'
         ));
 
-        // Get Statuses (excluding current one to avoid loops? No, loops might be valid)
-        $statuses = TMGMT_Event_Status::get_all_statuses();
-
         ?>
-        <div id="tmgmt-actions-container">
-            <?php foreach ($actions as $index => $action) : ?>
-                <?php $this->render_action_row($index, $action, $webhooks, $statuses); ?>
-            <?php endforeach; ?>
+        <div style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background: #fff;">
+            <?php if (empty($all_actions)) : ?>
+                <p>Keine Aktionen gefunden. Bitte erstellen Sie zuerst Aktionen unter "Aktionen".</p>
+            <?php else : ?>
+                <?php foreach ($all_actions as $action) : ?>
+                    <div style="margin-bottom: 5px;">
+                        <label>
+                            <input type="checkbox" name="tmgmt_available_actions[]" value="<?php echo esc_attr($action->ID); ?>" <?php checked(in_array($action->ID, $available_actions)); ?>>
+                            <?php echo esc_html($action->post_title); ?>
+                            <span style="color: #888; font-size: 11px;">(<?php echo get_post_meta($action->ID, '_tmgmt_action_type', true); ?>)</span>
+                        </label>
+                    </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
         </div>
-
-        <button type="button" class="button" id="tmgmt-add-action" style="margin-top: 10px;">+ Aktion hinzufügen</button>
-
-        <!-- Template for new row -->
-        <script type="text/template" id="tmgmt-action-template">
-            <?php $this->render_action_row('__INDEX__', array(), $webhooks, $statuses); ?>
-        </script>
-
-        <script>
-        jQuery(document).ready(function($) {
-            var container = $('#tmgmt-actions-container');
-            var template = $('#tmgmt-action-template').html();
-            var count = <?php echo count($actions); ?>;
-
-            $('#tmgmt-add-action').on('click', function() {
-                var newRow = template.replace(/__INDEX__/g, count);
-                container.append(newRow);
-                count++;
-            });
-
-            container.on('click', '.tmgmt-remove-action', function() {
-                $(this).closest('.tmgmt-action-row').remove();
-            });
-
-            container.on('change', '.tmgmt-action-type', function() {
-                var type = $(this).val();
-                var row = $(this).closest('.tmgmt-action-row');
-                if (type === 'webhook') {
-                    row.find('.tmgmt-webhook-select').show();
-                } else {
-                    row.find('.tmgmt-webhook-select').hide();
-                }
-            });
-            
-            // Trigger change on load to set initial state
-            $('.tmgmt-action-type').trigger('change');
-        });
-        </script>
-        <?php
-    }
-
-    private function render_action_row($index, $action, $webhooks, $statuses) {
-        $label = isset($action['label']) ? $action['label'] : '';
-        $type = isset($action['type']) ? $action['type'] : 'note';
-        $webhook_id = isset($action['webhook_id']) ? $action['webhook_id'] : '';
-        $target_status = isset($action['target_status']) ? $action['target_status'] : '';
-        ?>
-        <div class="tmgmt-action-row" style="border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; background: #f9f9f9;">
-            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                <div style="flex: 1; min-width: 200px;">
-                    <label style="display:block; font-size: 12px;">Bezeichnung</label>
-                    <input type="text" name="tmgmt_actions[<?php echo $index; ?>][label]" value="<?php echo esc_attr($label); ?>" style="width: 100%;" placeholder="z.B. Vertrag erstellen">
-                </div>
-                <div style="width: 150px;">
-                    <label style="display:block; font-size: 12px;">Typ</label>
-                    <select name="tmgmt_actions[<?php echo $index; ?>][type]" class="tmgmt-action-type" style="width: 100%;">
-                        <option value="note" <?php selected($type, 'note'); ?>>Notiz / Doku</option>
-                        <option value="webhook" <?php selected($type, 'webhook'); ?>>Webhook</option>
-                    </select>
-                </div>
-                <div class="tmgmt-webhook-select" style="flex: 1; min-width: 200px; display: none;">
-                    <label style="display:block; font-size: 12px;">Webhook</label>
-                    <select name="tmgmt_actions[<?php echo $index; ?>][webhook_id]" style="width: 100%;">
-                        <option value="">-- Wählen --</option>
-                        <?php foreach ($webhooks as $wh) : ?>
-                            <option value="<?php echo esc_attr($wh->ID); ?>" <?php selected($webhook_id, $wh->ID); ?>>
-                                <?php echo esc_html($wh->post_title); ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div style="flex: 1; min-width: 200px;">
-                    <label style="display:block; font-size: 12px;">Ziel-Status (Optional)</label>
-                    <select name="tmgmt_actions[<?php echo $index; ?>][target_status]" style="width: 100%;">
-                        <option value="">-- Kein Wechsel --</option>
-                        <?php foreach ($statuses as $slug => $status_label) : ?>
-                            <option value="<?php echo esc_attr($slug); ?>" <?php selected($target_status, $slug); ?>>
-                                <?php echo esc_html($status_label); ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div>
-                    <label style="display:block; font-size: 12px;">&nbsp;</label>
-                    <button type="button" class="button tmgmt-remove-action"><span class="dashicons dashicons-trash" style="margin-top: 4px;"></span></button>
-                </div>
-            </div>
-        </div>
+        <p class="description">Wählen Sie die Aktionen aus, die in diesem Status verfügbar sein sollen.</p>
         <?php
     }
 
@@ -242,22 +163,12 @@ class TMGMT_Status_Definition_Post_Type {
             update_post_meta($post_id, '_tmgmt_required_fields', array());
         }
 
-        // Save Actions
-        if (isset($_POST['tmgmt_actions']) && is_array($_POST['tmgmt_actions'])) {
-            $actions = array();
-            foreach ($_POST['tmgmt_actions'] as $action) {
-                if (!empty($action['label'])) {
-                    $actions[] = array(
-                        'label' => sanitize_text_field($action['label']),
-                        'type' => sanitize_text_field($action['type']),
-                        'webhook_id' => sanitize_text_field($action['webhook_id']),
-                        'target_status' => sanitize_text_field($action['target_status']),
-                    );
-                }
-            }
-            update_post_meta($post_id, '_tmgmt_status_actions', $actions);
+        // Save Available Actions
+        if (isset($_POST['tmgmt_available_actions']) && is_array($_POST['tmgmt_available_actions'])) {
+            $sanitized_actions = array_map('sanitize_text_field', $_POST['tmgmt_available_actions']);
+            update_post_meta($post_id, '_tmgmt_available_actions', $sanitized_actions);
         } else {
-            update_post_meta($post_id, '_tmgmt_status_actions', array());
+            update_post_meta($post_id, '_tmgmt_available_actions', array());
         }
     }
 

@@ -31,13 +31,7 @@ class TMGMT_Kanban_Column_Post_Type {
             'labels'              => $labels,
             'public'              => false, // Not public on frontend
             'show_ui'             => true,
-            'show_in_menu'        => 'edit.php?post_type=event', // Submenu of Event? Or Settings? Let's put it under Settings or top level for now.
-            // User asked for configuration. Maybe under "Einstellungen" (Settings) if we had one.
-            // For now, let's put it as a separate CPT in the menu or under Events.
-            // Given the structure, maybe 'show_in_menu' => true is safest, or under a parent.
-            // Let's put it under the "Töns MGMT" concept. 
-            // Since we don't have a main menu page yet, let's make it a top level menu item or put it under Events?
-            // Actually, let's just make it show_ui=true and it will appear.
+            'show_in_menu'        => false,
             'capability_type'     => 'post',
             'hierarchical'        => false,
             'supports'            => array('title'),
