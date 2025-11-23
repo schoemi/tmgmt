@@ -19,6 +19,7 @@ class TMGMT_Event_Meta_Boxes {
             'tmgmt_event_start_time' => 'Geplante Auftrittszeit',
             'tmgmt_event_arrival_time' => 'Späteste Anreisezeit',
             'tmgmt_event_departure_time' => 'Späteste Abreisezeit',
+            'tmgmt_venue_name' => 'Veranstaltungsort: Name',
             'tmgmt_venue_street' => 'Veranstaltungsort: Straße',
             'tmgmt_venue_number' => 'Veranstaltungsort: Nr.',
             'tmgmt_venue_zip' => 'Veranstaltungsort: PLZ',
@@ -109,6 +110,7 @@ class TMGMT_Event_Meta_Boxes {
         $arrival_time = get_post_meta($post->ID, '_tmgmt_event_arrival_time', true);
         $departure_time = get_post_meta($post->ID, '_tmgmt_event_departure_time', true);
         
+        $venue_name = get_post_meta($post->ID, '_tmgmt_venue_name', true);
         $venue_street = get_post_meta($post->ID, '_tmgmt_venue_street', true);
         $venue_number = get_post_meta($post->ID, '_tmgmt_venue_number', true);
         $venue_zip = get_post_meta($post->ID, '_tmgmt_venue_zip', true);
@@ -152,6 +154,12 @@ class TMGMT_Event_Meta_Boxes {
         </div>
 
         <div class="tmgmt-section-title">Adresse Veranstaltungsort</div>
+        <div class="tmgmt-row">
+            <div class="tmgmt-field">
+                <label for="tmgmt_venue_name">Name des Veranstaltungsorts</label>
+                <input type="text" id="tmgmt_venue_name" name="tmgmt_venue_name" value="<?php echo esc_attr($venue_name); ?>" placeholder="z.B. Stadthalle oder Grundschule">
+            </div>
+        </div>
         <div class="tmgmt-row">
             <div class="tmgmt-field" style="flex: 3;">
                 <label for="tmgmt_venue_street">Straße</label>
@@ -407,7 +415,7 @@ class TMGMT_Event_Meta_Boxes {
         $fields = array(
             // Event Details
             'tmgmt_event_date', 'tmgmt_event_start_time', 'tmgmt_event_arrival_time', 'tmgmt_event_departure_time',
-            'tmgmt_venue_street', 'tmgmt_venue_number', 'tmgmt_venue_zip', 'tmgmt_venue_city', 'tmgmt_venue_country',
+            'tmgmt_venue_name', 'tmgmt_venue_street', 'tmgmt_venue_number', 'tmgmt_venue_zip', 'tmgmt_venue_city', 'tmgmt_venue_country',
             'tmgmt_geo_lat', 'tmgmt_geo_lng', 'tmgmt_arrival_notes',
             // Contact Details
             'tmgmt_contact_salutation', 'tmgmt_contact_firstname', 'tmgmt_contact_lastname', 'tmgmt_contact_company',

@@ -16,6 +16,13 @@ class TMGMT_REST_API {
             'permission_callback' => array($this, 'check_permission'),
         ));
 
+        // Create Event
+        register_rest_route(self::NAMESPACE, '/events', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'create_event'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
         // Get Single Event
         register_rest_route(self::NAMESPACE, '/events/(?P<id>\d+)', array(
             'methods'             => 'GET',
@@ -66,6 +73,56 @@ class TMGMT_REST_API {
     public function check_permission($request) {
         // Allow if user has specific capability OR is admin/editor
         return current_user_can('edit_tmgmt_events') || current_user_can('edit_posts');
+    }
+
+    public function create_event($request) {
+        $params = $request->get_json_params();
+        if (!$params) {
+            $params = $request->get_body_params();
+        }
+
+        $title = isset($params['title']) ? sanitize_text_field($params['title']) : 'Neues Event';
+        
+        // Create Post
+        $post_id = wp_insert_post(array(
+            'post_title'  => $title,
+            'post_type'   => 'event',
+            'post_status' => 'publish'
+        ));
+
+        if (is_wp_error($post_id)) {
+            return $post_id;
+        }
+
+        // Set default status if available
+        // Find the first status of the first column
+        $col_posts = get_posts(array(
+            'post_type' => 'tmgmt_kanban_col',
+            'posts_per_page' => 1,
+            'meta_key' => '_tmgmt_kanban_order',
+            'orderby' => 'meta_value_num',
+            'order' => 'ASC'
+        ));
+
+        if (!empty($col_posts)) {
+            $status_ids = get_post_meta($col_posts[0]->ID, '_tmgmt_kanban_statuses', true);
+            if (is_array($status_ids) && !empty($status_ids)) {
+                $first_status_post = get_post($status_ids[0]);
+                if ($first_status_post) {
+                    update_post_meta($post_id, '_tmgmt_status', $first_status_post->post_name);
+                }
+            }
+        }
+
+        // Log creation
+        $log_manager = new TMGMT_Log_Manager();
+        $log_manager->log($post_id, 'api_create', 'Event erstellt');
+
+        return new WP_REST_Response(array(
+            'success' => true,
+            'message' => 'Event erstellt',
+            'id'      => $post_id
+        ), 201);
     }
 
     public function update_event($request) {
@@ -321,10 +378,13 @@ class TMGMT_REST_API {
                 }
             }
 
+            $color = get_post_meta($col->ID, '_tmgmt_kanban_color', true);
+
             $columns[] = array(
                 'id' => $col->ID,
                 'title' => $col->post_title,
-                'statuses' => $status_slugs
+                'statuses' => $status_slugs,
+                'color' => $color ? $color : '#cccccc'
             );
         }
 
@@ -338,14 +398,26 @@ class TMGMT_REST_API {
         $event_data = array();
         foreach ($events as $event) {
             $status = get_post_meta($event->ID, '_tmgmt_status', true);
-            $date = get_post_meta($event->ID, '_tmgmt_event_date', true);
+            $date_raw = get_post_meta($event->ID, '_tmgmt_event_date', true);
+            $time_raw = get_post_meta($event->ID, '_tmgmt_event_start_time', true);
             $city = get_post_meta($event->ID, '_tmgmt_venue_city', true);
             
+            $formatted_date = '';
+            if ($date_raw) {
+                $formatted_date = date_i18n(get_option('date_format'), strtotime($date_raw));
+            }
+
+            $formatted_time = '';
+            if ($time_raw) {
+                $formatted_time = date_i18n(get_option('time_format'), strtotime($time_raw));
+            }
+
             $event_data[] = array(
                 'id' => $event->ID,
                 'title' => $event->post_title,
                 'status' => $status,
-                'date' => $date,
+                'date' => $formatted_date,
+                'time' => $formatted_time,
                 'city' => $city
             );
         }
@@ -399,6 +471,19 @@ class TMGMT_REST_API {
             if ($status_def) {
                 $raw_actions = get_post_meta($status_def->ID, '_tmgmt_status_actions', true);
                 if (is_array($raw_actions)) {
+                    // Enrich actions with required fields from target status
+                    foreach ($raw_actions as $key => $action) {
+                        if (!empty($action['target_status'])) {
+                            $target_slug = $action['target_status'];
+                            $target_def = get_page_by_path($target_slug, OBJECT, 'tmgmt_status_def');
+                            if ($target_def) {
+                                $req = get_post_meta($target_def->ID, '_tmgmt_required_fields', true);
+                                if (is_array($req) && !empty($req)) {
+                                    $raw_actions[$key]['required_fields'] = $req;
+                                }
+                            }
+                        }
+                    }
                     $actions = $raw_actions;
                 }
             }

@@ -101,4 +101,29 @@ class TMGMT_Event_Status {
 
         return $required;
     }
+
+    /**
+     * Returns an array of required fields for each status.
+     * 
+     * @return array [slug => [field1, field2]]
+     */
+    public static function get_status_requirements() {
+        $args = array(
+            'post_type'      => 'tmgmt_status_def',
+            'posts_per_page' => -1,
+            'post_status'    => 'publish',
+        );
+
+        $posts = get_posts($args);
+        $requirements = array();
+
+        foreach ($posts as $post) {
+            $req = get_post_meta($post->ID, '_tmgmt_required_fields', true);
+            if (is_array($req) && !empty($req)) {
+                $requirements[$post->post_name] = $req;
+            }
+        }
+
+        return $requirements;
+    }
 }

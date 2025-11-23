@@ -28,8 +28,27 @@ document.addEventListener('DOMContentLoaded', function() {
     function renderBoard() {
         app.innerHTML = '';
         
+        // Dashboard Header
+        const dashboardHeader = document.createElement('div');
+        dashboardHeader.style.display = 'flex';
+        dashboardHeader.style.justifyContent = 'flex-end';
+        dashboardHeader.style.marginBottom = '20px';
+        
+        const createBtn = document.createElement('button');
+        createBtn.className = 'tmgmt-btn tmgmt-btn-primary';
+        createBtn.textContent = 'Neues Event';
+        createBtn.onclick = createNewEvent;
+        
+        dashboardHeader.appendChild(createBtn);
+        app.appendChild(dashboardHeader);
+
         if (!boardData.columns || boardData.columns.length === 0) {
-            app.innerHTML = '<div style="padding:20px; text-align:center; color:#666;">Keine Kanban-Spalten gefunden. Bitte im Backend konfigurieren.</div>';
+            const msg = document.createElement('div');
+            msg.style.padding = '20px';
+            msg.style.textAlign = 'center';
+            msg.style.color = '#666';
+            msg.textContent = 'Keine Kanban-Spalten gefunden. Bitte im Backend konfigurieren.';
+            app.appendChild(msg);
             return;
         }
 
@@ -46,6 +65,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const header = document.createElement('div');
             header.className = 'tmgmt-column-header';
             header.textContent = col.title;
+            if (col.color) {
+                header.style.borderTop = `4px solid ${col.color}`;
+                header.style.borderTopLeftRadius = '6px';
+                header.style.borderTopRightRadius = '6px';
+            }
             colEl.appendChild(header);
 
             // Body
@@ -81,6 +105,37 @@ document.addEventListener('DOMContentLoaded', function() {
         app.appendChild(board);
     }
 
+    function createNewEvent() {
+        const title = prompt('Titel für das neue Event:', 'Neues Event');
+        if (!title) return;
+
+        fetch(apiUrl + 'events', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-WP-Nonce': nonce
+            },
+            body: JSON.stringify({ title: title })
+        })
+        .then(res => {
+            if (!res.ok) throw new Error('Fehler beim Erstellen');
+            return res.json();
+        })
+        .then(data => {
+            if (data.success && data.id) {
+                // Reload board to show new card
+                loadBoard();
+                // Open modal for the new event
+                setTimeout(() => {
+                    openModal(data.id);
+                }, 500);
+            }
+        })
+        .catch(err => {
+            alert('Fehler: ' + err.message);
+        });
+    }
+
     function createCard(ev) {
         const card = document.createElement('div');
         card.className = 'tmgmt-card';
@@ -90,7 +145,7 @@ document.addEventListener('DOMContentLoaded', function() {
         card.innerHTML = `
             <div class="tmgmt-card-title">${ev.title}</div>
             <div class="tmgmt-card-meta">
-                <span>${ev.date || ''}</span>
+                <span>${ev.date || ''}${ev.time ? ' - ' + ev.time : ''}</span>
                 <span>${ev.city || ''}</span>
             </div>
         `;
@@ -217,37 +272,68 @@ document.addEventListener('DOMContentLoaded', function() {
         // 2. Veranstaltungsdaten
         let venueHtml = '';
         venueHtml += createInput('Location / Venue', 'venue_name', meta.venue_name); // Assuming venue_name exists or use street
-        venueHtml += createInput('Straße', 'venue_street', meta.venue_street);
+        venueHtml += `<div style="display:flex; gap:10px;">
+            <div style="flex:3">${createInput('Straße', 'venue_street', meta.venue_street)}</div>
+            <div style="flex:1">${createInput('Nr.', 'venue_number', meta.venue_number)}</div>
+        </div>`;
         venueHtml += `<div style="display:flex; gap:10px;">
             <div style="flex:1">${createInput('PLZ', 'venue_zip', meta.venue_zip)}</div>
             <div style="flex:2">${createInput('Stadt', 'venue_city', meta.venue_city)}</div>
         </div>`;
         venueHtml += createInput('Land', 'venue_country', meta.venue_country);
 
+        // Planung
+        let planningHtml = '';
+        planningHtml += `<div style="display:flex; gap:10px;">
+            <div style="flex:1">${createInput('Späteste Anreise', 'arrival_time', meta.arrival_time, 'time')}</div>
+            <div style="flex:1">${createInput('Späteste Abreise', 'departure_time', meta.departure_time, 'time')}</div>
+        </div>`;
+        planningHtml += `<div class="tmgmt-form-group">
+            <label>Hinweise Anreise / Bus</label>
+            <textarea name="arrival_notes" rows="3" style="width:100%; border:1px solid #dfe1e6; border-radius:4px; padding:8px;">${meta.arrival_notes || ''}</textarea>
+        </div>`;
+
         // 3. Kontaktdaten
         let contactHtml = '';
         contactHtml += `<div style="display:flex; gap:10px;">
+            <div style="flex:1">${createInput('Anrede', 'contact_salutation', meta.contact_salutation)}</div>
             <div style="flex:1">${createInput('Vorname', 'contact_firstname', meta.contact_firstname)}</div>
             <div style="flex:1">${createInput('Nachname', 'contact_lastname', meta.contact_lastname)}</div>
         </div>`;
-        contactHtml += createInput('Email', 'contact_email', meta.contact_email, 'email');
-        contactHtml += createInput('Telefon', 'contact_phone', meta.contact_phone, 'tel');
+        contactHtml += createInput('Firma / Verein', 'contact_company', meta.contact_company);
+        
+        contactHtml += `<div style="display:flex; gap:10px;">
+            <div style="flex:3">${createInput('Straße', 'contact_street', meta.contact_street)}</div>
+            <div style="flex:1">${createInput('Nr.', 'contact_number', meta.contact_number)}</div>
+        </div>`;
+        contactHtml += `<div style="display:flex; gap:10px;">
+            <div style="flex:1">${createInput('PLZ', 'contact_zip', meta.contact_zip)}</div>
+            <div style="flex:2">${createInput('Stadt', 'contact_city', meta.contact_city)}</div>
+        </div>`;
+        contactHtml += createInput('Land', 'contact_country', meta.contact_country);
 
+        contactHtml += createInput('Email (Vertrag)', 'contact_email_contract', meta.contact_email_contract, 'email');
+        contactHtml += createInput('Telefon (Vertrag)', 'contact_phone_contract', meta.contact_phone_contract, 'tel');
+
+        // Weitere Ansprechpartner
+        let otherContactsHtml = '';
+        
         // Technik
-        contactHtml += '<h4 style="margin: 15px 0 10px; border-bottom: 1px solid #eee; padding-bottom: 5px;">Technik</h4>';
-        contactHtml += createInput('Name (Technik)', 'contact_name_tech', meta.contact_name_tech);
-        contactHtml += createInput('Email (Technik)', 'contact_email_tech', meta.contact_email_tech, 'email');
-        contactHtml += createInput('Telefon (Technik)', 'contact_phone_tech', meta.contact_phone_tech, 'tel');
+        otherContactsHtml += '<h4 style="margin: 15px 0 10px; border-bottom: 1px solid #eee; padding-bottom: 5px;">Technik</h4>';
+        otherContactsHtml += createInput('Name (Technik)', 'contact_name_tech', meta.contact_name_tech);
+        otherContactsHtml += createInput('Email (Technik)', 'contact_email_tech', meta.contact_email_tech, 'email');
+        otherContactsHtml += createInput('Telefon (Technik)', 'contact_phone_tech', meta.contact_phone_tech, 'tel');
 
         // Programm
-        contactHtml += '<h4 style="margin: 15px 0 10px; border-bottom: 1px solid #eee; padding-bottom: 5px;">Programm</h4>';
-        contactHtml += createInput('Name (Programm)', 'contact_name_program', meta.contact_name_program);
-        contactHtml += createInput('Email (Programm)', 'contact_email_program', meta.contact_email_program, 'email');
-        contactHtml += createInput('Telefon (Programm)', 'contact_phone_program', meta.contact_phone_program, 'tel');
+        otherContactsHtml += '<h4 style="margin: 15px 0 10px; border-bottom: 1px solid #eee; padding-bottom: 5px;">Programm</h4>';
+        otherContactsHtml += createInput('Name (Programm)', 'contact_name_program', meta.contact_name_program);
+        otherContactsHtml += createInput('Email (Programm)', 'contact_email_program', meta.contact_email_program, 'email');
+        otherContactsHtml += createInput('Telefon (Programm)', 'contact_phone_program', meta.contact_phone_program, 'tel');
 
         // 4. Vertragsdaten
         let contractHtml = '';
         contractHtml += createInput('Gage', 'fee', meta.fee, 'number');
+        contractHtml += createInput('Anzahlung', 'deposit', meta.deposit, 'number');
         contractHtml += createInput('Anfrage vom', 'inquiry_date', meta.inquiry_date, 'date');
         
         // --- Right Column Content ---
@@ -278,7 +364,8 @@ document.addEventListener('DOMContentLoaded', function() {
             if (actions.length <= 3) {
                 actions.forEach(action => {
                     if (action.target_status) {
-                        statusBoxHtml += `<button class="tmgmt-btn tmgmt-btn-secondary tmgmt-transition-btn" data-target="${action.target_status}" style="margin-right:5px; margin-bottom:5px;">${action.label}</button>`;
+                        const req = action.required_fields ? JSON.stringify(action.required_fields) : '[]';
+                        statusBoxHtml += `<button class="tmgmt-btn tmgmt-btn-secondary tmgmt-transition-btn" data-target="${action.target_status}" data-required='${req}' style="margin-right:5px; margin-bottom:5px;">${action.label}</button>`;
                     }
                 });
             } else {
@@ -287,7 +374,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 statusBoxHtml += '<option value="">-- Aktion wählen --</option>';
                 actions.forEach(action => {
                     if (action.target_status) {
-                        statusBoxHtml += `<option value="${action.target_status}">${action.label}</option>`;
+                        const req = action.required_fields ? JSON.stringify(action.required_fields) : '[]';
+                        statusBoxHtml += `<option value="${action.target_status}" data-required='${req}'>${action.label}</option>`;
                     }
                 });
                 statusBoxHtml += '</select>';
@@ -347,7 +435,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="tmgmt-col-left">
                     ${createSection('Anfragedaten', inquiryHtml)}
                     ${createSection('Veranstaltungsdaten', venueHtml)}
+                    ${createSection('Planung', planningHtml)}
                     ${createSection('Kontaktdaten', contactHtml, true)}
+                    ${createSection('Weitere Ansprechpartner', otherContactsHtml, true)}
                     ${createSection('Vertragsdaten', contractHtml, true)}
                 </div>
                 <div class="tmgmt-col-right">
@@ -361,6 +451,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="tmgmt-actions-left">
                 </div>
                 <!-- Auto-Save enabled, no save button needed -->
+            </div>
+            <div id="tmgmt-bottom-sheet" class="tmgmt-bottom-sheet">
+                <div class="tmgmt-bottom-sheet-header">
+                    <div class="tmgmt-bottom-sheet-title">Fehlende Angaben</div>
+                    <span class="tmgmt-close-sheet" style="cursor:pointer; font-size:20px;">&times;</span>
+                </div>
+                <div class="tmgmt-sheet-content"></div>
             </div>
         `;
 
@@ -435,6 +532,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     // If status or title changed, reload board
                     if (payload.status || payload.title) {
                         loadBoard();
+                    }
+                    // If status changed, reload modal to update actions
+                    if (payload.status) {
+                        openModal(currentEditingId);
                     }
                 })
                 .catch(err => {
@@ -516,6 +617,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
             if (input.tagName === 'SELECT' || input.type === 'date' || input.type === 'time') {
                 input.addEventListener('change', () => {
+                    // Special handling for status change
+                    if (input.name === 'status') {
+                        const targetStatus = input.value;
+                        const requirements = tmgmtData.status_requirements || {};
+                        const requiredFields = requirements[targetStatus] || [];
+                        
+                        if (!checkRequiredFields(targetStatus, requiredFields)) {
+                            // Revert change if requirements not met
+                            input.value = originalValues[input.name];
+                            return;
+                        }
+                    }
                     autoSave(input.name, input.value);
                 });
             } else {
@@ -592,15 +705,139 @@ document.addEventListener('DOMContentLoaded', function() {
             };
         });
 
+        // Field Labels Map
+        const fieldLabels = {
+            'title': 'Titel',
+            'date': 'Datum',
+            'start_time': 'Startzeit',
+            'venue_name': 'Location / Venue',
+            'venue_street': 'Straße',
+            'venue_number': 'Hausnummer',
+            'venue_zip': 'PLZ',
+            'venue_city': 'Stadt',
+            'venue_country': 'Land',
+            'contact_firstname': 'Vorname',
+            'contact_lastname': 'Nachname',
+            'contact_email': 'Email',
+            'contact_phone': 'Telefon',
+            'fee': 'Gage',
+            'inquiry_date': 'Anfrage vom'
+        };
+
+        const checkRequiredFields = (targetStatus, requiredFields) => {
+            if (!requiredFields || requiredFields.length === 0) return true;
+
+            const missing = [];
+            const fieldMap = tmgmtData.field_map || {};
+
+            requiredFields.forEach(rawField => {
+                // Map settings key (e.g. tmgmt_event_date) to API key (e.g. date)
+                const field = fieldMap[rawField] || rawField;
+                
+                const input = modalContent.querySelector(`[name="${field}"]`);
+                const val = input ? input.value : '';
+                if (!val || val.trim() === '') {
+                    missing.push(field);
+                }
+            });
+
+            if (missing.length > 0) {
+                showBottomSheet(targetStatus, missing);
+                return false;
+            }
+            return true;
+        };
+
+        const showBottomSheet = (targetStatus, missingFields) => {
+            const sheet = modalContent.querySelector('#tmgmt-bottom-sheet');
+            const container = sheet.querySelector('.tmgmt-sheet-content');
+            const closeBtn = sheet.querySelector('.tmgmt-close-sheet');
+            
+            container.innerHTML = '';
+            
+            if (closeBtn) {
+                closeBtn.onclick = () => {
+                    sheet.classList.remove('active');
+                };
+            }
+
+            missingFields.forEach(field => {
+                const label = fieldLabels[field] || field;
+                let type = 'text';
+                if (field.includes('date')) type = 'date';
+                if (field.includes('time')) type = 'time';
+                if (field.includes('email')) type = 'email';
+                if (field === 'fee') type = 'number';
+                
+                const div = document.createElement('div');
+                div.className = 'tmgmt-form-group';
+                div.innerHTML = `
+                    <label>${label}</label>
+                    <input type="${type}" name="${field}" class="tmgmt-sheet-input" style="width:100%; padding:8px; border:1px solid #dfe1e6; border-radius:4px;">
+                `;
+                container.appendChild(div);
+            });
+
+            const btn = document.createElement('button');
+            btn.className = 'tmgmt-btn tmgmt-btn-primary';
+            btn.textContent = 'Speichern & Fortfahren';
+            btn.style.width = '100%';
+            btn.style.marginTop = '10px';
+            btn.onclick = () => {
+                const inputs = container.querySelectorAll('input');
+                const payload = {};
+                let allFilled = true;
+                inputs.forEach(inp => {
+                    if (!inp.value.trim()) allFilled = false;
+                    payload[inp.name] = inp.value;
+                });
+
+                if (!allFilled) {
+                    alert('Bitte alle Felder ausfüllen.');
+                    return;
+                }
+
+                updateEvent(currentEditingId, payload)
+                    .then(() => {
+                        // Update UI inputs immediately
+                        for (const [key, val] of Object.entries(payload)) {
+                            const mainInput = modalContent.querySelector(`[name="${key}"]`);
+                            if (mainInput) mainInput.value = val;
+                        }
+                        
+                        // Now perform status change
+                        const statusSelect = modalContent.querySelector('select[name="status"]');
+                        if (statusSelect) {
+                            statusSelect.value = targetStatus;
+                            autoSave('status', targetStatus);
+                        }
+                        
+                        sheet.classList.remove('active');
+                    })
+                    .catch(err => {
+                        alert('Fehler beim Speichern: ' + err.message);
+                    });
+            };
+            container.appendChild(btn);
+
+            setTimeout(() => {
+                sheet.classList.add('active');
+            }, 10);
+        };
+
         // Transition Buttons
         const transitionBtns = modalContent.querySelectorAll('.tmgmt-transition-btn');
         transitionBtns.forEach(btn => {
             btn.onclick = () => {
                 const target = btn.dataset.target;
-                const statusSelect = modalContent.querySelector('select[name="status"]');
-                if (statusSelect) {
-                    statusSelect.value = target;
-                    autoSave('status', target);
+                const required = JSON.parse(btn.dataset.required || '[]');
+                
+                if (checkRequiredFields(target, required)) {
+                    const statusSelect = modalContent.querySelector('select[name="status"]');
+                    if (statusSelect) {
+                        statusSelect.value = target;
+                        autoSave('status', target);
+                    }
                 }
             };
         });
@@ -612,10 +849,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 const select = modalContent.querySelector('#tmgmt-action-select');
                 const target = select.value;
                 if (target) {
-                    const statusSelect = modalContent.querySelector('select[name="status"]');
-                    if (statusSelect) {
-                        statusSelect.value = target;
-                        autoSave('status', target);
+                    const option = select.options[select.selectedIndex];
+                    const required = JSON.parse(option.dataset.required || '[]');
+
+                    if (checkRequiredFields(target, required)) {
+                        const statusSelect = modalContent.querySelector('select[name="status"]');
+                        if (statusSelect) {
+                            statusSelect.value = target;
+                            autoSave('status', target);
+                        }
                     }
                 }
             };
