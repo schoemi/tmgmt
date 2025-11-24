@@ -82,6 +82,22 @@ class TMGMT_REST_API {
             'callback'            => array($this, 'execute_action'),
             'permission_callback' => array($this, 'check_permission'),
         ));
+
+        // Attachments
+        register_rest_route(self::NAMESPACE, '/events/(?P<id>\d+)/attachments', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'handle_attachments'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
+        // Delete Attachment
+        register_rest_route(self::NAMESPACE, '/events/(?P<id>\d+)/attachments/(?P<attachment_id>\d+)', array(
+            'methods'             => 'DELETE',
+            'callback'            => array($this, 'delete_attachment'),
+            'permission_callback' => function($request) {
+                return current_user_can('administrator');
+            },
+        ));
     }
 
     public function check_permission($request) {
@@ -519,13 +535,48 @@ class TMGMT_REST_API {
             }
         }
 
+        // Fetch Attachments
+        $attachment_data = isset($clean_meta['event_attachments']) ? maybe_unserialize($clean_meta['event_attachments']) : array();
+        $attachments = array();
+        
+        if (is_array($attachment_data)) {
+            foreach ($attachment_data as $item) {
+                // Normalize structure
+                $att_id = 0;
+                $category = '';
+                
+                if (is_numeric($item)) {
+                    $att_id = intval($item);
+                } elseif (is_array($item) && isset($item['id'])) {
+                    $att_id = intval($item['id']);
+                    $category = isset($item['category']) ? $item['category'] : '';
+                }
+
+                if ($att_id > 0) {
+                    $att_post = get_post($att_id);
+                    if ($att_post) {
+                        $attachments[] = array(
+                            'id' => $att_id,
+                            'title' => $att_post->post_title,
+                            'filename' => basename(get_attached_file($att_id)),
+                            'url' => wp_get_attachment_url($att_id),
+                            'type' => $att_post->post_mime_type,
+                            'icon' => wp_mime_type_icon($att_id),
+                            'category' => $category
+                        );
+                    }
+                }
+            }
+        }
+
         return array(
             'id' => $event_id,
             'title' => $post->post_title,
             'content' => $post->post_content,
             'meta' => $clean_meta,
             'logs' => $formatted_logs,
-            'actions' => $actions
+            'actions' => $actions,
+            'attachments' => $attachments
         );
     }
 
@@ -647,11 +698,23 @@ class TMGMT_REST_API {
             $webhook_method = get_post_meta($webhook_id, '_tmgmt_webhook_method', true);
 
             if ($webhook_url) {
-                 // Simple Payload
+                 // Fetch all meta for payload
+                 $meta = get_post_meta($event_id);
+                 $clean_meta = array();
+                 foreach ($meta as $key => $values) {
+                     if (strpos($key, '_tmgmt_') === 0) {
+                         $clean_key = str_replace('_tmgmt_', '', $key);
+                         $clean_meta[$clean_key] = $values[0];
+                     }
+                 }
+
+                 // Expanded Payload
                  $payload = array(
                     'event_id' => $event_id,
                     'title' => get_the_title($event_id),
-                    'status' => get_post_meta($event_id, '_tmgmt_status', true)
+                    'content' => get_post_field('post_content', $event_id),
+                    'status' => isset($clean_meta['status']) ? $clean_meta['status'] : '',
+                    'meta' => $clean_meta
                  );
                  
                  $args = array(
@@ -690,5 +753,169 @@ class TMGMT_REST_API {
             'message' => 'Aktion erfolgreich ausgeführt',
             'new_status' => $target_status
         );
+    }
+
+    public function handle_attachments($request) {
+        $event_id = $request['id'];
+        $post = get_post($event_id);
+        
+        if (!$post || $post->post_type !== 'event') {
+            return new WP_Error('not_found', 'Event nicht gefunden', array('status' => 404));
+        }
+
+        $files = $request->get_file_params();
+        $params = $request->get_json_params();
+        // Fallback for multipart params
+        if (!$params) $params = $request->get_body_params();
+
+        // Debugging: Check if we received anything
+        if (empty($files) && (empty($params) || empty($params['media_ids']))) {
+            return new WP_Error('no_data', 'Keine Dateien oder Media-IDs empfangen.', array(
+                'status' => 400, 
+                'debug_files' => $files, 
+                'debug_params' => $params,
+                'debug_body' => $request->get_body()
+            ));
+        }
+
+        $log_manager = new TMGMT_Log_Manager();
+        $new_items = array();
+
+        // 1. Handle File Uploads (Multipart)
+        if (!empty($files)) {
+            require_once(ABSPATH . 'wp-admin/includes/image.php');
+            require_once(ABSPATH . 'wp-admin/includes/file.php');
+            require_once(ABSPATH . 'wp-admin/includes/media.php');
+
+            $category = isset($params['category']) ? sanitize_text_field($params['category']) : '';
+
+            foreach ($files as $file_key => $file) {
+                // Ensure $_FILES is populated for media_handle_upload
+                if (!isset($_FILES[$file_key])) {
+                    $_FILES[$file_key] = $file;
+                }
+
+                $attachment_id = media_handle_upload($file_key, $event_id);
+                
+                if (is_wp_error($attachment_id)) {
+                    return $attachment_id;
+                }
+                
+                $new_items[] = array(
+                    'id' => $attachment_id,
+                    'category' => $category
+                );
+                $log_manager->log($event_id, 'attachment_added', 'Datei hochgeladen: ' . basename($file['name']) . ($category ? " ($category)" : ''));
+            }
+        }
+
+        // 2. Handle Linking Existing Media (JSON)
+        if ($params && isset($params['media_ids'])) {
+            $ids = is_array($params['media_ids']) ? $params['media_ids'] : array($params['media_ids']);
+            $category = isset($params['category']) ? sanitize_text_field($params['category']) : '';
+
+            foreach ($ids as $mid) {
+                if (get_post($mid)) {
+                    $new_items[] = array(
+                        'id' => intval($mid),
+                        'category' => $category
+                    );
+                    $log_manager->log($event_id, 'attachment_linked', 'Datei verknüpft (ID: ' . $mid . ')' . ($category ? " ($category)" : ''));
+                }
+            }
+        }
+
+        // Update Meta
+        if (!empty($new_items)) {
+            $current_data = get_post_meta($event_id, '_tmgmt_event_attachments', true);
+            $current_data = maybe_unserialize($current_data);
+            if (!is_array($current_data)) $current_data = array();
+            
+            // Normalize current data to array of objects
+            $normalized_current = array();
+            foreach ($current_data as $item) {
+                if (is_numeric($item)) {
+                    $normalized_current[] = array('id' => intval($item), 'category' => '');
+                } elseif (is_array($item) && isset($item['id'])) {
+                    $normalized_current[] = $item;
+                }
+            }
+
+            // Merge new items
+            foreach ($new_items as $new_item) {
+                $found = false;
+                foreach ($normalized_current as &$existing) {
+                    if ($existing['id'] === $new_item['id']) {
+                        $existing['category'] = $new_item['category']; // Update category
+                        $found = true;
+                        break;
+                    }
+                }
+                if (!$found) {
+                    $normalized_current[] = $new_item;
+                }
+            }
+
+            update_post_meta($event_id, '_tmgmt_event_attachments', $normalized_current);
+        }
+
+        return array(
+            'success' => true,
+            'message' => 'Anhänge gespeichert',
+            'items' => $new_items
+        );
+    }
+
+    public function delete_attachment($request) {
+        $event_id = $request['id'];
+        $attachment_id = intval($request['attachment_id']);
+        
+        $post = get_post($event_id);
+        if (!$post || $post->post_type !== 'event') {
+            return new WP_Error('not_found', 'Event nicht gefunden', array('status' => 404));
+        }
+
+        $current_data = get_post_meta($event_id, '_tmgmt_event_attachments', true);
+        $current_data = maybe_unserialize($current_data);
+        if (!is_array($current_data)) $current_data = array();
+
+        $normalized_current = array();
+        $found = false;
+        $removed_item = null;
+
+        foreach ($current_data as $item) {
+            $item_id = 0;
+            $item_cat = '';
+            
+            if (is_numeric($item)) {
+                $item_id = intval($item);
+            } elseif (is_array($item) && isset($item['id'])) {
+                $item_id = intval($item['id']);
+                $item_cat = isset($item['category']) ? $item['category'] : '';
+            }
+
+            if ($item_id === $attachment_id) {
+                $found = true;
+                $removed_item = array('id' => $item_id, 'category' => $item_cat);
+                continue; // Skip adding this to new array
+            }
+
+            $normalized_current[] = is_array($item) ? $item : array('id' => $item_id, 'category' => '');
+        }
+
+        if ($found) {
+            update_post_meta($event_id, '_tmgmt_event_attachments', $normalized_current);
+            
+            $log_manager = new TMGMT_Log_Manager();
+            $log_manager->log($event_id, 'attachment_removed', 'Datei entfernt (ID: ' . $attachment_id . ')' . ($removed_item['category'] ? " ({$removed_item['category']})" : ''));
+
+            return array(
+                'success' => true,
+                'message' => 'Anhang entfernt',
+                'remaining' => $normalized_current
+            );
+        } else {
+            return new WP_Error('not_found', 'Anhang nicht in diesem Event gefunden', array('status' => 404));
+        }
     }
 }

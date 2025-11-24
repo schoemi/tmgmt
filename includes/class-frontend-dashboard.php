@@ -38,6 +38,7 @@ class TMGMT_Frontend_Dashboard {
             'nonce'  => wp_create_nonce('wp_rest'),
             'statuses' => TMGMT_Event_Status::get_all_statuses(),
             'status_requirements' => TMGMT_Event_Status::get_status_requirements(),
+            'can_delete_files' => current_user_can('administrator'), // Only admins can delete files
             'field_map' => array(
                 'tmgmt_event_date' => 'date',
                 'tmgmt_event_start_time' => 'start_time',

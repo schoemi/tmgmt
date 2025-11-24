@@ -132,3 +132,72 @@ Content-Type: application/json
   "message": "Log Eintrag erstellt"
 }
 ```
+
+---
+
+### 3. Anhänge hinzufügen
+
+Lädt Dateien hoch oder verknüpft bestehende Medien mit einem Event.
+
+*   **URL:** `/events/{id}/attachments`
+*   **Methode:** `POST`
+*   **URL Parameter:**
+    *   `id` (int): Die ID des Events.
+
+#### Option A: Datei Upload (Multipart)
+
+Senden Sie die Datei als `multipart/form-data`. Der Feldname ist beliebig (z.B. `file`).
+
+#### Option B: Bestehende Medien verknüpfen (JSON)
+
+```json
+{
+  "media_ids": [123, 456]
+}
+```
+
+#### Option C: Mit Kategorie (Optional)
+
+Sie können optional eine Kategorie für die Anhänge angeben (z.B. "Vertrag", "Rider").
+
+**Multipart (Upload):**
+Fügen Sie ein Feld `category` hinzu.
+
+**JSON (Verknüpfung):**
+```json
+{
+  "media_ids": [123],
+  "category": "Vertrag"
+}
+```
+
+#### Response
+
+```json
+{
+  "success": true,
+  "message": "Anhänge gespeichert",
+  "attachment_ids": [123, 456]
+}
+```
+
+### 6. Anhang löschen
+
+Löscht einen Anhang aus einem Event.
+
+*   **URL:** `/events/{id}/attachments/{attachment_id}`
+*   **Methode:** `DELETE`
+*   **URL Parameter:**
+    *   `id` (int): Die ID des Events.
+    *   `attachment_id` (int): Die ID des Anhangs (Media ID).
+*   **Berechtigung:** Nur Administratoren.
+
+#### Response
+
+```json
+{
+  "success": true,
+  "message": "Anhang entfernt",
+  "remaining": [ ... ]
+}
+```

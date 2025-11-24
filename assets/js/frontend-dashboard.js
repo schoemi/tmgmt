@@ -575,7 +575,47 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         logHtml += '</div>';
 
-
+        // 4. Attachments
+        const attachments = data.attachments || [];
+        let attachmentsHtml = '<div class="tmgmt-attachments-list" style="margin-bottom:10px;">';
+        if (attachments.length === 0) {
+            attachmentsHtml += '<div style="color:#888; font-style:italic; font-size:0.9em;">Keine Anhänge</div>';
+        } else {
+            attachments.forEach(att => {
+                const catLabel = att.category ? `<span style="background:#eee; padding:2px 6px; border-radius:4px; font-size:0.8em; margin-right:5px;">${att.category}</span>` : '';
+                let deleteBtn = '';
+                if (tmgmtData.can_delete_files) {
+                    deleteBtn = `<span class="tmgmt-delete-attachment dashicons dashicons-trash" data-id="${att.id}" style="cursor:pointer; color:#d63939; margin-left:auto;" title="Löschen">🗑️</span>`;
+                }
+                attachmentsHtml += `
+                    <div class="tmgmt-attachment-item" style="display:flex; align-items:center; gap:10px; padding:5px 0; border-bottom:1px solid #eee;">
+                        <img src="${att.icon}" style="width:24px; height:24px;">
+                        <div style="flex:1;">
+                            ${catLabel}
+                            <a href="${att.url}" target="_blank" style="text-decoration:none; color:#0079bf;">${att.filename}</a>
+                        </div>
+                        ${deleteBtn}
+                    </div>
+                `;
+            });
+        }
+        attachmentsHtml += '</div>';
+        attachmentsHtml += `
+            <div style="display:flex; gap:5px; align-items:center; flex-wrap:wrap;">
+                <select id="tmgmt-upload-category" style="padding:6px; border-radius:4px; border:1px solid #dfe1e6;">
+                    <option value="">-- Kategorie --</option>
+                    <option value="Vertrag">Vertrag</option>
+                    <option value="Rider">Rider</option>
+                    <option value="Setlist">Setlist</option>
+                    <option value="Rechnung">Rechnung</option>
+                    <option value="Sonstiges">Sonstiges</option>
+                </select>
+                <input type="file" id="tmgmt-file-upload" style="display:none;" multiple>
+                <button class="tmgmt-btn tmgmt-btn-secondary" onclick="document.getElementById('tmgmt-file-upload').click()">Datei hochladen</button>
+                <button class="tmgmt-btn tmgmt-btn-secondary" id="tmgmt-media-lib-btn">Aus Medienarchiv</button>
+            </div>
+            <div id="tmgmt-upload-progress" style="margin-top:5px; font-size:0.85em; color:#666;"></div>
+        `;
 
         // --- Assemble HTML ---
         const html = `
@@ -598,6 +638,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="tmgmt-col-right">
                     ${statusBoxHtml}
                     ${createSection('Notizen', contentHtml)}
+                    ${createSection('Dateien / Anhänge', attachmentsHtml)}
                     ${createSection('Karte', mapHtml)}
                     ${createSection('Logbuch', logHtml)}
                 </div>
@@ -765,8 +806,130 @@ document.addEventListener('DOMContentLoaded', function() {
         const inputs = modalContent.querySelectorAll('input, select, textarea');
         const originalValues = {};
 
+        // File Upload Listener
+        const fileInput = modalContent.querySelector('#tmgmt-file-upload');
+        if (fileInput) {
+            fileInput.addEventListener('change', (e) => {
+                const files = e.target.files;
+                if (!files || files.length === 0) return;
+
+                const categorySelect = modalContent.querySelector('#tmgmt-upload-category');
+                const category = categorySelect ? categorySelect.value : '';
+
+                const progressDiv = modalContent.querySelector('#tmgmt-upload-progress');
+                progressDiv.textContent = 'Lade hoch...';
+
+                const formData = new FormData();
+                for (let i = 0; i < files.length; i++) {
+                    formData.append('file_' + i, files[i]);
+                }
+                if (category) {
+                    formData.append('category', category);
+                }
+
+                fetch(apiUrl + 'events/' + currentEditingId + '/attachments', {
+                    method: 'POST',
+                    headers: {
+                        'X-WP-Nonce': nonce
+                    },
+                    body: formData
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        progressDiv.textContent = 'Upload erfolgreich!';
+                        // Reload modal to show new attachments
+                        openModal(currentEditingId);
+                    } else {
+                        progressDiv.textContent = 'Fehler: ' + (data.message || 'Upload fehlgeschlagen');
+                    }
+                })
+                .catch(err => {
+                    progressDiv.textContent = 'Fehler: ' + err.message;
+                });
+            });
+        }
+
+        // Media Library Button
+        const mediaBtn = modalContent.querySelector('#tmgmt-media-lib-btn');
+        if (mediaBtn) {
+            mediaBtn.onclick = (e) => {
+                e.preventDefault();
+                if (typeof wp !== 'undefined' && wp.media) {
+                    const frame = wp.media({
+                        title: 'Datei auswählen',
+                        multiple: true,
+                        button: { text: 'Auswählen' }
+                    });
+
+                    frame.on('select', () => {
+                        const selection = frame.state().get('selection');
+                        const ids = selection.map(attachment => attachment.id);
+                        
+                        const categorySelect = modalContent.querySelector('#tmgmt-upload-category');
+                        const category = categorySelect ? categorySelect.value : '';
+
+                        if (ids.length > 0) {
+                            fetch(apiUrl + 'events/' + currentEditingId + '/attachments', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-WP-Nonce': nonce
+                                },
+                                body: JSON.stringify({ 
+                                    media_ids: ids,
+                                    category: category
+                                })
+                            })
+                            .then(res => res.json())
+                            .then(data => {
+                                if (data.success) {
+                                    openModal(currentEditingId);
+                                }
+                            });
+                        }
+                    });
+
+                    frame.open();
+                } else {
+                    alert('Medienbibliothek ist hier nicht verfügbar. Bitte nutzen Sie den Upload.');
+                }
+            };
+        }
+
+        // Delete Attachment Listeners
+        const deleteBtns = modalContent.querySelectorAll('.tmgmt-delete-attachment');
+        deleteBtns.forEach(btn => {
+            btn.onclick = (e) => {
+                e.preventDefault();
+                const attId = btn.dataset.id;
+                if (confirm('Möchten Sie diesen Anhang wirklich entfernen?')) {
+                    fetch(apiUrl + 'events/' + currentEditingId + '/attachments/' + attId, {
+                        method: 'DELETE',
+                        headers: {
+                            'X-WP-Nonce': nonce
+                        }
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Reload modal
+                            openModal(currentEditingId);
+                        } else {
+                            alert('Fehler: ' + (data.message || 'Konnte Anhang nicht löschen'));
+                        }
+                    })
+                    .catch(err => {
+                        alert('Fehler: ' + err.message);
+                    });
+                }
+            };
+        });
+
         inputs.forEach(input => {
             if (!input.name) return;
+            if (input.type === 'file') return; // Skip file input
+            if (input.id === 'tmgmt-upload-category') return; // Skip category select
 
             // Store original value on focus
             input.addEventListener('focus', () => {
