@@ -9,3 +9,9 @@ Folgende Status sind aktuell vorgesehen
 - Vertrag zugesendet
 - Vertrag unterschrieben zurück
 - Abstimmung Technik
+- Vorbereitung abgeschlossen
+- Auftritt erfolgt
+- Rechnung gestellt
+- Rechnung bezahlt
+- Archiviert
+- Abgesagt

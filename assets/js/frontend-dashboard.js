@@ -585,7 +585,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const catLabel = att.category ? `<span style="background:#eee; padding:2px 6px; border-radius:4px; font-size:0.8em; margin-right:5px;">${att.category}</span>` : '';
                 let deleteBtn = '';
                 if (tmgmtData.can_delete_files) {
-                    deleteBtn = `<span class="tmgmt-delete-attachment dashicons dashicons-trash" data-id="${att.id}" style="cursor:pointer; color:#d63939; margin-left:auto;" title="Löschen">🗑️</span>`;
+                    deleteBtn = `<span class="tmgmt-delete-attachment" data-id="${att.id}" style="cursor:pointer; margin-left:auto; font-size: 1.2em;" title="Löschen">🗑️</span>`;
                 }
                 attachmentsHtml += `
                     <div class="tmgmt-attachment-item" style="display:flex; align-items:center; gap:10px; padding:5px 0; border-bottom:1px solid #eee;">
