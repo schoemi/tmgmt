@@ -23,6 +23,7 @@ require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-webhook-post-type.php
 require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-email-template-post-type.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-action-post-type.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-kanban-column-post-type.php';
+require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-tour-post-type.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-placeholder-parser.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-action-handler.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-dashboard.php';
@@ -31,6 +32,7 @@ require_once TMGMT_PLUGIN_DIR . 'includes/class-rest-api.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-assets.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-log-manager.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-communication-manager.php';
+require_once TMGMT_PLUGIN_DIR . 'includes/class-tour-manager.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-roles.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-frontend-dashboard.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-settings-menu.php';
@@ -45,6 +47,7 @@ function tmgmt_init() {
     new TMGMT_Email_Template_Post_Type();
     new TMGMT_Action_Post_Type();
     new TMGMT_Kanban_Column_Post_Type();
+    new TMGMT_Tour_Post_Type();
     new TMGMT_Action_Handler();
     new TMGMT_Dashboard();
     new TMGMT_Appointment_List();
@@ -52,6 +55,7 @@ function tmgmt_init() {
     new TMGMT_Assets();
     new TMGMT_Roles();
     new TMGMT_Frontend_Dashboard();
+    new TMGMT_Tour_Manager();
 }
 add_action('plugins_loaded', 'tmgmt_init');
 
