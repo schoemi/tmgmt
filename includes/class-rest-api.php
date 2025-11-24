@@ -480,6 +480,11 @@ class TMGMT_REST_API {
         // Fetch Logs
         $log_manager = new TMGMT_Log_Manager();
         $logs = $log_manager->get_logs($event_id);
+        
+        // Fetch Communication
+        $comm_manager = new TMGMT_Communication_Manager();
+        $communication = $comm_manager->get_entries($event_id);
+
         // Format logs for frontend
         $formatted_logs = array();
         foreach ($logs as $log) {
@@ -489,7 +494,23 @@ class TMGMT_REST_API {
                 'date' => date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($log->created_at)),
                 'user' => $user_info ? $user_info->display_name : 'System',
                 'message' => $log->message,
-                'type' => $log->type
+                'type' => $log->type,
+                'communication_id' => isset($log->communication_id) ? $log->communication_id : 0
+            );
+        }
+        
+        // Format Communication
+        $formatted_comm = array();
+        foreach ($communication as $comm) {
+            $user_info = get_userdata($comm->user_id);
+            $formatted_comm[] = array(
+                'id' => $comm->id,
+                'date' => date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($comm->created_at)),
+                'user' => $user_info ? $user_info->display_name : 'System',
+                'type' => $comm->type,
+                'recipient' => $comm->recipient,
+                'subject' => $comm->subject,
+                'content' => $comm->content
             );
         }
 
@@ -575,6 +596,7 @@ class TMGMT_REST_API {
             'content' => $post->post_content,
             'meta' => $clean_meta,
             'logs' => $formatted_logs,
+            'communication' => $formatted_comm,
             'actions' => $actions,
             'attachments' => $attachments
         );
@@ -688,6 +710,12 @@ class TMGMT_REST_API {
             $sent = wp_mail($recipient, $subject, nl2br($body), $headers);
             if ($sent) {
                 $log_message .= " - E-Mail gesendet an: $recipient";
+                
+                // Save Communication
+                $comm_manager = new TMGMT_Communication_Manager();
+                $comm_id = $comm_manager->add_entry($event_id, 'email', $recipient, $subject, $body);
+                
+                $log_manager->log($event_id, 'email_sent', "E-Mail '$subject' an $recipient gesendet.", null, $comm_id);
             } else {
                 return new WP_Error('mail_failed', 'E-Mail konnte nicht gesendet werden', array('status' => 500));
             }
@@ -741,6 +769,12 @@ class TMGMT_REST_API {
             $note = isset($params['note']) ? sanitize_textarea_field($params['note']) : '';
             if (!empty($note)) {
                 $log_message .= " - Notiz: " . $note;
+                
+                // Save Communication
+                $comm_manager = new TMGMT_Communication_Manager();
+                $comm_id = $comm_manager->add_entry($event_id, 'note', 'Intern', '', $note);
+                
+                $log_manager->log($event_id, 'note_added', "Notiz hinzugefügt.", null, $comm_id);
             }
         }
 

@@ -23,6 +23,7 @@ class TMGMT_Log_Manager {
             created_at datetime DEFAULT '0000-00-00 00:00:00' NOT NULL,
             type varchar(50) NOT NULL,
             message text NOT NULL,
+            communication_id bigint(20) DEFAULT 0,
             PRIMARY KEY  (id),
             KEY event_id (event_id)
         ) $charset_collate;";
@@ -38,9 +39,10 @@ class TMGMT_Log_Manager {
      * @param string $type
      * @param string $message
      * @param int $user_id (Optional, defaults to current user)
+     * @param int $communication_id (Optional, link to communication table)
      * @return int|false The row ID or false on error.
      */
-    public function log($event_id, $type, $message, $user_id = null) {
+    public function log($event_id, $type, $message, $user_id = null, $communication_id = 0) {
         global $wpdb;
 
         if (!$user_id) {
@@ -54,14 +56,16 @@ class TMGMT_Log_Manager {
                 'user_id' => $user_id,
                 'created_at' => current_time('mysql'),
                 'type' => $type,
-                'message' => $message
+                'message' => $message,
+                'communication_id' => $communication_id
             ),
             array(
                 '%d',
                 '%d',
                 '%s',
                 '%s',
-                '%s'
+                '%s',
+                '%d'
             )
         );
     }

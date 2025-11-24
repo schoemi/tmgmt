@@ -30,6 +30,7 @@ require_once TMGMT_PLUGIN_DIR . 'includes/class-appointment-list.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-rest-api.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-assets.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-log-manager.php';
+require_once TMGMT_PLUGIN_DIR . 'includes/class-communication-manager.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-roles.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-frontend-dashboard.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-settings-menu.php';
@@ -59,5 +60,8 @@ register_activation_hook(__FILE__, 'tmgmt_activate');
 function tmgmt_activate() {
     $log_manager = new TMGMT_Log_Manager();
     $log_manager->create_table();
+    
+    $comm_manager = new TMGMT_Communication_Manager();
+    $comm_manager->create_table();
 }
 

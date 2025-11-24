@@ -565,15 +565,50 @@ document.addEventListener('DOMContentLoaded', function() {
             logHtml += '<div class="tmgmt-log-entry">Keine Einträge.</div>';
         } else {
             logs.forEach(log => {
+                let link = '';
+                if (log.communication_id && log.communication_id > 0) {
+                    link = ` <a href="#" class="tmgmt-open-comm" data-id="${log.communication_id}" style="font-size:0.9em; color:#0079bf;">(Details)</a>`;
+                }
                 logHtml += `
                     <div class="tmgmt-log-entry">
                         <div class="tmgmt-log-meta">${log.date} - ${log.user}</div>
-                        <div>${log.message}</div>
+                        <div>${log.message}${link}</div>
                     </div>
                 `;
             });
         }
         logHtml += '</div>';
+
+        // 3b. Communication
+        const comms = data.communication || [];
+        let commHtml = '<div class="tmgmt-communication-list">';
+        if (comms.length === 0) {
+            commHtml += '<div style="padding:10px; color:#888;">Keine Kommunikation vorhanden.</div>';
+        } else {
+            commHtml += '<table style="width:100%; border-collapse:collapse; font-size:0.9em;">';
+            commHtml += '<thead style="background:#f4f5f7; text-align:left;"><tr><th style="padding:8px;">Datum</th><th style="padding:8px;">Typ</th><th style="padding:8px;">Von</th><th style="padding:8px;">An</th><th style="padding:8px;">Inhalt</th></tr></thead>';
+            commHtml += '<tbody>';
+            comms.forEach(c => {
+                const typeLabel = c.type === 'email' ? '📧 E-Mail' : '📝 Notiz';
+                const recipient = c.type === 'email' ? c.recipient : 'Intern';
+                const subject = c.type === 'email' ? `<strong>${c.subject}</strong><br>` : '';
+                const preview = c.content.length > 50 ? c.content.substring(0, 50) + '...' : c.content;
+                
+                commHtml += `<tr id="comm-row-${c.id}" style="border-bottom:1px solid #eee;">
+                    <td style="padding:8px; vertical-align:top;">${c.date}</td>
+                    <td style="padding:8px; vertical-align:top;">${typeLabel}</td>
+                    <td style="padding:8px; vertical-align:top;">${c.user}</td>
+                    <td style="padding:8px; vertical-align:top;">${recipient}</td>
+                    <td style="padding:8px; vertical-align:top;">
+                        ${subject}
+                        <div class="comm-preview">${preview}</div>
+                        <a href="#" class="tmgmt-open-comm-drawer" data-id="${c.id}" style="font-size:0.8em; color:#0079bf;">Anzeigen</a>
+                    </td>
+                </tr>`;
+            });
+            commHtml += '</tbody></table>';
+        }
+        commHtml += '</div>';
 
         // 4. Attachments
         const attachments = data.attachments || [];
@@ -618,6 +653,20 @@ document.addEventListener('DOMContentLoaded', function() {
         `;
 
         // --- Assemble HTML ---
+        
+        // Bottom Tabs Structure (Log & Communication)
+        const bottomTabs = `
+            <div class="tmgmt-tabs" style="display:flex; gap:5px; margin-bottom:15px; border-bottom:1px solid #ddd; padding-bottom:5px; margin-top: 20px;">
+                <button class="tmgmt-tab-btn active" data-tab="log" style="padding:5px 10px; border:none; background:none; cursor:pointer; border-bottom:2px solid transparent;">Logbuch</button>
+                <button class="tmgmt-tab-btn" data-tab="communication" style="padding:5px 10px; border:none; background:none; cursor:pointer; border-bottom:2px solid transparent;">Kommunikation</button>
+            </div>
+            <style>
+                .tmgmt-tab-btn.active { border-bottom-color: #0079bf !important; font-weight:bold; color:#0079bf; }
+                .tmgmt-tab-content { display: none; }
+                .tmgmt-tab-content.active { display: block; }
+            </style>
+        `;
+
         const html = `
             <div class="tmgmt-modal-header">
                 <div style="display:flex; align-items:center; gap:10px; flex:1;">
@@ -640,7 +689,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     ${createSection('Notizen', contentHtml)}
                     ${createSection('Dateien / Anhänge', attachmentsHtml)}
                     ${createSection('Karte', mapHtml)}
-                    ${createSection('Logbuch', logHtml)}
+                    
+                    ${bottomTabs}
+                    <div class="tmgmt-tab-content active" id="tab-log">
+                        ${logHtml}
+                    </div>
+                    <div class="tmgmt-tab-content" id="tab-communication">
+                        ${commHtml}
+                    </div>
                 </div>
             </div>
             <div class="tmgmt-modal-footer">
@@ -658,9 +714,154 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div id="tmgmt-sheet-body-missing" style="padding:20px; overflow-y:auto; flex:1;"></div>
                 </div>
             </div>
+            
+            <div id="tmgmt-side-drawer" class="tmgmt-side-drawer" style="display:none;">
+                <div class="tmgmt-drawer-header">
+                    <h3 id="tmgmt-drawer-title">Details</h3>
+                    <span class="tmgmt-close-drawer" style="cursor:pointer; font-size:20px;">&times;</span>
+                </div>
+                <div id="tmgmt-drawer-content" style="padding:20px; overflow-y:auto; flex:1;"></div>
+            </div>
+            <style>
+                .tmgmt-side-drawer {
+                    position: absolute;
+                    top: 0;
+                    right: 0;
+                    bottom: 0;
+                    width: 400px;
+                    background: white;
+                    box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+                    z-index: 1000;
+                    display: flex;
+                    flex-direction: column;
+                    border-left: 1px solid #eee;
+                    animation: slideIn 0.3s ease-out;
+                }
+                @keyframes slideIn {
+                    from { transform: translateX(100%); }
+                    to { transform: translateX(0); }
+                }
+                .tmgmt-drawer-header {
+                    padding: 15px 20px;
+                    border-bottom: 1px solid #eee;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    background: #f9f9f9;
+                }
+            </style>
         `;
 
         modalContent.innerHTML = html;
+
+        // Tab Switching Logic
+        const tabBtns = modalContent.querySelectorAll('.tmgmt-tab-btn');
+        const tabContents = modalContent.querySelectorAll('.tmgmt-tab-content');
+
+        tabBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                // Remove active class from all
+                tabBtns.forEach(b => b.classList.remove('active'));
+                tabContents.forEach(c => c.classList.remove('active'));
+
+                // Add active class to clicked
+                btn.classList.add('active');
+                const tabId = btn.getAttribute('data-tab');
+                const content = modalContent.querySelector(`#tab-${tabId}`);
+                if (content) content.classList.add('active');
+            });
+        });
+
+        // Log Details Click Handler
+        const logDetailLinks = modalContent.querySelectorAll('.tmgmt-open-comm');
+        logDetailLinks.forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const commId = link.getAttribute('data-id');
+                if (commId) {
+                    // Switch to Communication Tab
+                    const commTabBtn = modalContent.querySelector('.tmgmt-tab-btn[data-tab="communication"]');
+                    if (commTabBtn) commTabBtn.click();
+
+                    // Highlight the entry
+                    setTimeout(() => {
+                        const commRow = modalContent.querySelector(`#comm-row-${commId}`);
+                        if (commRow) {
+                            commRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            commRow.style.backgroundColor = '#fff3cd'; // Highlight color
+                            setTimeout(() => {
+                                commRow.style.backgroundColor = '';
+                            }, 2000);
+                            
+                            // Open the drawer
+                            const drawerBtn = commRow.querySelector('.tmgmt-open-comm-drawer');
+                            if (drawerBtn) drawerBtn.click();
+                        }
+                    }, 100);
+                }
+            });
+        });
+
+        // Side Drawer Logic
+        const drawer = modalContent.querySelector('#tmgmt-side-drawer');
+        const drawerContent = modalContent.querySelector('#tmgmt-drawer-content');
+        const closeDrawerBtn = modalContent.querySelector('.tmgmt-close-drawer');
+
+        if (closeDrawerBtn) {
+            closeDrawerBtn.onclick = () => {
+                drawer.style.display = 'none';
+            };
+        }
+
+        const openDrawerBtns = modalContent.querySelectorAll('.tmgmt-open-comm-drawer');
+        openDrawerBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const id = btn.getAttribute('data-id');
+                const comm = data.communication.find(c => c.id == id);
+                
+                if (comm) {
+                    const typeLabel = comm.type === 'email' ? '📧 E-Mail' : '📝 Notiz';
+                    let html = `
+                        <div style="margin-bottom:15px;">
+                            <div style="font-size:0.85em; color:#666;">Datum</div>
+                            <div>${comm.date}</div>
+                        </div>
+                        <div style="margin-bottom:15px;">
+                            <div style="font-size:0.85em; color:#666;">Typ</div>
+                            <div>${typeLabel}</div>
+                        </div>
+                        <div style="margin-bottom:15px;">
+                            <div style="font-size:0.85em; color:#666;">Von</div>
+                            <div>${comm.user}</div>
+                        </div>
+                    `;
+                    
+                    if (comm.type === 'email') {
+                        html += `
+                            <div style="margin-bottom:15px;">
+                                <div style="font-size:0.85em; color:#666;">An</div>
+                                <div>${comm.recipient}</div>
+                            </div>
+                            <div style="margin-bottom:15px;">
+                                <div style="font-size:0.85em; color:#666;">Betreff</div>
+                                <div><strong>${comm.subject}</strong></div>
+                            </div>
+                        `;
+                    }
+                    
+                    html += `
+                        <div style="margin-top:20px; border-top:1px solid #eee; padding-top:15px;">
+                            <div style="font-size:0.85em; color:#666; margin-bottom:5px;">Inhalt</div>
+                            <div style="white-space:pre-wrap; font-family:monospace; background:#f9f9f9; padding:10px; border-radius:4px; font-size:0.9em; overflow-x:auto;">${comm.content}</div>
+                        </div>
+                    `;
+                    
+                    drawerContent.innerHTML = html;
+                    drawer.style.display = 'flex';
+                }
+            });
+        });
 
         // Bind Events
         bindModalEvents();
@@ -734,6 +935,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                     // If status changed, reload modal to update actions
                     if (payload.status) {
+                        openModal(currentEditingId);
+                    } else {
+                        // Just reload modal to refresh logs/comm
                         openModal(currentEditingId);
                     }
                 })
@@ -1026,6 +1230,88 @@ document.addEventListener('DOMContentLoaded', function() {
             };
         });
 
+        // Tab Switching Logic
+        const tabs = modalContent.querySelectorAll('.tmgmt-tab');
+        tabs.forEach(tab => {
+            tab.onclick = () => {
+                // Remove active class from all tabs
+                tabs.forEach(t => {
+                    t.classList.remove('active');
+                    t.style.borderBottom = 'none';
+                    t.style.fontWeight = 'normal';
+                });
+                
+                // Add active class to clicked tab
+                tab.classList.add('active');
+                tab.style.borderBottom = '2px solid #0079bf';
+                tab.style.fontWeight = '600';
+                
+                // Hide all tab contents
+                const contents = modalContent.querySelectorAll('.tmgmt-tab-content');
+                contents.forEach(c => c.style.display = 'none');
+                
+                // Show target content
+                const targetId = 'tab-' + tab.dataset.tab;
+                const targetContent = modalContent.querySelector('#' + targetId);
+                if (targetContent) {
+                    targetContent.style.display = 'block';
+                    
+                    // Resize map if needed
+                    if (tab.dataset.tab === 'map') {
+                        window.dispatchEvent(new Event('resize'));
+                    }
+                }
+            };
+        });
+
+        // Communication Toggle
+        const commToggles = modalContent.querySelectorAll('.comm-toggle');
+        commToggles.forEach(toggle => {
+            toggle.onclick = (e) => {
+                e.preventDefault();
+                const row = toggle.closest('tr');
+                const full = row.querySelector('.comm-full');
+                const preview = row.querySelector('.comm-preview');
+                
+                if (full.style.display === 'none') {
+                    full.style.display = 'block';
+                    preview.style.display = 'none';
+                    toggle.textContent = 'Verbergen';
+                } else {
+                    full.style.display = 'none';
+                    preview.style.display = 'block';
+                    toggle.textContent = 'Anzeigen';
+                }
+            };
+        });
+
+        // Open Communication from Log
+        const logLinks = modalContent.querySelectorAll('.tmgmt-open-comm');
+        logLinks.forEach(link => {
+            link.onclick = (e) => {
+                e.preventDefault();
+                const commId = link.dataset.id;
+                
+                // Switch to Comm Tab
+                const commTab = modalContent.querySelector('.tmgmt-tab[data-tab="comm"]');
+                if (commTab) commTab.click();
+                
+                // Highlight Row
+                setTimeout(() => {
+                    const row = modalContent.querySelector('#comm-row-' + commId);
+                    if (row) {
+                        row.style.backgroundColor = '#fff3cd';
+                        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        setTimeout(() => row.style.backgroundColor = 'transparent', 2000);
+                        
+                        // Expand
+                        const toggle = row.querySelector('.comm-toggle');
+                        if (toggle && toggle.textContent === 'Anzeigen') toggle.click();
+                    }
+                }, 100);
+            };
+        });
+
 
 
 
@@ -1234,6 +1520,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Reload board
                     loadBoard();
                     // Reload modal to refresh actions
+                    openModal(currentEditingId);
+                } else {
+                    // Just reload modal to refresh logs/comm
                     openModal(currentEditingId);
                 }
                 if (callback) callback();

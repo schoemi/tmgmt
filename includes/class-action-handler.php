@@ -16,6 +16,20 @@ class TMGMT_Action_Handler {
             'side',
             'high'
         );
+        
+        add_meta_box(
+            'tmgmt_event_communication',
+            'Kommunikation',
+            array($this, 'render_communication_box'),
+            'event',
+            'normal',
+            'low'
+        );
+    }
+
+    public function render_communication_box($post) {
+        $comm_manager = new TMGMT_Communication_Manager();
+        $comm_manager->render_backend_table($post->ID);
     }
 
     public function render_actions_box($post) {
@@ -248,7 +262,12 @@ class TMGMT_Action_Handler {
 
             if ($sent) {
                 $log_message .= " - E-Mail gesendet an: $recipient";
-                $log_manager->log($event_id, 'email_sent', "E-Mail '$subject' an $recipient gesendet.");
+                
+                // Save Communication
+                $comm_manager = new TMGMT_Communication_Manager();
+                $comm_id = $comm_manager->add_entry($event_id, 'email', $recipient, $subject, $body);
+                
+                $log_manager->log($event_id, 'email_sent', "E-Mail '$subject' an $recipient gesendet.", null, $comm_id);
             } else {
                 $log_manager->log($event_id, 'email_error', "Fehler beim Senden der E-Mail an $recipient.");
                 wp_send_json_error(array('message' => 'E-Mail konnte nicht gesendet werden.'));
@@ -258,10 +277,20 @@ class TMGMT_Action_Handler {
             // Note Type
             if (!empty($note)) {
                 $log_message .= " - Notiz: " . $note;
+                
+                // Save Communication
+                $comm_manager = new TMGMT_Communication_Manager();
+                $comm_id = $comm_manager->add_entry($event_id, 'note', 'Intern', '', $note);
+                
+                // Log with link
+                $log_manager->log($event_id, 'note_added', "Notiz hinzugefügt.", null, $comm_id);
             }
         }
 
         // Log the main action
+        // Only log main action if it's not already logged above (email/note)
+        // But 'action_executed' is a summary. Let's keep it but maybe without comm_id or with?
+        // Let's keep it simple. The specific logs have the link.
         $log_manager->log($event_id, 'action', $log_message);
 
         // 5. Handle Status Change
