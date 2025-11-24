@@ -1084,12 +1084,59 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (type === 'email') {
             openActionSheet(actionId);
+        } else if (type === 'note') {
+            openNoteSheet(actionId);
         } else {
-            // Webhook or Note
+            // Webhook
             if (confirm('Aktion wirklich ausführen?')) {
                 executeAction(actionId, {});
             }
         }
+    }
+
+    function openNoteSheet(actionId) {
+        const sheet = document.getElementById('tmgmt-action-sheet');
+        if (!sheet) return;
+
+        const sheetBody = document.getElementById('tmgmt-sheet-body');
+        const confirmBtn = document.getElementById('tmgmt-sheet-confirm');
+        const cancelBtn = document.getElementById('tmgmt-sheet-cancel');
+        const closeBtn = sheet.querySelector('.tmgmt-close-sheet');
+        const overlay = sheet.querySelector('.tmgmt-sheet-overlay');
+
+        sheetBody.innerHTML = `
+            <div class="tmgmt-form-group">
+                <label class="tmgmt-sheet-label">Notiz erfassen</label>
+                <textarea id="tmgmt-note-body" class="tmgmt-sheet-textarea" rows="5" placeholder="Hier Notiz eingeben..."></textarea>
+            </div>
+        `;
+        
+        sheet.style.display = 'flex';
+        setTimeout(() => sheet.classList.add('open'), 10);
+
+        confirmBtn.onclick = () => {
+            const note = document.getElementById('tmgmt-note-body').value;
+            
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = 'Speichere...';
+
+            executeAction(actionId, {
+                note: note
+            }, () => {
+                closeSheet();
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = 'Ausführen';
+            });
+        };
+
+        const closeSheet = () => {
+            sheet.classList.remove('open');
+            setTimeout(() => sheet.style.display = 'none', 300);
+        };
+
+        if (cancelBtn) cancelBtn.onclick = closeSheet;
+        if (closeBtn) closeBtn.onclick = closeSheet;
+        if (overlay) overlay.onclick = closeSheet;
     }
 
     function openActionSheet(actionId) {

@@ -737,6 +737,11 @@ class TMGMT_REST_API {
                      $log_message .= " - Webhook Status: $code";
                  }
             }
+        } elseif ($type === 'note') {
+            $note = isset($params['note']) ? sanitize_textarea_field($params['note']) : '';
+            if (!empty($note)) {
+                $log_message .= " - Notiz: " . $note;
+            }
         }
 
         // Update Status if needed
