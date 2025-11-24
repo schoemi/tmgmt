@@ -68,6 +68,20 @@ class TMGMT_REST_API {
                 ),
             ),
         ));
+
+        // Preview Action (Email)
+        register_rest_route(self::NAMESPACE, '/events/(?P<id>\d+)/actions/(?P<action_id>\d+)/preview', array(
+            'methods'             => 'GET',
+            'callback'            => array($this, 'preview_action'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
+        // Execute Action
+        register_rest_route(self::NAMESPACE, '/events/(?P<id>\d+)/actions/(?P<action_id>\d+)/execute', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'execute_action'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
     }
 
     public function check_permission($request) {
@@ -469,22 +483,38 @@ class TMGMT_REST_API {
         if ($current_status) {
             $status_def = get_page_by_path($current_status, OBJECT, 'tmgmt_status_def');
             if ($status_def) {
-                $raw_actions = get_post_meta($status_def->ID, '_tmgmt_status_actions', true);
-                if (is_array($raw_actions)) {
-                    // Enrich actions with required fields from target status
-                    foreach ($raw_actions as $key => $action) {
-                        if (!empty($action['target_status'])) {
-                            $target_slug = $action['target_status'];
-                            $target_def = get_page_by_path($target_slug, OBJECT, 'tmgmt_status_def');
+                $available_action_ids = get_post_meta($status_def->ID, '_tmgmt_available_actions', true);
+                
+                if (is_array($available_action_ids) && !empty($available_action_ids)) {
+                    foreach ($available_action_ids as $action_id) {
+                        $action_post = get_post($action_id);
+                        if (!$action_post || $action_post->post_status !== 'publish') continue;
+
+                        $target_status = get_post_meta($action_id, '_tmgmt_action_target_status', true);
+                        $type = get_post_meta($action_id, '_tmgmt_action_type', true);
+                        
+                        // Build action object compatible with frontend
+                        $action_data = array(
+                            'id' => $action_id,
+                            'label' => $action_post->post_title,
+                            'type' => $type,
+                            'target_status' => $target_status,
+                            'required_fields' => array()
+                        );
+
+                        // If action changes status, fetch required fields for target status
+                        if ($target_status) {
+                            $target_def = get_page_by_path($target_status, OBJECT, 'tmgmt_status_def');
                             if ($target_def) {
                                 $req = get_post_meta($target_def->ID, '_tmgmt_required_fields', true);
                                 if (is_array($req) && !empty($req)) {
-                                    $raw_actions[$key]['required_fields'] = $req;
+                                    $action_data['required_fields'] = $req;
                                 }
                             }
                         }
+                        
+                        $actions[] = $action_data;
                     }
-                    $actions = $raw_actions;
                 }
             }
         }
@@ -496,6 +526,169 @@ class TMGMT_REST_API {
             'meta' => $clean_meta,
             'logs' => $formatted_logs,
             'actions' => $actions
+        );
+    }
+
+    public function preview_action($request) {
+        $event_id = $request['id'];
+        $action_id = $request['action_id'];
+
+        $action_post = get_post($action_id);
+        if (!$action_post || $action_post->post_type !== 'tmgmt_action') {
+            return new WP_Error('not_found', 'Aktion nicht gefunden', array('status' => 404));
+        }
+
+        $type = get_post_meta($action_id, '_tmgmt_action_type', true);
+        if ($type !== 'email') {
+            return new WP_Error('invalid_type', 'Vorschau nur für E-Mails verfügbar', array('status' => 400));
+        }
+
+        $email_template_id = get_post_meta($action_id, '_tmgmt_action_email_template_id', true);
+        if (!$email_template_id) {
+            return new WP_Error('no_template', 'Keine E-Mail Vorlage definiert', array('status' => 400));
+        }
+
+        $subject_raw = get_post_meta($email_template_id, '_tmgmt_email_subject', true);
+        $body_raw = get_post_meta($email_template_id, '_tmgmt_email_body', true);
+        $recipient_raw = get_post_meta($email_template_id, '_tmgmt_email_recipient', true);
+
+        // Fallback for recipient if empty
+        if (empty($recipient_raw)) {
+            $recipient_raw = '[contact_email_contract]';
+        }
+
+        // Fallback for subject if empty
+        if (empty($subject_raw)) {
+            $subject_raw = 'Info: [event_title]';
+        }
+
+        $subject = TMGMT_Placeholder_Parser::parse($subject_raw, $event_id);
+        $body = TMGMT_Placeholder_Parser::parse($body_raw, $event_id);
+        $recipient = TMGMT_Placeholder_Parser::parse($recipient_raw, $event_id);
+
+        return array(
+            'subject' => $subject,
+            'body' => $body,
+            'recipient' => $recipient
+        );
+    }
+
+    public function execute_action($request) {
+        $event_id = $request['id'];
+        $action_id = $request['action_id'];
+        $params = $request->get_json_params();
+
+        $action_post = get_post($action_id);
+        if (!$action_post || $action_post->post_type !== 'tmgmt_action') {
+            return new WP_Error('not_found', 'Aktion nicht gefunden', array('status' => 404));
+        }
+
+        $type = get_post_meta($action_id, '_tmgmt_action_type', true);
+        $log_manager = new TMGMT_Log_Manager();
+        $log_message = "Aktion ausgeführt: " . $action_post->post_title;
+
+        if ($type === 'email') {
+            // Use provided subject/body or fallback to template
+            $subject = isset($params['email_subject']) ? $params['email_subject'] : '';
+            $body = isset($params['email_body']) ? $params['email_body'] : '';
+            $recipient = isset($params['email_recipient']) ? $params['email_recipient'] : '';
+            
+            // If not provided (e.g. direct execution without preview), parse from template
+            if (empty($subject) || empty($body) || empty($recipient)) {
+                $email_template_id = get_post_meta($action_id, '_tmgmt_action_email_template_id', true);
+                if ($email_template_id) {
+                    if (empty($subject)) {
+                        $raw = get_post_meta($email_template_id, '_tmgmt_email_subject', true);
+                        $subject = TMGMT_Placeholder_Parser::parse($raw, $event_id);
+                    }
+                    if (empty($body)) {
+                        $raw = get_post_meta($email_template_id, '_tmgmt_email_body', true);
+                        $body = TMGMT_Placeholder_Parser::parse($raw, $event_id);
+                    }
+                    if (empty($recipient)) {
+                        $raw = get_post_meta($email_template_id, '_tmgmt_email_recipient', true);
+                        if (empty($raw)) $raw = '[contact_email_contract]'; // Fallback
+                        $recipient = TMGMT_Placeholder_Parser::parse($raw, $event_id);
+                    }
+                }
+            }
+
+            // Headers
+            $headers = array('Content-Type: text/html; charset=UTF-8');
+            
+            // Handle CC/BCC/Reply-To
+            $cc_raw = get_post_meta($email_template_id, '_tmgmt_email_cc', true);
+            $bcc_raw = get_post_meta($email_template_id, '_tmgmt_email_bcc', true);
+            $reply_to_raw = get_post_meta($email_template_id, '_tmgmt_email_reply_to', true);
+
+            if (!empty($cc_raw)) {
+                $cc = TMGMT_Placeholder_Parser::parse($cc_raw, $event_id);
+                if (!empty($cc)) $headers[] = 'Cc: ' . $cc;
+            }
+            if (!empty($bcc_raw)) {
+                $bcc = TMGMT_Placeholder_Parser::parse($bcc_raw, $event_id);
+                if (!empty($bcc)) $headers[] = 'Bcc: ' . $bcc;
+            }
+            if (!empty($reply_to_raw)) {
+                $reply_to = TMGMT_Placeholder_Parser::parse($reply_to_raw, $event_id);
+                if (!empty($reply_to)) $headers[] = 'Reply-To: ' . $reply_to;
+            }
+
+            $sent = wp_mail($recipient, $subject, nl2br($body), $headers);
+            if ($sent) {
+                $log_message .= " - E-Mail gesendet an: $recipient";
+            } else {
+                return new WP_Error('mail_failed', 'E-Mail konnte nicht gesendet werden', array('status' => 500));
+            }
+
+        } elseif ($type === 'webhook') {
+            $webhook_id = get_post_meta($action_id, '_tmgmt_action_webhook_id', true);
+            $webhook_url = get_post_meta($webhook_id, '_tmgmt_webhook_url', true);
+            $webhook_method = get_post_meta($webhook_id, '_tmgmt_webhook_method', true);
+
+            if ($webhook_url) {
+                 // Simple Payload
+                 $payload = array(
+                    'event_id' => $event_id,
+                    'title' => get_the_title($event_id),
+                    'status' => get_post_meta($event_id, '_tmgmt_status', true)
+                 );
+                 
+                 $args = array(
+                    'method' => $webhook_method === 'GET' ? 'GET' : 'POST',
+                    'timeout' => 20,
+                    'body' => $webhook_method === 'POST' ? json_encode($payload) : null,
+                    'headers' => array('Content-Type' => 'application/json')
+                 );
+                 
+                 $request_url = $webhook_url;
+                 if ($webhook_method === 'GET') {
+                     $request_url = add_query_arg($payload, $webhook_url);
+                 }
+
+                 $response = wp_remote_request($request_url, $args);
+                 if (is_wp_error($response)) {
+                     $log_message .= " - Webhook Fehler: " . $response->get_error_message();
+                 } else {
+                     $code = wp_remote_retrieve_response_code($response);
+                     $log_message .= " - Webhook Status: $code";
+                 }
+            }
+        }
+
+        // Update Status if needed
+        $target_status = get_post_meta($action_id, '_tmgmt_action_target_status', true);
+        if ($target_status) {
+            update_post_meta($event_id, '_tmgmt_status', $target_status);
+            $log_message .= " - Status geändert zu: $target_status";
+        }
+
+        $log_manager->log($event_id, 'action_executed', $log_message);
+
+        return array(
+            'success' => true,
+            'message' => 'Aktion erfolgreich ausgeführt',
+            'new_status' => $target_status
         );
     }
 }

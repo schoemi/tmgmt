@@ -94,13 +94,24 @@ class TMGMT_Frontend_Dashboard {
         <!-- Detail Modal Template -->
         <div id="tmgmt-modal" class="tmgmt-modal" style="display:none;">
             <div class="tmgmt-modal-content">
-                <span class="tmgmt-close">&times;</span>
-                <h2 id="tmgmt-modal-title">Event Details</h2>
-                <div id="tmgmt-modal-body">
-                    <!-- Form will be injected here -->
+                <!-- Content injected by JS -->
+            </div>
+        </div>
+
+        <!-- Action Bottom Sheet -->
+        <div id="tmgmt-action-sheet" class="tmgmt-bottom-sheet" style="display:none;">
+            <div class="tmgmt-sheet-overlay"></div>
+            <div class="tmgmt-sheet-content">
+                <div class="tmgmt-sheet-header">
+                    <h3 id="tmgmt-sheet-title">Aktion ausführen</h3>
+                    <span class="tmgmt-close-sheet">&times;</span>
                 </div>
-                <div class="tmgmt-modal-footer">
-                    <button id="tmgmt-save-btn" class="button button-primary">Speichern</button>
+                <div id="tmgmt-sheet-body">
+                    <!-- Dynamic Content -->
+                </div>
+                <div class="tmgmt-sheet-footer">
+                    <button id="tmgmt-sheet-cancel" class="tmgmt-btn">Abbrechen</button>
+                    <button id="tmgmt-sheet-confirm" class="tmgmt-btn tmgmt-btn-primary">Ausführen</button>
                 </div>
             </div>
         </div>

@@ -72,7 +72,7 @@ class TMGMT_Action_Post_Type {
         $email_templates = get_posts(array('post_type' => 'tmgmt_email_template', 'numberposts' => -1));
 
         // Get Statuses
-        $statuses = TMGMT_Event_Status::get_statuses();
+        $statuses = TMGMT_Event_Status::get_all_statuses();
 
         ?>
         <table class="form-table">
@@ -152,29 +152,33 @@ class TMGMT_Action_Post_Type {
     }
 
     public function enqueue_scripts($hook) {
-        global $post;
+        global $post_type;
         if ($hook == 'post-new.php' || $hook == 'post.php') {
-            if ($post->post_type === self::POST_TYPE) {
-                ?>
-                <script>
-                jQuery(document).ready(function($) {
-                    function toggleFields() {
-                        var type = $('#tmgmt_action_type').val();
-                        $('.tmgmt-webhook-row').hide();
-                        $('.tmgmt-email-row').hide();
-                        
-                        if (type === 'webhook') {
-                            $('.tmgmt-webhook-row').show();
-                        } else if (type === 'email') {
-                            $('.tmgmt-email-row').show();
-                        }
-                    }
-                    $('#tmgmt_action_type').change(toggleFields);
-                    toggleFields();
-                });
-                </script>
-                <?php
+            if ($post_type === self::POST_TYPE) {
+                add_action('admin_footer', array($this, 'print_admin_scripts'));
             }
         }
+    }
+
+    public function print_admin_scripts() {
+        ?>
+        <script>
+        jQuery(document).ready(function($) {
+            function toggleFields() {
+                var type = $('#tmgmt_action_type').val();
+                $('.tmgmt-webhook-row').hide();
+                $('.tmgmt-email-row').hide();
+                
+                if (type === 'webhook') {
+                    $('.tmgmt-webhook-row').show();
+                } else if (type === 'email') {
+                    $('.tmgmt-email-row').show();
+                }
+            }
+            $('#tmgmt_action_type').change(toggleFields);
+            toggleFields();
+        });
+        </script>
+        <?php
     }
 }

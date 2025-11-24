@@ -7,6 +7,155 @@ document.addEventListener('DOMContentLoaded', function() {
     let boardData = null;
     let currentMap = null;
 
+    // Field Labels Map
+    const fieldLabels = {
+        'title': 'Titel',
+        'date': 'Datum',
+        'start_time': 'Startzeit',
+        'arrival_time': 'Ankunftszeit',
+        'departure_time': 'Abfahrtszeit',
+        'arrival_notes': 'Anreise Notizen',
+        'venue_name': 'Location / Venue',
+        'venue_street': 'Straße (Location)',
+        'venue_number': 'Hausnummer (Location)',
+        'venue_zip': 'PLZ (Location)',
+        'venue_city': 'Stadt (Location)',
+        'venue_country': 'Land (Location)',
+        'contact_salutation': 'Anrede',
+        'contact_firstname': 'Vorname',
+        'contact_lastname': 'Nachname',
+        'contact_company': 'Firma / Veranstalter',
+        'contact_street': 'Straße (Kontakt)',
+        'contact_number': 'Hausnummer (Kontakt)',
+        'contact_zip': 'PLZ (Kontakt)',
+        'contact_city': 'Stadt (Kontakt)',
+        'contact_country': 'Land (Kontakt)',
+        'contact_email': 'E-Mail',
+        'contact_phone': 'Telefon',
+        'contact_email_contract': 'E-Mail (Vertrag)',
+        'contact_phone_contract': 'Telefon (Vertrag)',
+        'contact_name_tech': 'Name (Technik)',
+        'contact_email_tech': 'E-Mail (Technik)',
+        'contact_phone_tech': 'Telefon (Technik)',
+        'contact_name_program': 'Name (Programm)',
+        'contact_email_program': 'E-Mail (Programm)',
+        'contact_phone_program': 'Telefon (Programm)',
+        'fee': 'Gage',
+        'deposit': 'Anzahlung',
+        'inquiry_date': 'Anfrage vom'
+    };
+
+    const checkRequiredFields = (targetStatus, requiredFields) => {
+        if (!requiredFields || requiredFields.length === 0) return true;
+
+        const missing = [];
+        const fieldMap = tmgmtData.field_map || {};
+
+        requiredFields.forEach(rawField => {
+            // Map settings key (e.g. tmgmt_event_date) to API key (e.g. date)
+            const field = fieldMap[rawField] || rawField;
+            
+            const input = modalContent.querySelector(`[name="${field}"]`);
+            const val = input ? input.value : '';
+            if (!val || val.trim() === '') {
+                missing.push(field);
+            }
+        });
+
+        if (missing.length > 0) {
+            showBottomSheet(targetStatus, missing);
+            return false;
+        }
+        return true;
+    };
+
+    const showBottomSheet = (targetStatus, missingFields) => {
+        const sheet = modalContent.querySelector('#tmgmt-bottom-sheet');
+        const container = sheet.querySelector('#tmgmt-sheet-body-missing');
+        const closeBtn = sheet.querySelector('.tmgmt-close-sheet');
+        
+        container.innerHTML = '';
+        
+        const closeSheet = () => {
+            sheet.classList.remove('open');
+            setTimeout(() => sheet.style.display = 'none', 300);
+        };
+
+        if (closeBtn) {
+            closeBtn.onclick = closeSheet;
+        }
+
+        missingFields.forEach(field => {
+            const label = fieldLabels[field] || field;
+            let type = 'text';
+            if (field.includes('date')) type = 'date';
+            if (field.includes('time')) type = 'time';
+            if (field.includes('email')) type = 'email';
+            if (field === 'fee') type = 'number';
+            
+            const div = document.createElement('div');
+            div.className = 'tmgmt-form-group';
+            div.innerHTML = `
+                <label>${label}</label>
+                <input type="${type}" name="${field}" class="tmgmt-sheet-input" style="width:100%; padding:8px; border:1px solid #dfe1e6; border-radius:4px;">
+            `;
+            container.appendChild(div);
+        });
+
+        const btn = document.createElement('button');
+        btn.className = 'tmgmt-btn tmgmt-btn-primary';
+        btn.textContent = 'Speichern & Fortfahren';
+        btn.style.width = '100%';
+        btn.style.marginTop = '10px';
+        btn.onclick = () => {
+            const inputs = container.querySelectorAll('input');
+            const payload = {};
+            let allFilled = true;
+            inputs.forEach(inp => {
+                if (!inp.value.trim()) allFilled = false;
+                payload[inp.name] = inp.value;
+            });
+
+            if (!allFilled) {
+                alert('Bitte alle Felder ausfüllen.');
+                return;
+            }
+
+            // Add status to payload to save it in one go
+            payload['status'] = targetStatus;
+
+            updateEvent(currentEditingId, payload)
+                .then(() => {
+                    // Update UI inputs immediately
+                    for (const [key, val] of Object.entries(payload)) {
+                        const mainInput = modalContent.querySelector(`[name="${key}"]`);
+                        if (mainInput) mainInput.value = val;
+                    }
+                    
+                    // Update Status Select UI
+                    const statusSelect = modalContent.querySelector('select[name="status"]');
+                    if (statusSelect) {
+                        statusSelect.value = targetStatus;
+                    }
+                    
+                    // Reload Board & Modal
+                    loadBoard();
+                    openModal(currentEditingId);
+                    
+                    closeSheet();
+                })
+                .catch(err => {
+                    alert('Fehler beim Speichern: ' + err.message);
+                });
+        };
+        container.appendChild(btn);
+
+        sheet.style.display = 'flex';
+        setTimeout(() => {
+            sheet.classList.add('open');
+        }, 10);
+    };
+
     // Initial Load
     loadBoard();
 
@@ -363,20 +512,26 @@ document.addEventListener('DOMContentLoaded', function() {
             
             if (actions.length <= 3) {
                 actions.forEach(action => {
-                    if (action.target_status) {
-                        const req = action.required_fields ? JSON.stringify(action.required_fields) : '[]';
-                        statusBoxHtml += `<button class="tmgmt-btn tmgmt-btn-secondary tmgmt-transition-btn" data-target="${action.target_status}" data-required='${req}' style="margin-right:5px; margin-bottom:5px;">${action.label}</button>`;
-                    }
+                    const req = action.required_fields ? JSON.stringify(action.required_fields) : '[]';
+                    const target = action.target_status || '';
+                    statusBoxHtml += `<button class="tmgmt-btn tmgmt-btn-secondary tmgmt-action-btn" 
+                        data-id="${action.id}" 
+                        data-type="${action.type}" 
+                        data-target="${target}" 
+                        data-required='${req}' 
+                        style="margin-right:5px; margin-bottom:5px;">${action.label}</button>`;
                 });
             } else {
                 statusBoxHtml += '<div style="display:flex; gap:5px;">';
                 statusBoxHtml += '<select id="tmgmt-action-select" style="flex:1; padding: 8px; border-radius: 4px; border: 1px solid #dfe1e6;">';
                 statusBoxHtml += '<option value="">-- Aktion wählen --</option>';
                 actions.forEach(action => {
-                    if (action.target_status) {
-                        const req = action.required_fields ? JSON.stringify(action.required_fields) : '[]';
-                        statusBoxHtml += `<option value="${action.target_status}" data-required='${req}'>${action.label}</option>`;
-                    }
+                    const req = action.required_fields ? JSON.stringify(action.required_fields) : '[]';
+                    const target = action.target_status || '';
+                    statusBoxHtml += `<option value="${action.id}" 
+                        data-type="${action.type}" 
+                        data-target="${target}" 
+                        data-required='${req}'>${action.label}</option>`;
                 });
                 statusBoxHtml += '</select>';
                 statusBoxHtml += '<button class="tmgmt-btn tmgmt-btn-secondary" id="tmgmt-run-action-btn">Ausführen</button>';
@@ -452,12 +607,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
                 <!-- Auto-Save enabled, no save button needed -->
             </div>
-            <div id="tmgmt-bottom-sheet" class="tmgmt-bottom-sheet">
-                <div class="tmgmt-bottom-sheet-header">
-                    <div class="tmgmt-bottom-sheet-title">Fehlende Angaben</div>
-                    <span class="tmgmt-close-sheet" style="cursor:pointer; font-size:20px;">&times;</span>
+            <div id="tmgmt-bottom-sheet" class="tmgmt-bottom-sheet" style="display:none;">
+                <div class="tmgmt-sheet-overlay"></div>
+                <div class="tmgmt-sheet-content">
+                    <div class="tmgmt-sheet-header">
+                        <h3 class="tmgmt-bottom-sheet-title">Fehlende Angaben</h3>
+                        <span class="tmgmt-close-sheet" style="cursor:pointer; font-size:20px;">&times;</span>
+                    </div>
+                    <div id="tmgmt-sheet-body-missing" style="padding:20px; overflow-y:auto; flex:1;"></div>
                 </div>
-                <div class="tmgmt-sheet-content"></div>
             </div>
         `;
 
@@ -705,125 +863,9 @@ document.addEventListener('DOMContentLoaded', function() {
             };
         });
 
-        // Field Labels Map
-        const fieldLabels = {
-            'title': 'Titel',
-            'date': 'Datum',
-            'start_time': 'Startzeit',
-            'venue_name': 'Location / Venue',
-            'venue_street': 'Straße',
-            'venue_number': 'Hausnummer',
-            'venue_zip': 'PLZ',
-            'venue_city': 'Stadt',
-            'venue_country': 'Land',
-            'contact_firstname': 'Vorname',
-            'contact_lastname': 'Nachname',
-            'contact_email': 'Email',
-            'contact_phone': 'Telefon',
-            'fee': 'Gage',
-            'inquiry_date': 'Anfrage vom'
-        };
 
-        const checkRequiredFields = (targetStatus, requiredFields) => {
-            if (!requiredFields || requiredFields.length === 0) return true;
 
-            const missing = [];
-            const fieldMap = tmgmtData.field_map || {};
 
-            requiredFields.forEach(rawField => {
-                // Map settings key (e.g. tmgmt_event_date) to API key (e.g. date)
-                const field = fieldMap[rawField] || rawField;
-                
-                const input = modalContent.querySelector(`[name="${field}"]`);
-                const val = input ? input.value : '';
-                if (!val || val.trim() === '') {
-                    missing.push(field);
-                }
-            });
-
-            if (missing.length > 0) {
-                showBottomSheet(targetStatus, missing);
-                return false;
-            }
-            return true;
-        };
-
-        const showBottomSheet = (targetStatus, missingFields) => {
-            const sheet = modalContent.querySelector('#tmgmt-bottom-sheet');
-            const container = sheet.querySelector('.tmgmt-sheet-content');
-            const closeBtn = sheet.querySelector('.tmgmt-close-sheet');
-            
-            container.innerHTML = '';
-            
-            if (closeBtn) {
-                closeBtn.onclick = () => {
-                    sheet.classList.remove('active');
-                };
-            }
-
-            missingFields.forEach(field => {
-                const label = fieldLabels[field] || field;
-                let type = 'text';
-                if (field.includes('date')) type = 'date';
-                if (field.includes('time')) type = 'time';
-                if (field.includes('email')) type = 'email';
-                if (field === 'fee') type = 'number';
-                
-                const div = document.createElement('div');
-                div.className = 'tmgmt-form-group';
-                div.innerHTML = `
-                    <label>${label}</label>
-                    <input type="${type}" name="${field}" class="tmgmt-sheet-input" style="width:100%; padding:8px; border:1px solid #dfe1e6; border-radius:4px;">
-                `;
-                container.appendChild(div);
-            });
-
-            const btn = document.createElement('button');
-            btn.className = 'tmgmt-btn tmgmt-btn-primary';
-            btn.textContent = 'Speichern & Fortfahren';
-            btn.style.width = '100%';
-            btn.style.marginTop = '10px';
-            btn.onclick = () => {
-                const inputs = container.querySelectorAll('input');
-                const payload = {};
-                let allFilled = true;
-                inputs.forEach(inp => {
-                    if (!inp.value.trim()) allFilled = false;
-                    payload[inp.name] = inp.value;
-                });
-
-                if (!allFilled) {
-                    alert('Bitte alle Felder ausfüllen.');
-                    return;
-                }
-
-                updateEvent(currentEditingId, payload)
-                    .then(() => {
-                        // Update UI inputs immediately
-                        for (const [key, val] of Object.entries(payload)) {
-                            const mainInput = modalContent.querySelector(`[name="${key}"]`);
-                            if (mainInput) mainInput.value = val;
-                        }
-                        
-                        // Now perform status change
-                        const statusSelect = modalContent.querySelector('select[name="status"]');
-                        if (statusSelect) {
-                            statusSelect.value = targetStatus;
-                            autoSave('status', targetStatus);
-                        }
-                        
-                        sheet.classList.remove('active');
-                    })
-                    .catch(err => {
-                        alert('Fehler beim Speichern: ' + err.message);
-                    });
-            };
-            container.appendChild(btn);
-
-            setTimeout(() => {
-                sheet.classList.add('active');
-            }, 10);
-        };
 
         // Transition Buttons
         const transitionBtns = modalContent.querySelectorAll('.tmgmt-transition-btn');
@@ -842,26 +884,158 @@ document.addEventListener('DOMContentLoaded', function() {
             };
         });
 
+        // Action Buttons (Direct)
+        const actionBtns = modalContent.querySelectorAll('.tmgmt-action-btn');
+        actionBtns.forEach(btn => {
+            btn.onclick = () => {
+                const actionId = btn.dataset.id;
+                const type = btn.dataset.type;
+                const target = btn.dataset.target;
+                const required = JSON.parse(btn.dataset.required || '[]');
+                handleAction(actionId, type, target, required);
+            };
+        });
+
         // Action Dropdown
         const runActionBtn = modalContent.querySelector('#tmgmt-run-action-btn');
         if (runActionBtn) {
             runActionBtn.onclick = () => {
                 const select = modalContent.querySelector('#tmgmt-action-select');
-                const target = select.value;
-                if (target) {
+                const actionId = select.value;
+                if (actionId) {
                     const option = select.options[select.selectedIndex];
+                    const type = option.dataset.type;
+                    const target = option.dataset.target;
                     const required = JSON.parse(option.dataset.required || '[]');
-
-                    if (checkRequiredFields(target, required)) {
-                        const statusSelect = modalContent.querySelector('select[name="status"]');
-                        if (statusSelect) {
-                            statusSelect.value = target;
-                            autoSave('status', target);
-                        }
-                    }
+                    handleAction(actionId, type, target, required);
                 }
             };
         }
+    }
+
+    function handleAction(actionId, type, targetStatus, requiredFields) {
+        // Check required fields first
+        if (targetStatus && !checkRequiredFields(targetStatus, requiredFields)) {
+            return;
+        }
+
+        if (type === 'email') {
+            openActionSheet(actionId);
+        } else {
+            // Webhook or Note
+            if (confirm('Aktion wirklich ausführen?')) {
+                executeAction(actionId, {});
+            }
+        }
+    }
+
+    function openActionSheet(actionId) {
+        const sheet = document.getElementById('tmgmt-action-sheet');
+        if (!sheet) return;
+
+        const sheetBody = document.getElementById('tmgmt-sheet-body');
+        const confirmBtn = document.getElementById('tmgmt-sheet-confirm');
+        const cancelBtn = document.getElementById('tmgmt-sheet-cancel');
+        const closeBtn = sheet.querySelector('.tmgmt-close-sheet');
+        const overlay = sheet.querySelector('.tmgmt-sheet-overlay');
+
+        sheetBody.innerHTML = '<div class="tmgmt-loading">Lade Vorschau...</div>';
+        sheet.style.display = 'flex';
+        setTimeout(() => sheet.classList.add('open'), 10);
+
+        // Fetch Preview
+        fetch(apiUrl + `events/${currentEditingId}/actions/${actionId}/preview`, {
+            headers: { 'X-WP-Nonce': nonce }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.code) throw new Error(data.message); // WP Error
+
+            sheetBody.innerHTML = `
+                <div class="tmgmt-form-group">
+                    <label class="tmgmt-sheet-label">Empfänger</label>
+                    <input type="text" id="tmgmt-email-recipient" class="tmgmt-sheet-input">
+                </div>
+                <div class="tmgmt-form-group">
+                    <label class="tmgmt-sheet-label">Betreff</label>
+                    <input type="text" id="tmgmt-email-subject" class="tmgmt-sheet-input">
+                </div>
+                <div class="tmgmt-form-group">
+                    <label class="tmgmt-sheet-label">Nachricht</label>
+                    <textarea id="tmgmt-email-body" class="tmgmt-sheet-textarea"></textarea>
+                </div>
+            `;
+
+            // Set values safely
+            document.getElementById('tmgmt-email-recipient').value = data.recipient || '';
+            document.getElementById('tmgmt-email-subject').value = data.subject || '';
+            document.getElementById('tmgmt-email-body').value = data.body || '';
+
+            confirmBtn.onclick = () => {
+                const recipient = document.getElementById('tmgmt-email-recipient').value;
+                const subject = document.getElementById('tmgmt-email-subject').value;
+                const body = document.getElementById('tmgmt-email-body').value;
+                
+                confirmBtn.disabled = true;
+                confirmBtn.textContent = 'Sende...';
+
+                executeAction(actionId, {
+                    email_recipient: recipient,
+                    email_subject: subject,
+                    email_body: body
+                }, () => {
+                    closeSheet();
+                    confirmBtn.disabled = false;
+                    confirmBtn.textContent = 'Ausführen';
+                });
+            };
+        })
+        .catch(err => {
+            sheetBody.innerHTML = `<div class="error">Fehler: ${err.message}</div>`;
+        });
+
+        const closeSheet = () => {
+            sheet.classList.remove('open');
+            setTimeout(() => sheet.style.display = 'none', 300);
+        };
+
+        if (cancelBtn) cancelBtn.onclick = closeSheet;
+        if (closeBtn) closeBtn.onclick = closeSheet;
+        if (overlay) overlay.onclick = closeSheet;
+    }
+
+    function executeAction(actionId, params, callback) {
+        fetch(apiUrl + `events/${currentEditingId}/actions/${actionId}/execute`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-WP-Nonce': nonce
+            },
+            body: JSON.stringify(params)
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                if (data.new_status) {
+                    // Update status in UI
+                    const statusSelect = document.querySelector('select[name="status"]');
+                    if (statusSelect) statusSelect.value = data.new_status;
+                    // Reload board
+                    loadBoard();
+                    // Reload modal to refresh actions
+                    openModal(currentEditingId);
+                }
+                if (callback) callback();
+            } else {
+                alert('Fehler: ' + (data.message || 'Unbekannter Fehler'));
+                if (callback) callback(); // Reset button state
+            }
+        })
+        .catch(err => {
+            alert('Fehler: ' + err.message);
+            if (callback) callback();
+        });
     }
 
 

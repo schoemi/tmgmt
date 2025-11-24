@@ -67,11 +67,13 @@ class TMGMT_Email_Template_Post_Type {
         <div style="display: flex; gap: 10px; margin-bottom: 15px;">
             <div style="flex: 1;">
                 <label for="tmgmt_email_recipient" style="display:block; font-weight:bold; margin-bottom:5px;">Empfänger (To)</label>
-                <input type="text" id="tmgmt_email_recipient" name="tmgmt_email_recipient" value="<?php echo esc_attr($recipient); ?>" class="widefat" placeholder="[contact_email_contract]">
+                <input type="text" id="tmgmt_email_recipient" name="tmgmt_email_recipient" value="<?php echo esc_attr($recipient); ?>" class="widefat">
+                <p class="description" style="font-size:11px; color:#888;">Leer lassen für Standard: [contact_email_contract]</p>
             </div>
             <div style="flex: 1;">
                 <label for="tmgmt_email_subject" style="display:block; font-weight:bold; margin-bottom:5px;">Betreff</label>
-                <input type="text" id="tmgmt_email_subject" name="tmgmt_email_subject" value="<?php echo esc_attr($subject); ?>" class="widefat" placeholder="Vertrag für [event_title]">
+                <input type="text" id="tmgmt_email_subject" name="tmgmt_email_subject" value="<?php echo esc_attr($subject); ?>" class="widefat">
+                <p class="description" style="font-size:11px; color:#888;">Leer lassen für Standard: Info: [event_title]</p>
             </div>
         </div>
 

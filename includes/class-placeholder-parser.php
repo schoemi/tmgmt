@@ -55,6 +55,8 @@ class TMGMT_Placeholder_Parser {
             '[contact_zip]' => '_tmgmt_contact_zip',
             '[contact_city]' => '_tmgmt_contact_city',
             '[contact_country]' => '_tmgmt_contact_country',
+            '[contact_email]' => '_tmgmt_contact_email',
+            '[contact_phone]' => '_tmgmt_contact_phone',
             
             // Communication
             '[contact_email_contract]' => '_tmgmt_contact_email_contract',
@@ -74,6 +76,12 @@ class TMGMT_Placeholder_Parser {
 
         foreach ($meta_map as $placeholder => $meta_key) {
             $value = get_post_meta($event_id, $meta_key, true);
+            
+            // Format Date Fields
+            if (strpos($placeholder, 'date') !== false && !empty($value)) {
+                $value = date_i18n(get_option('date_format'), strtotime($value));
+            }
+            
             $replacements[$placeholder] = $value;
         }
 
