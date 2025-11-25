@@ -593,27 +593,42 @@ class TMGMT_Tour_Manager {
     }
 
     private function get_travel_data($from, $to, $bus_factor) {
+        // Check Cache
+        $lat1 = round($from['lat'], 5);
+        $lng1 = round($from['lng'], 5);
+        $lat2 = round($to['lat'], 5);
+        $lng2 = round($to['lng'], 5);
+
+        $cache_key = 'tmgmt_route_' . md5("{$lat1}_{$lng1}_{$lat2}_{$lng2}");
+        $cached_data = get_transient($cache_key);
+
+        if ($cached_data !== false) {
+             // Apply bus factor to cached base duration
+             $cached_data['duration'] = round($cached_data['duration'] * $bus_factor);
+             return $cached_data;
+        }
+
         $ors_key = get_option('tmgmt_ors_api_key');
         $here_key = get_option('tmgmt_here_api_key');
+        $data = false;
 
         // Try HERE Maps first if key exists
         if ($here_key) {
             $data = $this->fetch_here_route($from, $to, $here_key);
-            if ($data) {
-                // Apply bus factor if not already handled by vehicle type (HERE supports bus, but let's keep it simple)
-                // If we use car routing, apply factor.
-                $data['duration'] = $data['duration'] * $bus_factor;
-                return $data;
-            }
         }
 
-        // Try ORS if key exists
-        if ($ors_key) {
+        // Try ORS if key exists and no data yet
+        if (!$data && $ors_key) {
             $data = $this->fetch_ors_route($from, $to, $ors_key);
-            if ($data) {
-                $data['duration'] = $data['duration'] * $bus_factor;
-                return $data;
-            }
+        }
+
+        if ($data) {
+            // Cache the raw result (car duration/distance) for 30 days
+            set_transient($cache_key, $data, 30 * DAY_IN_SECONDS);
+            
+            // Apply bus factor
+            $data['duration'] = round($data['duration'] * $bus_factor);
+            return $data;
         }
 
         // Fallback: Haversine

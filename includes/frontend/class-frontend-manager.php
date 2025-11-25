@@ -277,8 +277,8 @@ class TMGMT_Frontend_Manager {
             echo '<td>';
             if ($item['type'] === 'event') {
                 echo '<strong>Auftritt</strong>';
-                if (isset($item['start_time']) && !empty($item['start_time'])) {
-                    echo '<br><span style="font-size: 0.9em; color: #555;">' . esc_html($item['start_time']) . ' Uhr</span>';
+                if (isset($item['show_start']) && !empty($item['show_start'])) {
+                    echo '<br><span style="font-size: 0.9em; color: #555;">' . esc_html($item['show_start']) . ' Uhr</span>';
                 }
             }
             elseif ($item['type'] === 'travel') echo 'Fahrt';
