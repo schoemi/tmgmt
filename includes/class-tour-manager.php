@@ -32,12 +32,33 @@ class TMGMT_Tour_Manager {
         $start_lng = get_option('tmgmt_route_start_lng');
         $start_name = get_option('tmgmt_route_start_name', 'Start');
         $buffer_arrival = (int)get_option('tmgmt_route_buffer_arrival', 30);
+        $min_buffer_arrival = (int)get_option('tmgmt_route_min_buffer_arrival', 15);
+        $max_idle_time = (int)get_option('tmgmt_route_max_idle_time', 120);
         $buffer_departure = (int)get_option('tmgmt_route_buffer_departure', 30);
+        $show_duration = (int)get_option('tmgmt_route_show_duration', 60);
         $loading_time = (int)get_option('tmgmt_route_loading_time', 60);
         $bus_factor = (float)get_option('tmgmt_route_bus_factor', 1.0);
         $status_filter = get_option('tmgmt_route_status_filter', array());
 
-        error_log('Settings - Start: ' . $start_lat . '/' . $start_lng . ', Status Filter: ' . print_r($status_filter, true));
+        // Convert Status Filter IDs to Slugs
+        if (!empty($status_filter)) {
+            $status_slugs = array();
+            foreach ($status_filter as $status_id) {
+                // Check if it's an ID (numeric)
+                if (is_numeric($status_id)) {
+                    $status_post = get_post($status_id);
+                    if ($status_post) {
+                        $status_slugs[] = $status_post->post_name;
+                    }
+                } else {
+                    // Already a slug?
+                    $status_slugs[] = $status_id;
+                }
+            }
+            $status_filter = $status_slugs;
+        }
+
+        error_log('Settings - Start: ' . $start_lat . '/' . $start_lng . ', Status Filter (Slugs): ' . print_r($status_filter, true));
 
         if (!$start_lat || !$start_lng) {
             return new WP_Error('missing_start', 'Startpunkt (Proberaum) ist nicht konfiguriert.');
@@ -46,8 +67,15 @@ class TMGMT_Tour_Manager {
         // 2. Get Events
         $args = array(
             'post_type' => 'event',
+            'post_status' => 'any',
             'numberposts' => -1,
             'meta_query' => array(
+                'relation' => 'OR',
+                array(
+                    'key' => '_tmgmt_event_date',
+                    'value' => $date,
+                    'compare' => '='
+                ),
                 array(
                     'key' => 'tmgmt_event_date',
                     'value' => $date,
@@ -57,27 +85,41 @@ class TMGMT_Tour_Manager {
         );
         
         $events = get_posts($args);
-        error_log('Events found for date: ' . count($events));
+        $raw_count = count($events);
+        error_log('Events found for date: ' . $raw_count);
 
         $filtered_events = array();
+        $debug_log = array();
 
         foreach ($events as $event) {
-            $status = get_post_meta($event->ID, 'tmgmt_event_status', true);
-            $time = get_post_meta($event->ID, 'tmgmt_event_start_time', true);
-            $lat = get_post_meta($event->ID, 'tmgmt_geo_lat', true);
-            $lng = get_post_meta($event->ID, 'tmgmt_geo_lng', true);
-            $city = get_post_meta($event->ID, 'tmgmt_venue_city', true);
+            $status = get_post_meta($event->ID, '_tmgmt_status', true);
+            if (!$status) $status = get_post_meta($event->ID, 'tmgmt_status', true); // Fallback
 
-            error_log("Checking Event ID {$event->ID} ('{$event->post_title}'): Status={$status}, Lat={$lat}, Lng={$lng}");
+            $time = get_post_meta($event->ID, '_tmgmt_event_start_time', true);
+            if (!$time) $time = get_post_meta($event->ID, 'tmgmt_event_start_time', true);
+
+            $lat = get_post_meta($event->ID, '_tmgmt_geo_lat', true);
+            if (!$lat) $lat = get_post_meta($event->ID, 'tmgmt_geo_lat', true);
+
+            $lng = get_post_meta($event->ID, '_tmgmt_geo_lng', true);
+            if (!$lng) $lng = get_post_meta($event->ID, 'tmgmt_geo_lng', true);
+
+            $city = get_post_meta($event->ID, '_tmgmt_venue_city', true);
+            if (!$city) $city = get_post_meta($event->ID, 'tmgmt_venue_city', true);
+
+            $debug_info = "ID {$event->ID}: Status='{$status}', Lat='{$lat}', Lng='{$lng}'";
+            error_log("Checking Event " . $debug_info);
 
             // If filter is active, check status
             if (!empty($status_filter) && !in_array($status, $status_filter)) {
                 error_log("-> Skipped due to status filter.");
+                $debug_log[] = $debug_info . " -> Skipped (Status Filter: " . implode(',', $status_filter) . ")";
                 continue;
             }
             
             if (!$lat || !$lng) {
                 error_log("-> Skipped due to missing geodata.");
+                $debug_log[] = $debug_info . " -> Skipped (Missing Geo)";
                 // Skip events without geo data for now
                 continue;
             }
@@ -95,7 +137,7 @@ class TMGMT_Tour_Manager {
 
         if (empty($filtered_events)) {
             error_log('No events left after filtering.');
-            return new WP_Error('no_events', 'Keine passenden Events mit Geodaten für diesen Tag gefunden.');
+            return new WP_Error('no_events', 'Keine passenden Events mit Geodaten für diesen Tag gefunden. (Gefunden: ' . $raw_count . ', Gefiltert: ' . ($raw_count - count($filtered_events)) . ') <br>Details:<br>' . implode('<br>', $debug_log));
         }
 
         // 3. Sort by Time
@@ -162,87 +204,117 @@ class TMGMT_Tour_Manager {
             'lng' => $start_lng
         );
 
-        // 5. Calculate Times (Backwards Pass)
-        // We start from the last event's show time and calculate backwards to find the latest departure.
-        // Note: This is a simplified logic. Real logic needs to handle multiple events.
-        // We iterate backwards from the last event.
-        
-        // Find the last event index
-        $last_event_idx = -1;
-        for ($i = count($schedule) - 1; $i >= 0; $i--) {
-            if ($schedule[$i]['type'] === 'event') {
-                $last_event_idx = $i;
-                break;
-            }
-        }
+        // 5. Calculate Times
+        // New Logic:
+        // 1. Calculate Start of Tour (Backwards from First Event) to ensure we arrive on time.
+        // 2. Calculate Departures for ALL events based on Show Duration (Forward Pass).
+        // 3. Calculate Arrivals for subsequent events based on Travel (Forward Pass).
 
-        if ($last_event_idx !== -1) {
-            // Calculate times for the last event
-            $event = &$schedule[$last_event_idx];
-            $show_start = strtotime($date . ' ' . $event['show_start']);
-            
-            // Arrival at venue
-            $arrival_time = $show_start - ($event['buffer_arrival'] * 60);
-            $event['arrival_time'] = date('H:i', $arrival_time);
-            
-            // Departure from venue (after show)
-            // We assume show duration? Or just use buffer departure as "time after show start"?
-            // Usually show duration is needed. If missing, we assume 0 or just use buffer departure as "time after show".
-            // Let's assume show takes 60 mins for now if not specified.
-            $show_duration = 60; 
-            $departure_time = $show_start + ($show_duration * 60) + ($event['buffer_departure'] * 60);
-            $event['departure_time'] = date('H:i', $departure_time);
-
-            // Now propagate backwards
-            $current_arrival_time = $arrival_time;
-            
-            for ($i = $last_event_idx - 1; $i >= 0; $i--) {
-                $item = &$schedule[$i];
-                
-                if ($item['type'] === 'travel') {
-                    // Departure from previous location = Arrival at next - Duration
-                    $departure_from_prev = $current_arrival_time - ($item['duration'] * 60);
-                    $item['departure_time'] = date('H:i', $departure_from_prev);
-                    $item['arrival_time'] = date('H:i', $current_arrival_time);
-                    $current_arrival_time = $departure_from_prev;
-                } elseif ($item['type'] === 'event') {
-                    // This is an earlier event.
-                    // Its departure time must be <= current_arrival_time (which is departure for next travel)
-                    $item['departure_time'] = date('H:i', $current_arrival_time);
-                    
-                    // Check if this conflicts with its own show time + buffer
-                    // For now, we just set the departure time based on the NEXT event requirement.
-                    // But we also need to calculate its arrival time based on ITS show time.
-                    
-                    $this_show_start = strtotime($date . ' ' . $item['show_start']);
-                    $this_arrival = $this_show_start - ($item['buffer_arrival'] * 60);
-                    $item['arrival_time'] = date('H:i', $this_arrival);
-                    
-                    // Update current_arrival_time for the travel before this event
-                    $current_arrival_time = $this_arrival;
-                } elseif ($item['type'] === 'start') {
-                    // Departure from start
-                    $item['departure_time'] = date('H:i', $current_arrival_time);
-                    // Loading start
-                    $loading_start = $current_arrival_time - ($item['loading_time'] * 60);
-                    $item['arrival_time'] = date('H:i', $loading_start); // "Arrival" at start means start of work
+        if (!empty($schedule)) {
+            // Find first event index
+            $first_event_idx = -1;
+            foreach ($schedule as $i => $item) {
+                if ($item['type'] === 'event') {
+                    $first_event_idx = $i;
+                    break;
                 }
             }
-            
-            // Propagate forward for return trip
-            $last_event = $schedule[$last_event_idx];
-            $last_departure = strtotime($date . ' ' . $last_event['departure_time']);
-            
-            // Find travel after last event
-            for ($i = $last_event_idx + 1; $i < count($schedule); $i++) {
-                $item = &$schedule[$i];
-                if ($item['type'] === 'travel') {
-                    $item['departure_time'] = date('H:i', $last_departure);
-                    $arrival_at_end = $last_departure + ($item['duration'] * 60);
-                    $item['arrival_time'] = date('H:i', $arrival_at_end);
-                    $last_departure = $arrival_at_end;
-                } elseif ($item['type'] === 'end') {
-                    $item['arrival_time'] = date('H:i', $last_departure);
+
+            if ($first_event_idx !== -1) {
+                // --- A. Anchor: First Event Arrival ---
+                $first_event = &$schedule[$first_event_idx];
+                $first_show_start = strtotime($date . ' ' . $first_event['show_start']);
+                $first_arrival_needed = $first_show_start - ($first_event['buffer_arrival'] * 60);
+                
+                $first_event['arrival_time'] = date('H:i', $first_arrival_needed);
+
+                // --- B. Backwards Pass: Start of Day ---
+                $current_time = $first_arrival_needed;
+                for ($i = $first_event_idx - 1; $i >= 0; $i--) {
+                    $item = &$schedule[$i];
+                    if ($item['type'] === 'travel') {
+                        $item['arrival_time'] = date('H:i', $current_time);
+                        $departure_time = $current_time - ($item['duration'] * 60);
+                        $item['departure_time'] = date('H:i', $departure_time);
+                        $current_time = $departure_time;
+                    } elseif ($item['type'] === 'start') {
+                        $item['departure_time'] = date('H:i', $current_time);
+                        $loading_start = $current_time - ($item['loading_time'] * 60);
+                        $item['arrival_time'] = date('H:i', $loading_start);
+                    }
+                }
+
+                // --- C. Forward Pass: Events & Subsequent Travel ---
+                // We start tracking time from the First Event's Arrival
+                
+                $last_departure_time = 0;
+                $current_arrival_timestamp = $first_arrival_needed;
+
+                for ($i = $first_event_idx; $i < count($schedule); $i++) {
+                    $item = &$schedule[$i];
+
+                    if ($item['type'] === 'event') {
+                        // Event Logic
+                        $show_start = strtotime($date . ' ' . $item['show_start']);
+                        
+                        // Calculate Actual Buffer (Show Start - Arrival)
+                        $item['actual_buffer'] = round(($show_start - $current_arrival_timestamp) / 60);
+
+                        // Thresholds
+                        // Standard Limit: Show Start - Standard Buffer (e.g. 20:00 - 30m = 19:30)
+                        // Min Limit: Show Start - Min Buffer (e.g. 20:00 - 15m = 19:45)
+                        
+                        $standard_limit = $show_start - ($item['buffer_arrival'] * 60);
+                        $min_limit = $show_start - ($min_buffer_arrival * 60);
+
+                        // Check for lateness
+                        if ($current_arrival_timestamp > $show_start) {
+                            // Level 3: Arrived after Show Start
+                            $item['error'] = 'Auftrittszeit vor Ankunft';
+                            $item['time_diff'] = abs($item['actual_buffer']); // Minutes late
+                        } elseif ($current_arrival_timestamp > $min_limit) {
+                            // Level 2: Arrived after Min Buffer Limit (but before Show Start)
+                            $item['error'] = 'Vorlaufzeit zu gering';
+                            $item['time_diff'] = $item['actual_buffer']; // Remaining buffer
+                        } elseif ($current_arrival_timestamp > $standard_limit) {
+                            // Level 1: Arrived after Standard Buffer Limit (but before Min Limit)
+                            $item['warning'] = 'Achtung: Kurze Vorlaufzeit';
+                            $item['time_diff'] = $item['actual_buffer']; // Remaining buffer
+                        } elseif ($current_arrival_timestamp < ($show_start - ($max_idle_time * 60))) {
+                            // Idle Warning: Arrived way too early
+                            $item['idle_warning'] = 'Lange Wartezeit';
+                            $item['time_diff'] = $item['actual_buffer']; // Waiting time
+                        }
+
+                        // Arrival Time:
+                        // For First Event: Already set (Anchor).
+                        // For Others: Should be set by previous Travel step.
+                        
+                        // Calculate Departure: Show Start + Duration + Buffer
+                        $departure = $show_start + ($show_duration * 60) + ($item['buffer_departure'] * 60);
+                        $item['departure_time'] = date('H:i', $departure);
+                        
+                        $last_departure_time = $departure;
+
+                    } elseif ($item['type'] === 'travel') {
+                        // Travel Logic
+                        // Start travel at last_departure_time
+                        $item['departure_time'] = date('H:i', $last_departure_time);
+                        
+                        $arrival = $last_departure_time + ($item['duration'] * 60);
+                        $item['arrival_time'] = date('H:i', $arrival);
+                        
+                        $last_departure_time = $arrival; // Arrived at next location
+                        $current_arrival_timestamp = $arrival;
+
+                        // Set Arrival for next item (Event or End)
+                        if (isset($schedule[$i+1])) {
+                            $schedule[$i+1]['arrival_time'] = date('H:i', $arrival);
+                        }
+                    } elseif ($item['type'] === 'end') {
+                        // End Logic
+                        // Arrival already set by previous travel
+                    }
                 }
             }
         }

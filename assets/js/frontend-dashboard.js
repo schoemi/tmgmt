@@ -936,10 +936,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     // If status changed, reload modal to update actions
                     if (payload.status) {
                         openModal(currentEditingId);
-                    } else {
-                        // Just reload modal to refresh logs/comm
-                        openModal(currentEditingId);
                     }
+                    // For other fields, we do NOT reload the modal to avoid interrupting typing
                 })
                 .catch(err => {
                     console.error(err);
@@ -947,15 +945,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
         };
 
-        const autoSave = (name, value) => {
+        const autoSave = (name, value, options = {}) => {
             const payload = {};
             payload[name] = value;
+            if (options.suppress_log) {
+                payload['suppress_log'] = true;
+            }
             savePayload(payload);
         };
 
-        const debouncedSave = debounce((name, value) => {
-            autoSave(name, value);
-        }, 1000);
+        const debouncedSave = debounce((name, value, options) => {
+            autoSave(name, value, options);
+        }, 2000);
 
         // Geocoding Logic
         const performGeocode = () => {
@@ -1174,11 +1175,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (titleInput) titleInput.value = input.value;
                     }
 
-                    // Save with suppress_log = true
-                    const payload = {};
-                    payload[fieldName] = fieldValue;
-                    payload['suppress_log'] = true;
-                    savePayload(payload);
+                    // Use debounced save with suppress_log
+                    debouncedSave(fieldName, fieldValue, { suppress_log: true });
 
                     // Trigger Geocode for address fields
                     if (['venue_street', 'venue_zip', 'venue_city', 'venue_country'].includes(input.name)) {

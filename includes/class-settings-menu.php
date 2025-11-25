@@ -39,6 +39,9 @@ class TMGMT_Settings_Menu {
         register_setting('tmgmt_route_options', 'tmgmt_route_start_lng');
         
         register_setting('tmgmt_route_options', 'tmgmt_route_buffer_arrival', array('type' => 'integer', 'default' => 30));
+        register_setting('tmgmt_route_options', 'tmgmt_route_min_buffer_arrival', array('type' => 'integer', 'default' => 15));
+        register_setting('tmgmt_route_options', 'tmgmt_route_max_idle_time', array('type' => 'integer', 'default' => 120));
+        register_setting('tmgmt_route_options', 'tmgmt_route_show_duration', array('type' => 'integer', 'default' => 60));
         register_setting('tmgmt_route_options', 'tmgmt_route_buffer_departure', array('type' => 'integer', 'default' => 30));
         register_setting('tmgmt_route_options', 'tmgmt_route_loading_time', array('type' => 'integer', 'default' => 60));
         register_setting('tmgmt_route_options', 'tmgmt_route_bus_factor', array('type' => 'number', 'default' => 1.0));
@@ -205,7 +208,28 @@ class TMGMT_Settings_Menu {
                         <th scope="row"><label for="tmgmt_route_buffer_arrival">Pufferzeit Anreise (Minuten)</label></th>
                         <td>
                             <input name="tmgmt_route_buffer_arrival" type="number" id="tmgmt_route_buffer_arrival" value="<?php echo esc_attr(get_option('tmgmt_route_buffer_arrival', 30)); ?>" class="small-text">
-                            <p class="description">Zusätzliche Zeit, die zur reinen Fahrzeit addiert wird.</p>
+                            <p class="description">Zusätzliche Zeit, die zur reinen Fahrzeit addiert wird (Standard).</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="tmgmt_route_min_buffer_arrival">Minimale Pufferzeit vor Auftritt (Minuten)</label></th>
+                        <td>
+                            <input name="tmgmt_route_min_buffer_arrival" type="number" id="tmgmt_route_min_buffer_arrival" value="<?php echo esc_attr(get_option('tmgmt_route_min_buffer_arrival', 15)); ?>" class="small-text">
+                            <p class="description">Absolute Untergrenze vor Showbeginn. Wird diese unterschritten, gilt die Tour als fehlerhaft.</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="tmgmt_route_max_idle_time">Zeit für Leerlauf-Warnung (Minuten)</label></th>
+                        <td>
+                            <input name="tmgmt_route_max_idle_time" type="number" id="tmgmt_route_max_idle_time" value="<?php echo esc_attr(get_option('tmgmt_route_max_idle_time', 120)); ?>" class="small-text">
+                            <p class="description">Warnung anzeigen, wenn die Wartezeit vor Ort diesen Wert überschreitet.</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="tmgmt_route_show_duration">Dauer der Show (Minuten)</label></th>
+                        <td>
+                            <input name="tmgmt_route_show_duration" type="number" id="tmgmt_route_show_duration" value="<?php echo esc_attr(get_option('tmgmt_route_show_duration', 60)); ?>" class="small-text">
+                            <p class="description">Standard-Dauer des Auftritts für die Berechnung der Abreisezeit.</p>
                         </td>
                     </tr>
                     <tr>

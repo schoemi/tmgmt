@@ -17,8 +17,8 @@ class TMGMT_Event_Meta_Boxes {
         return array(
             'tmgmt_event_date' => 'Datum der Veranstaltung',
             'tmgmt_event_start_time' => 'Geplante Auftrittszeit',
-            'tmgmt_event_arrival_time' => 'Späteste Anreisezeit',
-            'tmgmt_event_departure_time' => 'Späteste Abreisezeit',
+            'tmgmt_event_arrival_time' => 'Geplante Anreisezeit',
+            'tmgmt_event_departure_time' => 'Geplante Abreisezeit',
             'tmgmt_venue_name' => 'Veranstaltungsort: Name',
             'tmgmt_venue_street' => 'Veranstaltungsort: Straße',
             'tmgmt_venue_number' => 'Veranstaltungsort: Nr.',
@@ -144,11 +144,11 @@ class TMGMT_Event_Meta_Boxes {
         </div>
         <div class="tmgmt-row">
             <div class="tmgmt-field">
-                <label for="tmgmt_event_arrival_time">Späteste Anreisezeit</label>
+                <label for="tmgmt_event_arrival_time">Geplante Anreisezeit</label>
                 <input type="time" id="tmgmt_event_arrival_time" name="tmgmt_event_arrival_time" value="<?php echo esc_attr($arrival_time); ?>">
             </div>
             <div class="tmgmt-field">
-                <label for="tmgmt_event_departure_time">Späteste Abreisezeit</label>
+                <label for="tmgmt_event_departure_time">Geplante Abreisezeit</label>
                 <input type="time" id="tmgmt_event_departure_time" name="tmgmt_event_departure_time" value="<?php echo esc_attr($departure_time); ?>">
             </div>
         </div>
@@ -387,6 +387,30 @@ class TMGMT_Event_Meta_Boxes {
         // Check for Status Change and Log it
         $old_status = get_post_meta($post_id, '_tmgmt_status', true);
         $new_status = isset($_POST['tmgmt_status']) ? sanitize_text_field($_POST['tmgmt_status']) : '';
+
+        // Check for Start Time Change to flag Tour for update
+        $old_start_time = get_post_meta($post_id, '_tmgmt_event_start_time', true);
+        $new_start_time = isset($_POST['tmgmt_event_start_time']) ? sanitize_text_field($_POST['tmgmt_event_start_time']) : '';
+        
+        if ($old_start_time !== $new_start_time) {
+            $event_date = isset($_POST['tmgmt_event_date']) ? sanitize_text_field($_POST['tmgmt_event_date']) : get_post_meta($post_id, '_tmgmt_event_date', true);
+            if ($event_date) {
+                $tour_posts = get_posts(array(
+                    'post_type' => 'tmgmt_tour',
+                    'numberposts' => 1,
+                    'meta_query' => array(
+                        array(
+                            'key' => 'tmgmt_tour_date',
+                            'value' => $event_date,
+                            'compare' => '='
+                        )
+                    )
+                ));
+                if ($tour_posts) {
+                    update_post_meta($tour_posts[0]->ID, 'tmgmt_tour_update_required', true);
+                }
+            }
+        }
 
         if ($old_status !== $new_status && !empty($new_status)) {
             $log_manager = new TMGMT_Log_Manager();

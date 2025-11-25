@@ -33,6 +33,7 @@ require_once TMGMT_PLUGIN_DIR . 'includes/class-assets.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-log-manager.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-communication-manager.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-tour-manager.php';
+require_once TMGMT_PLUGIN_DIR . 'includes/class-tour-overview.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-roles.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-frontend-dashboard.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-settings-menu.php';
@@ -56,6 +57,7 @@ function tmgmt_init() {
     new TMGMT_Roles();
     new TMGMT_Frontend_Dashboard();
     new TMGMT_Tour_Manager();
+    new TMGMT_Tour_Overview();
 }
 add_action('plugins_loaded', 'tmgmt_init');
 

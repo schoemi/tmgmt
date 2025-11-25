@@ -6,6 +6,37 @@ class TMGMT_Tour_Post_Type {
         add_action('init', array($this, 'register_post_type'));
         add_action('add_meta_boxes', array($this, 'add_meta_boxes'));
         add_action('save_post', array($this, 'save_meta_boxes'));
+        add_filter('manage_tmgmt_tour_posts_columns', array($this, 'add_custom_columns'));
+        add_action('manage_tmgmt_tour_posts_custom_column', array($this, 'render_custom_columns'), 10, 2);
+    }
+
+    public function add_custom_columns($columns) {
+        $new_columns = array();
+        foreach ($columns as $key => $value) {
+            $new_columns[$key] = $value;
+            if ($key === 'title') {
+                $new_columns['tmgmt_tour_status'] = 'Status';
+            }
+        }
+        return $new_columns;
+    }
+
+    public function render_custom_columns($column, $post_id) {
+        if ($column === 'tmgmt_tour_status') {
+            $update_required = get_post_meta($post_id, 'tmgmt_tour_update_required', true);
+            $error_count = (int)get_post_meta($post_id, 'tmgmt_tour_error_count', true);
+            $warning_count = (int)get_post_meta($post_id, 'tmgmt_tour_warning_count', true);
+
+            if ($update_required) {
+                echo '<span class="dashicons dashicons-update" style="color:#d63638"></span> <span style="color:#d63638; font-weight:bold;">Update erforderlich</span>';
+            } elseif ($error_count > 0) {
+                echo '<span class="dashicons dashicons-warning" style="color:#d63638"></span> <span style="color:#d63638">' . $error_count . ' Fehler</span>';
+            } elseif ($warning_count > 0) {
+                echo '<span class="dashicons dashicons-warning" style="color:#dba617"></span> <span style="color:#dba617">' . $warning_count . ' Warnungen</span>';
+            } else {
+                echo '<span class="dashicons dashicons-yes" style="color:#00a32a"></span> OK';
+            }
+        }
     }
 
     public function register_post_type() {
@@ -57,17 +88,45 @@ class TMGMT_Tour_Post_Type {
     public function render_details_box($post) {
         $date = get_post_meta($post->ID, 'tmgmt_tour_date', true);
         $data = get_post_meta($post->ID, 'tmgmt_tour_data', true);
+        $bus_travel = get_post_meta($post->ID, 'tmgmt_tour_bus_travel', true);
         
+        $warning_count = get_post_meta($post->ID, 'tmgmt_tour_warning_count', true);
+        $error_count = get_post_meta($post->ID, 'tmgmt_tour_error_count', true);
+        $update_required = get_post_meta($post->ID, 'tmgmt_tour_update_required', true);
+
         wp_nonce_field('tmgmt_save_tour', 'tmgmt_tour_nonce');
         ?>
         <div class="tmgmt-tour-editor">
             <p>
                 <label for="tmgmt_tour_date"><strong>Datum der Tour:</strong></label>
                 <input type="date" id="tmgmt_tour_date" name="tmgmt_tour_date" value="<?php echo esc_attr($date); ?>">
-                <button type="button" class="button button-primary" id="tmgmt-calc-tour">Tour berechnen / Aktualisieren</button>
+                
+                <label for="tmgmt_tour_bus_travel" style="margin-left: 20px;">
+                    <input type="checkbox" id="tmgmt_tour_bus_travel" name="tmgmt_tour_bus_travel" value="1" <?php checked($bus_travel, '1'); ?>>
+                    <strong>Reise mit Bus</strong>
+                </label>
+
+                <button type="button" class="button button-primary" id="tmgmt-calc-tour" style="margin-left: 20px;">Tour berechnen / Aktualisieren</button>
                 <span id="tmgmt-calc-spinner" class="spinner" style="float:none;"></span>
             </p>
             
+            <?php if ($update_required): ?>
+            <div class="notice notice-error inline" style="margin: 10px 0; padding: 10px; border-left-color: #d63638;">
+                <p>
+                    <span class="dashicons dashicons-update" style="color:#d63638; vertical-align: text-bottom;"></span>
+                    <strong>Update erforderlich:</strong> Die Auftrittszeit eines Termins wurde geändert. Bitte Tour neu berechnen.
+                </p>
+            </div>
+            <?php elseif ($warning_count > 0 || $error_count > 0): ?>
+            <div class="notice notice-warning inline" style="margin: 10px 0; padding: 10px; border-left-color: <?php echo ($error_count > 0) ? '#d63638' : '#dba617'; ?>;">
+                <p>
+                    <strong>Status:</strong> 
+                    <?php if ($error_count > 0) echo '<span style="color:#d63638">' . $error_count . ' Fehler</span> '; ?>
+                    <?php if ($warning_count > 0) echo '<span style="color:#dba617">' . $warning_count . ' Warnungen</span>'; ?>
+                </p>
+            </div>
+            <?php endif; ?>
+
             <div id="tmgmt-tour-results" style="margin-top: 20px;">
                 <?php
                 if ($data) {
@@ -117,7 +176,7 @@ class TMGMT_Tour_Post_Type {
         if (empty($schedule)) return;
         
         echo '<table class="widefat fixed striped">';
-        echo '<thead><tr><th>Zeit</th><th>Ort / Event</th><th>Aktion</th><th>Dauer/Distanz</th><th>Puffer</th></tr></thead>';
+        echo '<thead><tr><th>Zeit</th><th>Ort / Event</th><th>Aktion</th><th>Dauer/Distanz</th></tr></thead>';
         echo '<tbody>';
         
         foreach ($schedule as $item) {
@@ -125,15 +184,42 @@ class TMGMT_Tour_Post_Type {
             
             // Time Column
             echo '<td>';
-            if (isset($item['arrival_time'])) echo 'An: ' . $item['arrival_time'] . '<br>';
-            if (isset($item['show_start'])) echo '<strong>Show: ' . $item['show_start'] . '</strong><br>';
-            if (isset($item['departure_time'])) echo 'Ab: ' . $item['departure_time'];
+            if ($item['type'] === 'travel') {
+                // For travel: Departure (Start of trip) -> Arrival (End of trip)
+                if (isset($item['departure_time'])) echo 'Ab: ' . $item['departure_time'] . '<br>';
+                if (isset($item['arrival_time'])) echo 'An: ' . $item['arrival_time'];
+            } else {
+                // For events/start/end: Arrival -> Show -> Departure
+                if (isset($item['arrival_time'])) echo 'An: ' . $item['arrival_time'] . '<br>';
+                if (isset($item['show_start'])) echo '<strong>Show: ' . $item['show_start'] . '</strong><br>';
+                if (isset($item['departure_time'])) echo 'Ab: ' . $item['departure_time'];
+            }
             echo '</td>';
             
             // Location Column
             echo '<td>';
             if ($item['type'] === 'start') echo '<strong>Start: ' . esc_html($item['location']) . '</strong>';
-            if ($item['type'] === 'event') echo '<strong>' . esc_html($item['title']) . '</strong><br>' . esc_html($item['location']);
+            if ($item['type'] === 'event') {
+                $edit_link = get_edit_post_link($item['id']);
+                echo '<strong><a href="' . esc_url($edit_link) . '" target="_blank">' . esc_html($item['title']) . '</a></strong><br>' . esc_html($item['location']);
+                
+                if (isset($item['error'])) {
+                    if ($item['error'] === 'Auftrittszeit vor Ankunft') {
+                        echo '<br><span style="color: #d63638; font-weight: bold;">⚠️ ' . esc_html($item['error']) . ' (' . $item['time_diff'] . ' Min zu spät)</span>';
+                    } else {
+                        echo '<br><span style="color: #d63638; font-weight: bold;">⚠️ ' . esc_html($item['error']) . ' (Nur ' . $item['time_diff'] . ' Min Puffer)</span>';
+                    }
+                } elseif (isset($item['warning'])) {
+                    echo '<br><span style="color: #d69e2e; font-weight: bold;">⚠️ ' . esc_html($item['warning']) . ' (Nur ' . $item['time_diff'] . ' Min Puffer)</span>';
+                } elseif (isset($item['idle_warning'])) {
+                    echo '<br><span style="color: #00a32a; font-weight: bold;">ℹ️ ' . esc_html($item['idle_warning']) . ' (' . $item['time_diff'] . ' Min Puffer)</span>';
+                } else {
+                    // No warning/error -> Show actual buffer
+                    if (isset($item['actual_buffer'])) {
+                        echo '<br><span style="color: #666;">Puffer: ' . $item['actual_buffer'] . ' Min</span>';
+                    }
+                }
+            }
             if ($item['type'] === 'travel') echo '<em>Fahrt nach ' . esc_html($item['to']) . '</em>';
             if ($item['type'] === 'end') echo '<strong>Ende: ' . esc_html($item['location']) . '</strong>';
             echo '</td>';
@@ -145,12 +231,6 @@ class TMGMT_Tour_Post_Type {
             echo '<td>';
             if (isset($item['duration'])) echo $item['duration'] . ' Min';
             if (isset($item['distance'])) echo ' (' . $item['distance'] . ' km)';
-            echo '</td>';
-            
-            // Buffer Column
-            echo '<td>';
-            if (isset($item['buffer_arrival'])) echo 'An: ' . $item['buffer_arrival'] . ' Min<br>';
-            if (isset($item['buffer_departure'])) echo 'Ab: ' . $item['buffer_departure'] . ' Min';
             echo '</td>';
             
             echo '</tr>';
@@ -183,9 +263,40 @@ class TMGMT_Tour_Post_Type {
             }
         }
 
+        // Save Bus Travel Checkbox
+        $bus_travel = isset($_POST['tmgmt_tour_bus_travel']) ? '1' : '0';
+        update_post_meta($post_id, 'tmgmt_tour_bus_travel', $bus_travel);
+
         if (isset($_POST['tmgmt_tour_data'])) {
             // We save the raw JSON string. In a real app, we should decode and sanitize.
-            update_post_meta($post_id, 'tmgmt_tour_data', wp_unslash($_POST['tmgmt_tour_data']));
+            $json = wp_unslash($_POST['tmgmt_tour_data']);
+            update_post_meta($post_id, 'tmgmt_tour_data', $json);
+
+            // Reset Update Required Flag
+            update_post_meta($post_id, 'tmgmt_tour_update_required', false);
+
+            // Calculate and save counts
+            $schedule = json_decode($json, true);
+            $warnings = 0;
+            $errors = 0;
+            if (is_array($schedule)) {
+                foreach ($schedule as $item) {
+                    if (isset($item['warning']) || isset($item['idle_warning'])) $warnings++;
+                    if (isset($item['error'])) $errors++;
+
+                    // Update Event Meta with Planned Times
+                    if (isset($item['type']) && $item['type'] === 'event' && isset($item['id'])) {
+                        if (isset($item['arrival_time'])) {
+                            update_post_meta($item['id'], '_tmgmt_event_arrival_time', $item['arrival_time']);
+                        }
+                        if (isset($item['departure_time'])) {
+                            update_post_meta($item['id'], '_tmgmt_event_departure_time', $item['departure_time']);
+                        }
+                    }
+                }
+            }
+            update_post_meta($post_id, 'tmgmt_tour_warning_count', $warnings);
+            update_post_meta($post_id, 'tmgmt_tour_error_count', $errors);
         }
     }
 }
