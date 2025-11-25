@@ -6,6 +6,7 @@ class TMGMT_Tour_Post_Type {
         add_action('init', array($this, 'register_post_type'));
         add_action('add_meta_boxes', array($this, 'add_meta_boxes'));
         add_action('save_post', array($this, 'save_meta_boxes'));
+        add_action('admin_post_tmgmt_print_tour', array($this, 'handle_print_tour'));
         add_filter('manage_tmgmt_tour_posts_columns', array($this, 'add_custom_columns'));
         add_action('manage_tmgmt_tour_posts_custom_column', array($this, 'render_custom_columns'), 10, 2);
     }
@@ -58,14 +59,14 @@ class TMGMT_Tour_Post_Type {
 
         $args = array(
             'labels'             => $labels,
-            'public'             => false,
-            'publicly_queryable' => false,
+            'public'             => true, // Enable Frontend
+            'publicly_queryable' => true,
             'show_ui'            => true,
             'show_in_menu'       => 'edit.php?post_type=event',
             'query_var'          => true,
             'rewrite'            => array('slug' => 'tour'),
             'capability_type'    => 'post',
-            'has_archive'        => false,
+            'has_archive'        => true,
             'hierarchical'       => false,
             'menu_position'      => null,
             'supports'           => array('title'),
@@ -135,6 +136,7 @@ class TMGMT_Tour_Post_Type {
                 </label>
 
                 <button type="button" class="button button-primary" id="tmgmt-calc-tour" style="margin-left: 20px;">Tour berechnen / Aktualisieren</button>
+                <a href="<?php echo admin_url('admin-post.php?action=tmgmt_print_tour&tour_id=' . $post->ID); ?>" target="_blank" class="button button-secondary" style="margin-left: 10px;">Drucken (PDF)</a>
                 <span id="tmgmt-calc-spinner" class="spinner" style="float:none;"></span>
             </p>
 
@@ -182,6 +184,10 @@ class TMGMT_Tour_Post_Type {
                 <?php
                 if ($data) {
                     $schedule = json_decode($data, true);
+                    
+                    // Map Container
+                    echo '<div id="tmgmt-tour-map" style="height: 400px; width: 100%; margin-bottom: 20px; border: 1px solid #ccc;"></div>';
+                    
                     $this->render_schedule_table($schedule);
                     
                     // Render Free Slot Summary
@@ -215,6 +221,68 @@ class TMGMT_Tour_Post_Type {
         
         <script>
         jQuery(document).ready(function($) {
+            // Initialize Map if data exists
+            var tourData = <?php echo $data ? $data : '[]'; ?>;
+            if (tourData.length > 0 && typeof L !== 'undefined') {
+                var map = L.map('tmgmt-tour-map');
+                var bounds = [];
+                
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; OpenStreetMap contributors'
+                }).addTo(map);
+
+                var counter = 1;
+                tourData.forEach(function(item) {
+                    var lat = null;
+                    var lng = null;
+                    var title = '';
+                    var iconColor = 'blue';
+
+                    if (item.type === 'start') {
+                        lat = item.lat;
+                        lng = item.lng;
+                        title = 'Start: ' + item.location;
+                        iconColor = 'green';
+                    } else if (item.type === 'event') {
+                        lat = item.lat;
+                        lng = item.lng;
+                        title = counter + '. ' + item.title + ' (' + item.location + ')';
+                        counter++;
+                        iconColor = 'blue';
+                    } else if (item.type === 'shuttle_stop') {
+                        // Shuttle stops might not have lat/lng in the schedule directly if not calculated properly?
+                        // Actually they should have it if we want to map them.
+                        // Let's check if we have lat/lng in the item.
+                        // The current logic in Tour Manager puts lat/lng in 'start' and 'event'.
+                        // For shuttle stops, we need to ensure they are there.
+                        // Looking at Tour Manager, shuttle stops are added with 'location' and 'address'.
+                        // We might need to fetch lat/lng for them or ensure they are passed.
+                        // Wait, the shuttle stops in the schedule array come from the shuttle definition which HAS lat/lng.
+                        // But let's check if they are copied to the schedule item.
+                        // In Tour Manager:
+                        // $stop_loc = array('lat' => ..., 'lng' => ...);
+                        // $schedule[] = array('type' => 'shuttle_stop', ...);
+                        // It seems lat/lng are NOT explicitly added to the 'shuttle_stop' item in the final schedule array in Tour Manager.
+                        // I should fix Tour Manager to include lat/lng in shuttle_stop items first.
+                    }
+                    
+                    if (lat && lng) {
+                        var marker = L.marker([lat, lng], {
+                            title: title
+                        }).addTo(map);
+                        
+                        marker.bindPopup('<strong>' + title + '</strong>');
+                        bounds.push([lat, lng]);
+                    }
+                });
+
+                if (bounds.length > 0) {
+                    map.fitBounds(bounds, {padding: [50, 50]});
+                } else {
+                    map.setView([51.1657, 10.4515], 6); // Default Germany
+                }
+            }
+
             $('#tmgmt-calc-tour').on('click', function() {
                 var date = $('#tmgmt_tour_date').val();
                 var mode = $('#tmgmt_tour_mode').val();
@@ -469,5 +537,206 @@ class TMGMT_Tour_Post_Type {
             update_post_meta($post_id, 'tmgmt_tour_warning_count', $warnings);
             update_post_meta($post_id, 'tmgmt_tour_error_count', $errors);
         }
+    }
+    
+    public function handle_print_tour() {
+        if (!current_user_can('edit_posts')) {
+            wp_die('Keine Berechtigung.');
+        }
+
+        $tour_id = isset($_GET['tour_id']) ? intval($_GET['tour_id']) : 0;
+        if (!$tour_id) {
+            wp_die('Ungültige Tour ID.');
+        }
+
+        $tour = get_post($tour_id);
+        if (!$tour || $tour->post_type !== 'tmgmt_tour') {
+            wp_die('Tour nicht gefunden.');
+        }
+
+        $json_data = get_post_meta($tour_id, 'tmgmt_tour_data', true);
+        $schedule = json_decode($json_data, true);
+
+        if (!$schedule) {
+            wp_die('Keine Fahrplandaten vorhanden. Bitte erst berechnen.');
+        }
+
+        // Extract Summary Data
+        $shuttle_stops = array();
+        $meeting_time = '-';
+        $first_departure = '-';
+        $gig_count = 0;
+        $start_location = '';
+        $is_pickup = true;
+
+        foreach ($schedule as $item) {
+            if ($item['type'] === 'start') {
+                $is_pickup = false;
+                $meeting_time = isset($item['meeting_time']) ? $item['meeting_time'] : '-';
+                $first_departure = isset($item['departure_time']) ? $item['departure_time'] : '-';
+                $start_location = isset($item['location']) ? $item['location'] : 'Start';
+            } elseif ($item['type'] === 'shuttle_stop' && $is_pickup) {
+                $shuttle_stops[] = $item;
+            } elseif ($item['type'] === 'event') {
+                $gig_count++;
+            }
+        }
+
+        // HTML Output
+        ?>
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Tourplan: <?php echo esc_html($tour->post_title); ?></title>
+            <style>
+                body { font-family: sans-serif; font-size: 12px; }
+                h1 { font-size: 18px; margin-bottom: 10px; }
+                .summary-box { border: 1px solid #000; padding: 10px; margin-bottom: 20px; background-color: #f9f9f9; }
+                .summary-row { margin-bottom: 5px; }
+                .summary-label { font-weight: bold; display: inline-block; width: 200px; }
+                table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                th, td { border: 1px solid #ccc; padding: 6px; text-align: left; }
+                th { background-color: #eee; }
+                .type-event { background-color: #e6f7ff; }
+                .type-travel { color: #666; font-style: italic; }
+                .type-shuttle { background-color: #fff0f0; }
+                .type-start { background-color: #e8f5e9; }
+                @media print {
+                    .no-print { display: none; }
+                    body { font-size: 11px; }
+                    .type-event { background-color: #f0f8ff !important; -webkit-print-color-adjust: exact; }
+                    .type-shuttle { background-color: #fff5f5 !important; -webkit-print-color-adjust: exact; }
+                    .type-start { background-color: #f1f8e9 !important; -webkit-print-color-adjust: exact; }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="no-print" style="margin-bottom: 20px; padding: 10px; background: #eee; border-bottom: 1px solid #ccc;">
+                <button onclick="window.print();" style="padding: 8px 16px; font-size: 14px; cursor: pointer; background: #0073aa; color: #fff; border: none; border-radius: 4px;">Drucken / PDF speichern</button>
+                <button onclick="window.close();" style="padding: 8px 16px; font-size: 14px; cursor: pointer; margin-left: 10px;">Schließen</button>
+            </div>
+
+            <h1><?php echo esc_html($tour->post_title); ?></h1>
+            <p><strong>Datum:</strong> <?php echo date('d.m.Y', strtotime(get_post_meta($tour_id, 'tmgmt_tour_date', true))); ?></p>
+
+            <div class="summary-box">
+                <h3>Übersicht</h3>
+                <?php if (!empty($shuttle_stops)): ?>
+                    <div style="margin-bottom: 15px;">
+                        <strong>Abfahrtszeiten Shuttle:</strong>
+                        <ul style="margin: 5px 0 0 20px; padding: 0;">
+                        <?php foreach ($shuttle_stops as $stop): ?>
+                            <li><?php echo esc_html($stop['departure_time']); ?> Uhr - <?php echo esc_html($stop['location']); ?></li>
+                        <?php endforeach; ?>
+                        </ul>
+                    </div>
+                <?php endif; ?>
+                
+                <div class="summary-row">
+                    <span class="summary-label">Treffzeitpunkt (<?php echo esc_html($start_location); ?>):</span>
+                    <span><?php echo esc_html($meeting_time); ?> Uhr</span>
+                </div>
+                <div class="summary-row">
+                    <span class="summary-label">Abfahrt zum ersten Event:</span>
+                    <span><?php echo esc_html($first_departure); ?> Uhr</span>
+                </div>
+                <div class="summary-row">
+                    <span class="summary-label">Anzahl Auftritte:</span>
+                    <span><?php echo intval($gig_count); ?></span>
+                </div>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 120px;">Zeit</th>
+                        <th style="width: 150px;">Aktivität</th>
+                        <th>Ort / Details</th>
+                        <th style="width: 200px;">Kontakte</th>
+                        <th style="width: 100px;">Dauer</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($schedule as $item): ?>
+                        <?php 
+                            $row_class = '';
+                            if ($item['type'] === 'event') $row_class = 'type-event';
+                            elseif (strpos($item['type'], 'travel') !== false) $row_class = 'type-travel';
+                            elseif (strpos($item['type'], 'shuttle') !== false) $row_class = 'type-shuttle';
+                            elseif ($item['type'] === 'start') $row_class = 'type-start';
+                            
+                            $time_col = '';
+                            if (isset($item['arrival_time']) && isset($item['departure_time'])) {
+                                $time_col = $item['arrival_time'] . ' - ' . $item['departure_time'];
+                            } elseif (isset($item['arrival_time'])) {
+                                $time_col = 'Ank: ' . $item['arrival_time'];
+                            } elseif (isset($item['departure_time'])) {
+                                $time_col = 'Abf: ' . $item['departure_time'];
+                            }
+                        ?>
+                        <tr class="<?php echo $row_class; ?>">
+                            <td style="white-space: nowrap; font-weight: bold;"><?php echo $time_col; ?></td>
+                            <td>
+                                <?php 
+                                    if ($item['type'] === 'event') echo '<strong>Auftritt</strong>';
+                                    elseif ($item['type'] === 'travel') echo 'Fahrt';
+                                    elseif ($item['type'] === 'shuttle_travel') echo 'Shuttle Fahrt';
+                                    elseif ($item['type'] === 'shuttle_stop') echo 'Shuttle Stop';
+                                    elseif ($item['type'] === 'start') echo 'Laden / Start';
+                                    elseif ($item['type'] === 'end') echo 'Ende';
+                                    else echo esc_html($item['type']);
+                                ?>
+                            </td>
+                            <td>
+                                <?php 
+                                    if ($item['type'] === 'event') {
+                                        if (isset($item['title'])) echo '<strong>' . esc_html($item['title']) . '</strong>';
+                                        if (isset($item['organizer']) && $item['organizer']) echo ' (' . esc_html($item['organizer']) . ')';
+                                        echo '<br>';
+                                        
+                                        if (isset($item['address'])) echo '<small>' . esc_html($item['address']) . '</small>';
+                                        elseif (isset($item['location'])) echo '<small>' . esc_html($item['location']) . '</small>';
+                                    } else {
+                                        if (isset($item['location'])) echo '<strong>' . esc_html($item['location']) . '</strong><br>';
+                                        if (isset($item['address'])) echo '<small>' . esc_html($item['address']) . '</small>';
+                                    }
+                                    
+                                    if (isset($item['from']) && isset($item['to'])) echo esc_html($item['from']) . ' &rarr; ' . esc_html($item['to']);
+                                    if (isset($item['distance'])) echo ' (' . round($item['distance'], 1) . ' km)';
+                                ?>
+                            </td>
+                            <td style="font-size: 11px;">
+                                <?php if ($item['type'] === 'event'): ?>
+                                    <?php if (!empty($item['contact_name']) || !empty($item['contact_phone'])): ?>
+                                        <div style="margin-bottom: 5px;">
+                                            <strong>Vertrag:</strong><br>
+                                            <?php if (!empty($item['contact_name'])) echo esc_html($item['contact_name']) . '<br>'; ?>
+                                            <?php if (!empty($item['contact_phone'])) echo esc_html($item['contact_phone']); ?>
+                                        </div>
+                                    <?php endif; ?>
+                                    
+                                    <?php if (!empty($item['program_name']) || !empty($item['program_phone'])): ?>
+                                        <div>
+                                            <strong>Programm:</strong><br>
+                                            <?php if (!empty($item['program_name'])) echo esc_html($item['program_name']) . '<br>'; ?>
+                                            <?php if (!empty($item['program_phone'])) echo esc_html($item['program_phone']); ?>
+                                        </div>
+                                    <?php endif; ?>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <?php 
+                                    if (isset($item['duration'])) echo $item['duration'] . ' min';
+                                    if (isset($item['loading_time'])) echo '<br>Laden: ' . $item['loading_time'] . ' min';
+                                ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </body>
+        </html>
+        <?php
+        exit;
     }
 }

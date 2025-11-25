@@ -113,6 +113,24 @@ class TMGMT_Tour_Manager {
             $city = get_post_meta($event->ID, '_tmgmt_venue_city', true);
             if (!$city) $city = get_post_meta($event->ID, 'tmgmt_venue_city', true);
 
+            $street = get_post_meta($event->ID, '_tmgmt_venue_street', true);
+            if (!$street) $street = get_post_meta($event->ID, 'tmgmt_venue_street', true);
+
+            $zip = get_post_meta($event->ID, '_tmgmt_venue_zip', true);
+            if (!$zip) $zip = get_post_meta($event->ID, 'tmgmt_venue_zip', true);
+
+            $address = trim($street . ', ' . $zip . ' ' . $city);
+            if ($address === ',') $address = '';
+
+            // Fetch Contact Info
+            $organizer = get_post_meta($event->ID, '_tmgmt_contact_company', true);
+            
+            $contact_name = trim(get_post_meta($event->ID, '_tmgmt_contact_firstname', true) . ' ' . get_post_meta($event->ID, '_tmgmt_contact_lastname', true));
+            $contact_phone = get_post_meta($event->ID, '_tmgmt_contact_phone_contract', true);
+            
+            $program_name = get_post_meta($event->ID, '_tmgmt_contact_name_program', true);
+            $program_phone = get_post_meta($event->ID, '_tmgmt_contact_phone_program', true);
+
             $debug_info = "ID {$event->ID}: Status='{$status}', Lat='{$lat}', Lng='{$lng}'";
             error_log("Checking Event " . $debug_info);
 
@@ -143,7 +161,13 @@ class TMGMT_Tour_Manager {
                 'start_time' => $time,
                 'lat' => $lat,
                 'lng' => $lng,
-                'location' => $city
+                'location' => $city,
+                'address' => $address,
+                'organizer' => $organizer,
+                'contact_name' => $contact_name,
+                'contact_phone' => $contact_phone,
+                'program_name' => $program_name,
+                'program_phone' => $program_phone
             );
             error_log("-> Added to route.");
         }
@@ -188,6 +212,12 @@ class TMGMT_Tour_Manager {
                 'id' => $event['id'],
                 'title' => $event['title'],
                 'location' => $event['location'],
+                'address' => $event['address'],
+                'organizer' => $event['organizer'],
+                'contact_name' => $event['contact_name'],
+                'contact_phone' => $event['contact_phone'],
+                'program_name' => $event['program_name'],
+                'program_phone' => $event['program_phone'],
                 'lat' => $event['lat'],
                 'lng' => $event['lng'],
                 'show_start' => $event['start_time'],
@@ -238,6 +268,8 @@ class TMGMT_Tour_Manager {
                         'type' => 'shuttle_stop',
                         'location' => $stop['name'],
                         'address' => $stop['address'],
+                        'lat' => $stop_loc['lat'],
+                        'lng' => $stop_loc['lng'],
                         'duration' => $stop_duration
                     );
                     
@@ -306,6 +338,8 @@ class TMGMT_Tour_Manager {
                         'type' => 'shuttle_stop',
                         'location' => $stop['name'],
                         'address' => $stop['address'],
+                        'lat' => $stop_loc['lat'],
+                        'lng' => $stop_loc['lng'],
                         'duration' => $stop_duration
                     );
                     
@@ -415,6 +449,8 @@ class TMGMT_Tour_Manager {
                                     'type' => 'shuttle_stop',
                                     'location' => $stop['name'],
                                     'address' => $stop['address'],
+                                    'lat' => $stop_loc['lat'],
+                                    'lng' => $stop_loc['lng'],
                                     'arrival_time' => date('H:i', $arrival_at_stop),
                                     'departure_time' => date('H:i', $departure_from_stop),
                                     'duration' => $stop_duration

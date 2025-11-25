@@ -48,7 +48,9 @@ class TMGMT_Assets {
             
             // Enqueue for Tour Post Type
             if ('tmgmt_tour' === $post->post_type) {
-                 // We might need scripts here too later
+                // Leaflet
+                wp_enqueue_style('leaflet-css', 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css');
+                wp_enqueue_script('leaflet-js', 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js', array(), '1.9.4', true);
             }
         }
     }

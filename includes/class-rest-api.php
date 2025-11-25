@@ -590,6 +590,58 @@ class TMGMT_REST_API {
             }
         }
 
+        // Fetch Tour Info
+        $tours_info = array();
+        $event_date = isset($clean_meta['event_date']) ? $clean_meta['event_date'] : '';
+        
+        if ($event_date) {
+            $tours = get_posts(array(
+                'post_type' => 'tmgmt_tour',
+                'numberposts' => -1,
+                'meta_query' => array(
+                    array(
+                        'key' => 'tmgmt_tour_date',
+                        'value' => $event_date,
+                        'compare' => '='
+                    )
+                )
+            ));
+
+            foreach ($tours as $tour) {
+                $data_json = get_post_meta($tour->ID, 'tmgmt_tour_data', true);
+                $schedule = json_decode($data_json, true);
+                $mode = get_post_meta($tour->ID, 'tmgmt_tour_mode', true);
+                if (!$mode) $mode = 'draft';
+
+                $is_in_tour = false;
+                $event_status_in_tour = 'ok';
+
+                if (is_array($schedule)) {
+                    foreach ($schedule as $item) {
+                        if (isset($item['type']) && $item['type'] === 'event' && isset($item['id']) && $item['id'] == $event_id) {
+                            $is_in_tour = true;
+                            if (isset($item['error'])) {
+                                $event_status_in_tour = 'error';
+                            } elseif (isset($item['warning'])) {
+                                $event_status_in_tour = 'warning';
+                            }
+                            break;
+                        }
+                    }
+                }
+
+                if ($is_in_tour) {
+                    $tours_info[] = array(
+                        'id' => $tour->ID,
+                        'title' => $tour->post_title,
+                        'link' => get_permalink($tour->ID),
+                        'mode' => $mode,
+                        'status' => $event_status_in_tour
+                    );
+                }
+            }
+        }
+
         return array(
             'id' => $event_id,
             'title' => $post->post_title,
@@ -598,7 +650,8 @@ class TMGMT_REST_API {
             'logs' => $formatted_logs,
             'communication' => $formatted_comm,
             'actions' => $actions,
-            'attachments' => $attachments
+            'attachments' => $attachments,
+            'tours' => $tours_info
         );
     }
 

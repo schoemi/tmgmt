@@ -447,13 +447,55 @@ document.addEventListener('DOMContentLoaded', function() {
         // Planung
         let planningHtml = '';
         planningHtml += `<div style="display:flex; gap:10px;">
-            <div style="flex:1">${createInput('Späteste Anreise', 'arrival_time', meta.arrival_time, 'time')}</div>
-            <div style="flex:1">${createInput('Späteste Abreise', 'departure_time', meta.departure_time, 'time')}</div>
+            <div style="flex:1">${createInput('Geplante Anreise', 'arrival_time', meta.event_arrival_time, 'time')}</div>
+            <div style="flex:1">${createInput('Geplante Abreise', 'departure_time', meta.event_departure_time, 'time')}</div>
         </div>`;
         planningHtml += `<div class="tmgmt-form-group">
             <label>Hinweise Anreise / Bus</label>
             <textarea name="arrival_notes" rows="3" style="width:100%; border:1px solid #dfe1e6; border-radius:4px; padding:8px;">${meta.arrival_notes || ''}</textarea>
         </div>`;
+
+        // Tour Info
+        if (data.tours && data.tours.length > 0) {
+            planningHtml += '<div class="tmgmt-form-group" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee;">';
+            planningHtml += '<label>Tourenplanungen</label>';
+            planningHtml += '<div style="display: flex; flex-wrap: wrap; gap: 8px;">';
+            data.tours.forEach(tour => {
+                let statusIcon = '';
+                if (tour.status === 'error') {
+                    statusIcon = '<span style="color: #d63638;" title="Fehler">⚠️</span>';
+                } else if (tour.status === 'warning') {
+                    statusIcon = '<span style="color: #dba617;" title="Warnung">⚠️</span>';
+                } else {
+                    statusIcon = '<span style="color: #00a32a;" title="OK">✅</span>';
+                }
+                
+                let modeBadge = '';
+                if (tour.mode === 'real') {
+                    modeBadge = '<span style="background: #00a32a; color: #fff; padding: 2px 6px; border-radius: 3px; font-size: 10px; text-transform: uppercase;">Echt</span>';
+                } else {
+                    modeBadge = '<span style="background: #666; color: #fff; padding: 2px 6px; border-radius: 3px; font-size: 10px; text-transform: uppercase;">Entwurf</span>';
+                }
+
+                planningHtml += `<a href="${tour.link}" target="_blank" style="
+                    display: inline-flex; 
+                    align-items: center; 
+                    gap: 6px; 
+                    padding: 6px 10px; 
+                    background: #f4f5f7; 
+                    border: 1px solid #dfe1e6; 
+                    border-radius: 4px; 
+                    text-decoration: none; 
+                    color: #172b4d; 
+                    font-size: 13px;
+                    transition: background 0.2s;">
+                    <span style="font-weight: 500;">${tour.title}</span>
+                    ${modeBadge} ${statusIcon}
+                </a>`;
+            });
+            planningHtml += '</div>';
+            planningHtml += '</div>';
+        }
 
         // 3. Kontaktdaten
         let contactHtml = '';

@@ -162,9 +162,11 @@ class TMGMT_Event_Meta_Boxes {
             if ($is_in_tour) {
                 $found_in_any = true;
                 $edit_link = get_edit_post_link($tour->ID);
+                $view_link = get_permalink($tour->ID);
                 
                 echo '<li style="margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #eee;">';
-                echo '<strong><a href="' . esc_url($edit_link) . '">' . esc_html($tour->post_title) . '</a></strong><br>';
+                echo '<strong><a href="' . esc_url($edit_link) . '">' . esc_html($tour->post_title) . '</a></strong>';
+                echo ' <a href="' . esc_url($view_link) . '" target="_blank" style="text-decoration:none; font-size: 12px;"><span class="dashicons dashicons-external"></span> Frontend</a><br>';
                 
                 // Mode Badge
                 if ($mode === 'real') {

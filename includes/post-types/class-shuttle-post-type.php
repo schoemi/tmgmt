@@ -127,6 +127,34 @@ class TMGMT_Shuttle_Post_Type {
                 $(this).closest('tr').remove();
                 reindex();
             });
+
+            list.on('click', '.resolve-geo', function() {
+                var row = $(this).closest('tr');
+                var address = row.find('.stop-address').val();
+                var latInput = row.find('input[name="tmgmt_stops_lat[]"]');
+                var lngInput = row.find('input[name="tmgmt_stops_lng[]"]');
+                
+                if (!address) {
+                    alert('Bitte erst eine Adresse eingeben.');
+                    return;
+                }
+                
+                var btn = $(this);
+                btn.prop('disabled', true);
+                
+                $.getJSON('https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(address), function(data) {
+                    btn.prop('disabled', false);
+                    if (data && data.length > 0) {
+                        latInput.val(data[0].lat);
+                        lngInput.val(data[0].lon);
+                    } else {
+                        alert('Adresse nicht gefunden.');
+                    }
+                }).fail(function() {
+                    btn.prop('disabled', false);
+                    alert('Fehler beim Abrufen der Geodaten.');
+                });
+            });
         });
         </script>
         <?php
@@ -143,7 +171,10 @@ class TMGMT_Shuttle_Post_Type {
                 <input type="text" name="tmgmt_stops_name[]" value="<?php echo esc_attr($stop['name']); ?>" style="width: 100%;" placeholder="z.B. Bahnhof oder Name">
             </td>
             <td>
-                <input type="text" name="tmgmt_stops_address[]" value="<?php echo esc_attr($stop['address']); ?>" style="width: 100%;" placeholder="Musterstraße 1, 12345 Musterstadt">
+                <div style="display: flex; gap: 5px; align-items: center;">
+                    <input type="text" name="tmgmt_stops_address[]" class="stop-address" value="<?php echo esc_attr($stop['address']); ?>" style="width: 100%;" placeholder="Musterstraße 1, 12345 Musterstadt">
+                    <button type="button" class="button button-small resolve-geo" title="Geodaten abrufen"><span class="dashicons dashicons-location"></span></button>
+                </div>
             </td>
             <td>
                 <div style="display: flex; gap: 5px;">
