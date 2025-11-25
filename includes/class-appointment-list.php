@@ -75,6 +75,22 @@ class TMGMT_Appointment_List {
         // Sort groups (dates)
         ksort($grouped);
 
+        // Sort events within groups by time
+        foreach ($grouped as $date => &$day_events) {
+            usort($day_events, function($a, $b) {
+                $time_a = get_post_meta($a->ID, '_tmgmt_event_start_time', true);
+                $time_b = get_post_meta($b->ID, '_tmgmt_event_start_time', true);
+                
+                // Handle empty times (put them at the end or beginning? Let's put them at the end)
+                if (empty($time_a) && empty($time_b)) return 0;
+                if (empty($time_a)) return 1;
+                if (empty($time_b)) return -1;
+
+                return strcmp($time_a, $time_b);
+            });
+        }
+        unset($day_events);
+
         echo '<div class="wrap">';
         echo '<h1 class="wp-heading-inline">Terminliste</h1>';
         
