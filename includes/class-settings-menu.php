@@ -274,7 +274,14 @@ class TMGMT_Settings_Menu {
                         <th scope="row"><label for="tmgmt_route_loading_time">Verladen / Vorlaufzeit (Minuten)</label></th>
                         <td>
                             <input name="tmgmt_route_loading_time" type="number" id="tmgmt_route_loading_time" value="<?php echo esc_attr(get_option('tmgmt_route_loading_time', 60)); ?>" class="small-text">
-                            <p class="description">Zeit, die vor der Abfahrt für das Beladen benötigt wird.</p>
+                            <p class="description">Zeit, die vor der Abfahrt für das Beladen benötigt wird. Der Bus muss diese Zeit VOR der geplanten Abfahrt am Proberaum sein.</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="tmgmt_route_meeting_buffer">Vorlaufzeit Treffen (Minuten)</label></th>
+                        <td>
+                            <input name="tmgmt_route_meeting_buffer" type="number" id="tmgmt_route_meeting_buffer" value="<?php echo esc_attr(get_option('tmgmt_route_meeting_buffer', 15)); ?>" class="small-text">
+                            <p class="description">Zeit vor dem Eintreffen des Busses (bzw. Ladebeginn), zu der sich die Musiker am Proberaum treffen sollen.</p>
                         </td>
                     </tr>
                     <tr>

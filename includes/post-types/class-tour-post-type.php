@@ -98,6 +98,24 @@ class TMGMT_Tour_Post_Type {
         $error_count = get_post_meta($post->ID, 'tmgmt_tour_error_count', true);
         $update_required = get_post_meta($post->ID, 'tmgmt_tour_update_required', true);
 
+        // Fetch Shuttles
+        $shuttles = get_posts(array(
+            'post_type' => 'tmgmt_shuttle',
+            'numberposts' => -1,
+            'post_status' => 'any'
+        ));
+        $pickup_shuttles = array();
+        $dropoff_shuttles = array();
+        foreach ($shuttles as $shuttle) {
+            $type = get_post_meta($shuttle->ID, 'tmgmt_shuttle_type', true);
+            if ($type === 'pickup') $pickup_shuttles[] = $shuttle;
+            else if ($type === 'dropoff') $dropoff_shuttles[] = $shuttle;
+        }
+        
+        $selected_pickup = get_post_meta($post->ID, 'tmgmt_tour_pickup_shuttle', true);
+        $selected_dropoff = get_post_meta($post->ID, 'tmgmt_tour_dropoff_shuttle', true);
+        $end_at_base = get_post_meta($post->ID, 'tmgmt_tour_end_at_base', true);
+
         wp_nonce_field('tmgmt_save_tour', 'tmgmt_tour_nonce');
         ?>
         <div class="tmgmt-tour-editor">
@@ -119,6 +137,29 @@ class TMGMT_Tour_Post_Type {
                 <button type="button" class="button button-primary" id="tmgmt-calc-tour" style="margin-left: 20px;">Tour berechnen / Aktualisieren</button>
                 <span id="tmgmt-calc-spinner" class="spinner" style="float:none;"></span>
             </p>
+
+            <div style="margin-bottom: 20px; padding: 10px; background: #f9f9f9; border: 1px solid #ddd;">
+                <label for="tmgmt_tour_pickup_shuttle"><strong>Sammelfahrt (Abholung):</strong></label>
+                <select name="tmgmt_tour_pickup_shuttle" id="tmgmt_tour_pickup_shuttle">
+                    <option value="">- Keine -</option>
+                    <?php foreach ($pickup_shuttles as $s): ?>
+                        <option value="<?php echo $s->ID; ?>" <?php selected($selected_pickup, $s->ID); ?>><?php echo esc_html($s->post_title); ?></option>
+                    <?php endforeach; ?>
+                </select>
+
+                <label for="tmgmt_tour_dropoff_shuttle" style="margin-left: 20px;"><strong>Sammelfahrt (Rückfahrt):</strong></label>
+                <select name="tmgmt_tour_dropoff_shuttle" id="tmgmt_tour_dropoff_shuttle">
+                    <option value="">- Keine -</option>
+                    <?php foreach ($dropoff_shuttles as $s): ?>
+                        <option value="<?php echo $s->ID; ?>" <?php selected($selected_dropoff, $s->ID); ?>><?php echo esc_html($s->post_title); ?></option>
+                    <?php endforeach; ?>
+                </select>
+
+                <label for="tmgmt_tour_end_at_base" style="margin-left: 20px;">
+                    <input type="checkbox" id="tmgmt_tour_end_at_base" name="tmgmt_tour_end_at_base" value="1" <?php checked($end_at_base, '1'); ?>>
+                    <strong>Ende am Proberaum</strong>
+                </label>
+            </div>
             
             <?php if ($update_required): ?>
             <div class="notice notice-error inline" style="margin: 10px 0; padding: 10px; border-left-color: #d63638;">
@@ -169,6 +210,7 @@ class TMGMT_Tour_Post_Type {
                 ?>
             </div>
             <input type="hidden" name="tmgmt_tour_data" id="tmgmt_tour_data" value="<?php echo esc_attr($data); ?>">
+            <input type="hidden" id="tmgmt_tour_id" value="<?php echo $post->ID; ?>">
         </div>
         
         <script>
@@ -176,6 +218,7 @@ class TMGMT_Tour_Post_Type {
             $('#tmgmt-calc-tour').on('click', function() {
                 var date = $('#tmgmt_tour_date').val();
                 var mode = $('#tmgmt_tour_mode').val();
+                var tour_id = $('#tmgmt_tour_id').val();
                 if (!date) {
                     alert('Bitte wählen Sie ein Datum.');
                     return;
@@ -187,6 +230,7 @@ class TMGMT_Tour_Post_Type {
                     action: 'tmgmt_calculate_tour',
                     date: date,
                     mode: mode,
+                    tour_id: tour_id,
                     nonce: '<?php echo wp_create_nonce('tmgmt_backend_nonce'); ?>'
                 }, function(response) {
                     $('#tmgmt-calc-spinner').removeClass('is-active');
@@ -227,7 +271,7 @@ class TMGMT_Tour_Post_Type {
             
             // Time Column
             echo '<td>';
-            if ($item['type'] === 'travel') {
+            if ($item['type'] === 'travel' || $item['type'] === 'shuttle_travel') {
                 // For travel: Departure (Start of trip) -> Arrival (End of trip)
                 if (isset($item['departure_time'])) echo 'Ab: ' . $item['departure_time'] . '<br>';
                 if (isset($item['arrival_time'])) echo 'An: ' . $item['arrival_time'];
@@ -241,7 +285,14 @@ class TMGMT_Tour_Post_Type {
             
             // Location Column
             echo '<td>';
-            if ($item['type'] === 'start') echo '<strong>Start: ' . esc_html($item['location']) . '</strong>';
+            if ($item['type'] === 'start') {
+                echo '<strong>Start: ' . esc_html($item['location']) . '</strong>';
+                if (isset($item['meeting_time'])) {
+                    echo '<br><span style="color: #2271b1; font-weight: bold;">Treffen: ' . $item['meeting_time'] . '</span>';
+                }
+            }
+            if ($item['type'] === 'shuttle_stop') echo '<strong>Sammelfahrt: ' . esc_html($item['location']) . '</strong><br>' . esc_html($item['address']);
+            if ($item['type'] === 'shuttle_travel') echo '<em>Fahrt nach ' . esc_html($item['to']) . '</em>';
             if ($item['type'] === 'event') {
                 $edit_link = get_edit_post_link($item['id']);
                 echo '<strong><a href="' . esc_url($edit_link) . '" target="_blank">' . esc_html($item['title']) . '</a></strong><br>' . esc_html($item['location']);
@@ -268,7 +319,34 @@ class TMGMT_Tour_Post_Type {
             echo '</td>';
             
             // Action Column
-            echo '<td>' . $item['type'] . '</td>';
+            $icon = '';
+            switch ($item['type']) {
+                case 'start':
+                    // Traffic Lights Go (Green)
+                    $icon = '<i class="fa-solid fa-traffic-light" title="Start" style="color: #00a32a; font-size: 24px;"></i>';
+                    break;
+                case 'shuttle_stop':
+                    $icon = '<i class="fa-solid fa-people-group" title="Sammelpunkt" style="color: #2271b1; font-size: 24px;"></i>';
+                    break;
+                case 'shuttle_travel':
+                    $icon = '<i class="fa-solid fa-van-shuttle" title="Sammelfahrt" style="color: #666; font-size: 24px;"></i>';
+                    break;
+                case 'event':
+                    // Trumpet (Music)
+                    $icon = '<i class="fa-solid fa-music" title="Event" style="color: #2271b1; font-size: 24px;"></i>';
+                    break;
+                case 'travel':
+                    // Bus
+                    $icon = '<i class="fa-solid fa-bus" title="Fahrt" style="color: #666; font-size: 24px;"></i>';
+                    break;
+                case 'end':
+                    // Finish Flag
+                    $icon = '<i class="fa-solid fa-flag-checkered" title="Ende" style="color: #d63638; font-size: 24px;"></i>';
+                    break;
+                default:
+                    $icon = $item['type'];
+            }
+            echo '<td style="text-align:center; vertical-align: middle;">' . $icon . '</td>';
             
             // Duration Column
             echo '<td>';
@@ -309,6 +387,18 @@ class TMGMT_Tour_Post_Type {
         // Save Bus Travel Checkbox
         $bus_travel = isset($_POST['tmgmt_tour_bus_travel']) ? '1' : '0';
         update_post_meta($post_id, 'tmgmt_tour_bus_travel', $bus_travel);
+
+        // Save End At Base Checkbox
+        $end_at_base = isset($_POST['tmgmt_tour_end_at_base']) ? '1' : '0';
+        update_post_meta($post_id, 'tmgmt_tour_end_at_base', $end_at_base);
+
+        // Save Shuttles
+        if (isset($_POST['tmgmt_tour_pickup_shuttle'])) {
+            update_post_meta($post_id, 'tmgmt_tour_pickup_shuttle', sanitize_text_field($_POST['tmgmt_tour_pickup_shuttle']));
+        }
+        if (isset($_POST['tmgmt_tour_dropoff_shuttle'])) {
+            update_post_meta($post_id, 'tmgmt_tour_dropoff_shuttle', sanitize_text_field($_POST['tmgmt_tour_dropoff_shuttle']));
+        }
 
         // Save Mode with Validation
         $mode = isset($_POST['tmgmt_tour_mode']) ? sanitize_text_field($_POST['tmgmt_tour_mode']) : 'draft';

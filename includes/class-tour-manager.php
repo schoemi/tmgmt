@@ -11,12 +11,13 @@ class TMGMT_Tour_Manager {
         
         $date = isset($_POST['date']) ? sanitize_text_field($_POST['date']) : '';
         $mode = isset($_POST['mode']) ? sanitize_text_field($_POST['mode']) : 'real';
+        $tour_id = isset($_POST['tour_id']) ? intval($_POST['tour_id']) : 0;
 
         if (!$date) {
             wp_send_json_error('Kein Datum angegeben.');
         }
 
-        $tour_data = $this->calculate_tour($date, $mode);
+        $tour_data = $this->calculate_tour($date, $mode, $tour_id);
         
         if (is_wp_error($tour_data)) {
             wp_send_json_error($tour_data->get_error_message());
@@ -25,9 +26,9 @@ class TMGMT_Tour_Manager {
         wp_send_json_success($tour_data);
     }
 
-    public function calculate_tour($date, $mode = 'real') {
+    public function calculate_tour($date, $mode = 'real', $tour_id = 0) {
         // Debug Logging
-        error_log('TMGMT Tour Calculation Start for Date: ' . $date . ' Mode: ' . $mode);
+        error_log('TMGMT Tour Calculation Start for Date: ' . $date . ' Mode: ' . $mode . ' Tour ID: ' . $tour_id);
 
         // 1. Get Settings
         $start_lat = get_option('tmgmt_route_start_lat');
@@ -39,6 +40,7 @@ class TMGMT_Tour_Manager {
         $buffer_departure = (int)get_option('tmgmt_route_buffer_departure', 30);
         $show_duration = (int)get_option('tmgmt_route_show_duration', 60);
         $loading_time = (int)get_option('tmgmt_route_loading_time', 60);
+        $meeting_buffer = (int)get_option('tmgmt_route_meeting_buffer', 15);
         $bus_factor = (float)get_option('tmgmt_route_bus_factor', 1.0);
         $min_free_slot = (int)get_option('tmgmt_route_min_free_slot', 60);
         $status_filter = get_option('tmgmt_route_status_filter', array());
@@ -196,7 +198,55 @@ class TMGMT_Tour_Manager {
             $current_location = array('lat' => $event['lat'], 'lng' => $event['lng'], 'name' => $event['location']);
         }
 
-        // Return Trip
+        // --- Shuttle Calculation (Dropoff) ---
+        $dropoff_shuttle_id = $tour_id ? get_post_meta($tour_id, 'tmgmt_tour_dropoff_shuttle', true) : false;
+        $end_at_base = $tour_id ? get_post_meta($tour_id, 'tmgmt_tour_end_at_base', true) : false;
+        
+        // If "End at Base" is TRUE, we do Dropoff BEFORE returning to Base.
+        // Sequence: Last Event -> Dropoff Stops -> Base (End)
+        
+        if ($end_at_base && $dropoff_shuttle_id) {
+            $shuttle_stops_json = get_post_meta($dropoff_shuttle_id, 'tmgmt_shuttle_stops', true);
+            $shuttle_stops = json_decode($shuttle_stops_json, true);
+            
+            if (!empty($shuttle_stops)) {
+                // We are at Last Event ($current_location)
+                
+                foreach ($shuttle_stops as $stop) {
+                    $stop_duration = 5; 
+                    $stop_loc = array(
+                        'lat' => isset($stop['lat']) ? $stop['lat'] : '',
+                        'lng' => isset($stop['lng']) ? $stop['lng'] : '',
+                        'name' => $stop['name']
+                    );
+
+                    // Travel from Current (Last Event or Prev Stop) to Stop
+                    $travel = array('duration' => 30, 'distance' => 0);
+                    if ($stop_loc['lat'] && $stop_loc['lng'] && $current_location['lat'] && $current_location['lng']) {
+                        $travel = $this->get_travel_data($current_location, $stop_loc, $bus_factor);
+                    }
+
+                    $schedule[] = array(
+                        'type' => 'shuttle_travel',
+                        'from' => $current_location['name'],
+                        'to' => $stop['name'],
+                        'duration' => $travel['duration'],
+                        'distance' => $travel['distance']
+                    );
+                    
+                    $schedule[] = array(
+                        'type' => 'shuttle_stop',
+                        'location' => $stop['name'],
+                        'address' => $stop['address'],
+                        'duration' => $stop_duration
+                    );
+                    
+                    $current_location = $stop_loc;
+                }
+            }
+        }
+
+        // Return Trip (to Base)
         $start_point = array('lat' => $start_lat, 'lng' => $start_lng, 'name' => $start_name);
         $travel_back = $this->get_travel_data($current_location, $start_point, $bus_factor);
         
@@ -214,6 +264,55 @@ class TMGMT_Tour_Manager {
             'lat' => $start_lat,
             'lng' => $start_lng
         );
+
+        // If "End at Base" is FALSE (Default), we do Dropoff AFTER returning to Base.
+        // Sequence: Last Event -> Base -> Dropoff Stops
+        
+        if (!$end_at_base && $dropoff_shuttle_id) {
+            $shuttle_stops_json = get_post_meta($dropoff_shuttle_id, 'tmgmt_shuttle_stops', true);
+            $shuttle_stops = json_decode($shuttle_stops_json, true);
+            
+            if (!empty($shuttle_stops)) {
+                // We are at Base ($start_point)
+                // But we need to account for Unloading Time at Base first?
+                // The 'end' item is just a marker.
+                // Let's assume unloading happens at Base.
+                
+                // Current Location is Base
+                $current_location = $start_point;
+
+                foreach ($shuttle_stops as $stop) {
+                    $stop_duration = 5; 
+                    $stop_loc = array(
+                        'lat' => isset($stop['lat']) ? $stop['lat'] : '',
+                        'lng' => isset($stop['lng']) ? $stop['lng'] : '',
+                        'name' => $stop['name']
+                    );
+
+                    $travel = array('duration' => 30, 'distance' => 0);
+                    if ($stop_loc['lat'] && $stop_loc['lng'] && $current_location['lat'] && $current_location['lng']) {
+                        $travel = $this->get_travel_data($current_location, $stop_loc, $bus_factor);
+                    }
+
+                    $schedule[] = array(
+                        'type' => 'shuttle_travel',
+                        'from' => $current_location['name'],
+                        'to' => $stop['name'],
+                        'duration' => $travel['duration'],
+                        'distance' => $travel['distance']
+                    );
+                    
+                    $schedule[] = array(
+                        'type' => 'shuttle_stop',
+                        'location' => $stop['name'],
+                        'address' => $stop['address'],
+                        'duration' => $stop_duration
+                    );
+                    
+                    $current_location = $stop_loc;
+                }
+            }
+        }
 
         // 5. Calculate Times
         // New Logic:
@@ -252,6 +351,83 @@ class TMGMT_Tour_Manager {
                         $item['departure_time'] = date('H:i', $current_time);
                         $loading_start = $current_time - ($item['loading_time'] * 60);
                         $item['arrival_time'] = date('H:i', $loading_start);
+                        
+                        // Meeting Time (Before Loading Starts)
+                        $meeting_time = $loading_start - ($meeting_buffer * 60);
+                        $item['meeting_time'] = date('H:i', $meeting_time);
+                    }
+                }
+
+                // --- Shuttle Calculation (Pickup) ---
+                if ($tour_id) {
+                    $pickup_shuttle_id = get_post_meta($tour_id, 'tmgmt_tour_pickup_shuttle', true);
+                    if ($pickup_shuttle_id) {
+                        $shuttle_stops_json = get_post_meta($pickup_shuttle_id, 'tmgmt_shuttle_stops', true);
+                        $shuttle_stops = json_decode($shuttle_stops_json, true);
+                        
+                        if (!empty($shuttle_stops)) {
+                            $shuttle_schedule = array();
+                            // Start from Rehearsal Room Arrival (Loading Start)
+                            $current_shuttle_time = strtotime($date . ' ' . $schedule[0]['arrival_time']);
+                            
+                            // Current Location (Target) is Rehearsal Room
+                            $current_target_loc = array(
+                                'lat' => $start_lat,
+                                'lng' => $start_lng,
+                                'name' => $start_name
+                            );
+
+                            // Iterate stops in reverse order
+                            for ($s = count($shuttle_stops) - 1; $s >= 0; $s--) {
+                                $stop = $shuttle_stops[$s];
+                                $stop_duration = 5; // 5 min boarding
+
+                                // Prepare Stop Location
+                                $stop_loc = array(
+                                    'lat' => isset($stop['lat']) ? $stop['lat'] : '',
+                                    'lng' => isset($stop['lng']) ? $stop['lng'] : '',
+                                    'name' => $stop['name']
+                                );
+
+                                // Calculate Travel from Stop to Target
+                                $travel = array('duration' => 30, 'distance' => 0); // Default fallback
+                                if ($stop_loc['lat'] && $stop_loc['lng'] && $current_target_loc['lat'] && $current_target_loc['lng']) {
+                                    $travel = $this->get_travel_data($stop_loc, $current_target_loc, $bus_factor);
+                                }
+
+                                // Travel from Stop to Next Point
+                                $departure_from_stop = $current_shuttle_time - ($travel['duration'] * 60);
+                                
+                                array_unshift($shuttle_schedule, array(
+                                    'type' => 'shuttle_travel',
+                                    'from' => $stop['name'],
+                                    'to' => $current_target_loc['name'],
+                                    'duration' => $travel['duration'],
+                                    'distance' => $travel['distance'],
+                                    'departure_time' => date('H:i', $departure_from_stop),
+                                    'arrival_time' => date('H:i', $current_shuttle_time)
+                                ));
+
+                                // Stop at Station
+                                $arrival_at_stop = $departure_from_stop - ($stop_duration * 60);
+                                
+                                array_unshift($shuttle_schedule, array(
+                                    'type' => 'shuttle_stop',
+                                    'location' => $stop['name'],
+                                    'address' => $stop['address'],
+                                    'arrival_time' => date('H:i', $arrival_at_stop),
+                                    'departure_time' => date('H:i', $departure_from_stop),
+                                    'duration' => $stop_duration
+                                ));
+
+                                $current_shuttle_time = $arrival_at_stop;
+                                $current_target_loc = $stop_loc;
+                            }
+                            
+                            // Merge and Update Index
+                            $schedule = array_merge($shuttle_schedule, $schedule);
+                            $first_event_idx += count($shuttle_schedule);
+                        }
                     }
                 }
 
@@ -334,6 +510,24 @@ class TMGMT_Tour_Manager {
                         if (isset($schedule[$i+1])) {
                             $schedule[$i+1]['arrival_time'] = date('H:i', $arrival);
                         }
+                    } elseif ($item['type'] === 'shuttle_travel') {
+                        // Shuttle Travel Logic (Same as Travel)
+                        $item['departure_time'] = date('H:i', $last_departure_time);
+                        
+                        $arrival = $last_departure_time + ($item['duration'] * 60);
+                        $item['arrival_time'] = date('H:i', $arrival);
+                        
+                        $last_departure_time = $arrival;
+                        $current_arrival_timestamp = $arrival;
+
+                        if (isset($schedule[$i+1])) {
+                            $schedule[$i+1]['arrival_time'] = date('H:i', $arrival);
+                        }
+                    } elseif ($item['type'] === 'shuttle_stop') {
+                        // Shuttle Stop Logic (Duration)
+                        // Arrival already set by previous travel
+                        $item['departure_time'] = date('H:i', $last_departure_time + ($item['duration'] * 60));
+                        $last_departure_time += ($item['duration'] * 60);
                     } elseif ($item['type'] === 'end') {
                         // End Logic
                         // Arrival already set by previous travel
@@ -342,6 +536,8 @@ class TMGMT_Tour_Manager {
             }
         }
 
+        // Remove old Shuttle Calculation Block (Dropoff) - It is now handled in Step 4
+        
         // Append Unroutable Events
         if (!empty($unroutable_events)) {
             foreach ($unroutable_events as $ue) {

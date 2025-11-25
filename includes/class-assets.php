@@ -9,6 +9,11 @@ class TMGMT_Assets {
     public function enqueue_admin_scripts($hook) {
         global $post;
 
+        // Always enqueue FontAwesome for TMGMT pages
+        if (strpos($hook, 'tmgmt') !== false || ($post && in_array($post->post_type, array('event', 'tmgmt_tour')))) {
+            wp_enqueue_style('font-awesome', 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css');
+        }
+
         if ($hook == 'post-new.php' || $hook == 'post.php') {
             if ('event' === $post->post_type) {
                 wp_enqueue_script('jquery-ui-dialog');
@@ -39,6 +44,11 @@ class TMGMT_Assets {
                 wp_localize_script('tmgmt-admin-script', 'tmgmt_vars', array(
                     'validation_rules' => $rules
                 ));
+            }
+            
+            // Enqueue for Tour Post Type
+            if ('tmgmt_tour' === $post->post_type) {
+                 // We might need scripts here too later
             }
         }
     }

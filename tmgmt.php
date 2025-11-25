@@ -24,6 +24,7 @@ require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-email-template-post-t
 require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-action-post-type.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-kanban-column-post-type.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-tour-post-type.php';
+require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-shuttle-post-type.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-placeholder-parser.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-action-handler.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-dashboard.php';
@@ -50,6 +51,7 @@ function tmgmt_init() {
     new TMGMT_Action_Post_Type();
     new TMGMT_Kanban_Column_Post_Type();
     new TMGMT_Tour_Post_Type();
+    new TMGMT_Shuttle_Post_Type();
     new TMGMT_Action_Handler();
     new TMGMT_Dashboard();
     new TMGMT_Appointment_List();
