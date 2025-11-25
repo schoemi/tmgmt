@@ -414,9 +414,9 @@ document.addEventListener('DOMContentLoaded', function() {
         `;
 
         // Helper to create section
-        const createSection = (title, content, isCollapsed = false, style = '') => `
+        const createSection = (title, content, isCollapsed = false, style = '', titleStyle = '') => `
             <div class="tmgmt-section ${isCollapsed ? 'collapsed' : ''}" style="${style}">
-                <div class="tmgmt-section-title">${title}</div>
+                <div class="tmgmt-section-title" style="${titleStyle}">${title}</div>
                 <div class="tmgmt-section-content">
                     ${content}
                 </div>
@@ -681,12 +681,15 @@ document.addEventListener('DOMContentLoaded', function() {
         const getSectionConfig = (key, defaultOrder, defaultCollapsed) => {
             if (layout[key]) {
                 const config = isMobile ? (layout[key].mobile || {}) : (layout[key].desktop || {});
+                const colors = layout[key].colors || {};
                 return {
                     order: config.order || defaultOrder,
-                    collapsed: config.collapsed !== undefined ? config.collapsed : defaultCollapsed
+                    collapsed: config.collapsed !== undefined ? config.collapsed : defaultCollapsed,
+                    bgColor: colors.bg || '',
+                    textColor: colors.text || ''
                 };
             }
-            return { order: defaultOrder, collapsed: defaultCollapsed };
+            return { order: defaultOrder, collapsed: defaultCollapsed, bgColor: '', textColor: '' };
         };
 
         // Define Sections with Keys
@@ -709,7 +712,11 @@ document.addEventListener('DOMContentLoaded', function() {
         sections.forEach(sec => {
             const config = getSectionConfig(sec.key, sec.defaultOrder, sec.defaultCollapsed);
             const style = `order: ${config.order};`;
-            sectionsHtml += createSection(sec.title, sec.content, config.collapsed, style);
+            let titleStyle = '';
+            if (config.bgColor) titleStyle += `background-color: ${config.bgColor};`;
+            if (config.textColor) titleStyle += `color: ${config.textColor};`;
+            
+            sectionsHtml += createSection(sec.title, sec.content, config.collapsed, style, titleStyle);
         });
 
         const html = `

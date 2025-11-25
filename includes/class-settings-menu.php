@@ -379,6 +379,10 @@ class TMGMT_Settings_Menu {
                     'mobile' => array(
                         'order' => intval($_POST[$sec . '_mobile_order']),
                         'collapsed' => isset($_POST[$sec . '_mobile_collapsed'])
+                    ),
+                    'colors' => array(
+                        'bg' => sanitize_hex_color($_POST[$sec . '_bg_color']),
+                        'text' => sanitize_hex_color($_POST[$sec . '_text_color'])
                     )
                 );
             }
@@ -412,6 +416,8 @@ class TMGMT_Settings_Menu {
             $d_collapsed = isset($saved_layout[$key]['desktop']['collapsed']) ? $saved_layout[$key]['desktop']['collapsed'] : false;
             $m_order = isset($saved_layout[$key]['mobile']['order']) ? $saved_layout[$key]['mobile']['order'] : $i;
             $m_collapsed = isset($saved_layout[$key]['mobile']['collapsed']) ? $saved_layout[$key]['mobile']['collapsed'] : false;
+            $bg_color = isset($saved_layout[$key]['colors']['bg']) ? $saved_layout[$key]['colors']['bg'] : '';
+            $text_color = isset($saved_layout[$key]['colors']['text']) ? $saved_layout[$key]['colors']['text'] : '';
             
             $rows[] = array(
                 'key' => $key,
@@ -419,7 +425,9 @@ class TMGMT_Settings_Menu {
                 'desktop_order' => $d_order,
                 'desktop_collapsed' => $d_collapsed,
                 'mobile_order' => $m_order,
-                'mobile_collapsed' => $m_collapsed
+                'mobile_collapsed' => $m_collapsed,
+                'bg_color' => $bg_color,
+                'text_color' => $text_color
             );
             $i++;
         }
@@ -470,6 +478,7 @@ class TMGMT_Settings_Menu {
                             <th><?php echo $get_sort_link('label', 'Sektion'); ?></th>
                             <th colspan="2">Desktop</th>
                             <th colspan="2">Mobile</th>
+                            <th colspan="2">Farben (Titel)</th>
                         </tr>
                         <tr>
                             <th></th>
@@ -477,6 +486,8 @@ class TMGMT_Settings_Menu {
                             <th>Initial eingeklappt</th>
                             <th><?php echo $get_sort_link('mobile_order', 'Reihenfolge'); ?></th>
                             <th>Initial eingeklappt</th>
+                            <th>Hintergrund</th>
+                            <th>Text</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -497,6 +508,18 @@ class TMGMT_Settings_Menu {
                             </td>
                             <td>
                                 <input type="checkbox" name="<?php echo $key; ?>_mobile_collapsed" <?php checked($row['mobile_collapsed']); ?>>
+                            </td>
+                            <td>
+                                <div style="display:flex; align-items:center; gap:3px;">
+                                    <input type="text" name="<?php echo $key; ?>_bg_color" value="<?php echo esc_attr($row['bg_color']); ?>" placeholder="Default" style="width:65px;">
+                                    <input type="color" value="<?php echo esc_attr($row['bg_color'] ?: '#ffffff'); ?>" oninput="this.previousElementSibling.value = this.value" style="width:25px; height:25px; padding:0; border:0; background:none; cursor:pointer;">
+                                </div>
+                            </td>
+                            <td>
+                                <div style="display:flex; align-items:center; gap:3px;">
+                                    <input type="text" name="<?php echo $key; ?>_text_color" value="<?php echo esc_attr($row['text_color']); ?>" placeholder="Default" style="width:65px;">
+                                    <input type="color" value="<?php echo esc_attr($row['text_color'] ?: '#000000'); ?>" oninput="this.previousElementSibling.value = this.value" style="width:25px; height:25px; padding:0; border:0; background:none; cursor:pointer;">
+                                </div>
                             </td>
                         </tr>
                         <?php 
