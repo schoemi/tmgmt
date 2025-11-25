@@ -89,6 +89,8 @@ class TMGMT_Tour_Post_Type {
         $date = get_post_meta($post->ID, 'tmgmt_tour_date', true);
         $data = get_post_meta($post->ID, 'tmgmt_tour_data', true);
         $bus_travel = get_post_meta($post->ID, 'tmgmt_tour_bus_travel', true);
+        $mode = get_post_meta($post->ID, 'tmgmt_tour_mode', true);
+        if (!$mode) $mode = 'draft'; // Default to draft
         
         $warning_count = get_post_meta($post->ID, 'tmgmt_tour_warning_count', true);
         $error_count = get_post_meta($post->ID, 'tmgmt_tour_error_count', true);
@@ -101,6 +103,12 @@ class TMGMT_Tour_Post_Type {
                 <label for="tmgmt_tour_date"><strong>Datum der Tour:</strong></label>
                 <input type="date" id="tmgmt_tour_date" name="tmgmt_tour_date" value="<?php echo esc_attr($date); ?>">
                 
+                <label for="tmgmt_tour_mode" style="margin-left: 20px;"><strong>Modus:</strong></label>
+                <select name="tmgmt_tour_mode" id="tmgmt_tour_mode">
+                    <option value="draft" <?php selected($mode, 'draft'); ?>>Entwurfsplanung</option>
+                    <option value="real" <?php selected($mode, 'real'); ?>>Echtplanung</option>
+                </select>
+
                 <label for="tmgmt_tour_bus_travel" style="margin-left: 20px;">
                     <input type="checkbox" id="tmgmt_tour_bus_travel" name="tmgmt_tour_bus_travel" value="1" <?php checked($bus_travel, '1'); ?>>
                     <strong>Reise mit Bus</strong>
@@ -132,6 +140,27 @@ class TMGMT_Tour_Post_Type {
                 if ($data) {
                     $schedule = json_decode($data, true);
                     $this->render_schedule_table($schedule);
+                    
+                    // Render Free Slot Summary
+                    $free_slots = array();
+                    foreach ($schedule as $item) {
+                        if (isset($item['free_slot_before'])) {
+                            $free_slots[] = $item;
+                        }
+                    }
+                    
+                    if (!empty($free_slots)) {
+                        echo '<div class="postbox" style="margin-top: 20px;">';
+                        echo '<h3 class="hndle"><span>Freie Zeiträume (Gap Analysis)</span></h3>';
+                        echo '<div class="inside">';
+                        echo '<ul>';
+                        foreach ($free_slots as $slot) {
+                            $fs = $slot['free_slot_before'];
+                            echo '<li><strong>' . $fs['start'] . ' - ' . $fs['end'] . ' (' . $fs['duration'] . ' Min)</strong> vor ' . esc_html($slot['title']) . ' (' . esc_html($slot['location']) . ')</li>';
+                        }
+                        echo '</ul>';
+                        echo '</div></div>';
+                    }
                 } else {
                     echo '<p>Noch keine Tour berechnet.</p>';
                 }
@@ -144,6 +173,7 @@ class TMGMT_Tour_Post_Type {
         jQuery(document).ready(function($) {
             $('#tmgmt-calc-tour').on('click', function() {
                 var date = $('#tmgmt_tour_date').val();
+                var mode = $('#tmgmt_tour_mode').val();
                 if (!date) {
                     alert('Bitte wählen Sie ein Datum.');
                     return;
@@ -154,6 +184,7 @@ class TMGMT_Tour_Post_Type {
                 $.post(ajaxurl, {
                     action: 'tmgmt_calculate_tour',
                     date: date,
+                    mode: mode,
                     nonce: '<?php echo wp_create_nonce('tmgmt_backend_nonce'); ?>'
                 }, function(response) {
                     $('#tmgmt-calc-spinner').removeClass('is-active');
@@ -180,6 +211,16 @@ class TMGMT_Tour_Post_Type {
         echo '<tbody>';
         
         foreach ($schedule as $item) {
+            // Render Free Slot Row if exists
+            if (isset($item['free_slot_before'])) {
+                $fs = $item['free_slot_before'];
+                echo '<tr style="background-color: #e6fffa;">';
+                echo '<td>' . esc_html($fs['start']) . ' - ' . esc_html($fs['end']) . '</td>';
+                echo '<td colspan="2"><strong>Freier Zeitraum</strong></td>';
+                echo '<td>' . esc_html($fs['duration']) . ' Min</td>';
+                echo '</tr>';
+            }
+
             echo '<tr>';
             
             // Time Column
@@ -267,6 +308,44 @@ class TMGMT_Tour_Post_Type {
         $bus_travel = isset($_POST['tmgmt_tour_bus_travel']) ? '1' : '0';
         update_post_meta($post_id, 'tmgmt_tour_bus_travel', $bus_travel);
 
+        // Save Mode with Validation
+        $mode = isset($_POST['tmgmt_tour_mode']) ? sanitize_text_field($_POST['tmgmt_tour_mode']) : 'draft';
+        
+        if ($mode === 'real') {
+            // 1. Check for existing Real Tour on this date
+            $date = sanitize_text_field($_POST['tmgmt_tour_date']);
+            $existing = get_posts(array(
+                'post_type' => 'tmgmt_tour',
+                'post_status' => 'any',
+                'meta_query' => array(
+                    'relation' => 'AND',
+                    array('key' => 'tmgmt_tour_date', 'value' => $date),
+                    array('key' => 'tmgmt_tour_mode', 'value' => 'real')
+                ),
+                'exclude' => array($post_id)
+            ));
+            
+            if (!empty($existing)) {
+                $mode = 'draft';
+                // TODO: Add user feedback that mode was reverted
+            }
+            
+            // 2. Check for Errors in the Data
+            if (isset($_POST['tmgmt_tour_data'])) {
+                $json = wp_unslash($_POST['tmgmt_tour_data']);
+                $schedule = json_decode($json, true);
+                if (is_array($schedule)) {
+                    foreach ($schedule as $item) {
+                        if (isset($item['error'])) {
+                            $mode = 'draft';
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        update_post_meta($post_id, 'tmgmt_tour_mode', $mode);
+
         if (isset($_POST['tmgmt_tour_data'])) {
             // We save the raw JSON string. In a real app, we should decode and sanitize.
             $json = wp_unslash($_POST['tmgmt_tour_data']);
@@ -284,8 +363,8 @@ class TMGMT_Tour_Post_Type {
                     if (isset($item['warning']) || isset($item['idle_warning'])) $warnings++;
                     if (isset($item['error'])) $errors++;
 
-                    // Update Event Meta with Planned Times
-                    if (isset($item['type']) && $item['type'] === 'event' && isset($item['id'])) {
+                    // Update Event Meta with Planned Times (ONLY IF REAL MODE)
+                    if ($mode === 'real' && isset($item['type']) && $item['type'] === 'event' && isset($item['id'])) {
                         if (isset($item['arrival_time'])) {
                             update_post_meta($item['id'], '_tmgmt_event_arrival_time', $item['arrival_time']);
                         }

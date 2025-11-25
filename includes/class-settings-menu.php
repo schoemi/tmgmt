@@ -264,6 +264,13 @@ class TMGMT_Settings_Menu {
                         </td>
                     </tr>
                     <tr>
+                        <th scope="row"><label for="tmgmt_route_min_free_slot">Minimale Zeit für freien Slot (Minuten)</label></th>
+                        <td>
+                            <input name="tmgmt_route_min_free_slot" type="number" id="tmgmt_route_min_free_slot" value="<?php echo esc_attr(get_option('tmgmt_route_min_free_slot', 60)); ?>" class="small-text">
+                            <p class="description">Ab dieser Dauer wird ein Zeitraum als "Freier Slot" in der Entwurfsplanung angezeigt.</p>
+                        </td>
+                    </tr>
+                    <tr>
                         <th scope="row"><label for="tmgmt_route_loading_time">Verladen / Vorlaufzeit (Minuten)</label></th>
                         <td>
                             <input name="tmgmt_route_loading_time" type="number" id="tmgmt_route_loading_time" value="<?php echo esc_attr(get_option('tmgmt_route_loading_time', 60)); ?>" class="small-text">

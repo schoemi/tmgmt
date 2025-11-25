@@ -10,11 +10,13 @@ class TMGMT_Tour_Manager {
         check_ajax_referer('tmgmt_backend_nonce', 'nonce');
         
         $date = isset($_POST['date']) ? sanitize_text_field($_POST['date']) : '';
+        $mode = isset($_POST['mode']) ? sanitize_text_field($_POST['mode']) : 'real';
+
         if (!$date) {
             wp_send_json_error('Kein Datum angegeben.');
         }
 
-        $tour_data = $this->calculate_tour($date);
+        $tour_data = $this->calculate_tour($date, $mode);
         
         if (is_wp_error($tour_data)) {
             wp_send_json_error($tour_data->get_error_message());
@@ -23,9 +25,9 @@ class TMGMT_Tour_Manager {
         wp_send_json_success($tour_data);
     }
 
-    public function calculate_tour($date) {
+    public function calculate_tour($date, $mode = 'real') {
         // Debug Logging
-        error_log('TMGMT Tour Calculation Start for Date: ' . $date);
+        error_log('TMGMT Tour Calculation Start for Date: ' . $date . ' Mode: ' . $mode);
 
         // 1. Get Settings
         $start_lat = get_option('tmgmt_route_start_lat');
@@ -38,6 +40,7 @@ class TMGMT_Tour_Manager {
         $show_duration = (int)get_option('tmgmt_route_show_duration', 60);
         $loading_time = (int)get_option('tmgmt_route_loading_time', 60);
         $bus_factor = (float)get_option('tmgmt_route_bus_factor', 1.0);
+        $min_free_slot = (int)get_option('tmgmt_route_min_free_slot', 60);
         $status_filter = get_option('tmgmt_route_status_filter', array());
 
         // Convert Status Filter IDs to Slugs
@@ -89,6 +92,7 @@ class TMGMT_Tour_Manager {
         error_log('Events found for date: ' . $raw_count);
 
         $filtered_events = array();
+        $unroutable_events = array();
         $debug_log = array();
 
         foreach ($events as $event) {
@@ -110,8 +114,8 @@ class TMGMT_Tour_Manager {
             $debug_info = "ID {$event->ID}: Status='{$status}', Lat='{$lat}', Lng='{$lng}'";
             error_log("Checking Event " . $debug_info);
 
-            // If filter is active, check status
-            if (!empty($status_filter) && !in_array($status, $status_filter)) {
+            // If filter is active, check status (ONLY IN REAL MODE)
+            if ($mode === 'real' && !empty($status_filter) && !in_array($status, $status_filter)) {
                 error_log("-> Skipped due to status filter.");
                 $debug_log[] = $debug_info . " -> Skipped (Status Filter: " . implode(',', $status_filter) . ")";
                 continue;
@@ -120,7 +124,14 @@ class TMGMT_Tour_Manager {
             if (!$lat || !$lng) {
                 error_log("-> Skipped due to missing geodata.");
                 $debug_log[] = $debug_info . " -> Skipped (Missing Geo)";
-                // Skip events without geo data for now
+                
+                $unroutable_events[] = array(
+                    'id' => $event->ID,
+                    'title' => $event->post_title,
+                    'start_time' => $time,
+                    'location' => $city ?: 'Unbekannt',
+                    'error' => 'Keine Geodaten (Lat/Lng fehlt)'
+                );
                 continue;
             }
 
@@ -135,9 +146,9 @@ class TMGMT_Tour_Manager {
             error_log("-> Added to route.");
         }
 
-        if (empty($filtered_events)) {
+        if (empty($filtered_events) && empty($unroutable_events)) {
             error_log('No events left after filtering.');
-            return new WP_Error('no_events', 'Keine passenden Events mit Geodaten für diesen Tag gefunden. (Gefunden: ' . $raw_count . ', Gefiltert: ' . ($raw_count - count($filtered_events)) . ') <br>Details:<br>' . implode('<br>', $debug_log));
+            return new WP_Error('no_events', 'Keine passenden Events für diesen Tag gefunden. (Gefunden: ' . $raw_count . ') <br>Details:<br>' . implode('<br>', $debug_log));
         }
 
         // 3. Sort by Time
@@ -267,6 +278,18 @@ class TMGMT_Tour_Manager {
                         $standard_limit = $show_start - ($item['buffer_arrival'] * 60);
                         $min_limit = $show_start - ($min_buffer_arrival * 60);
 
+                        // Gap Analysis (Draft Mode Only)
+                        if ($mode === 'draft') {
+                            $free_time = ($standard_limit - $current_arrival_timestamp) / 60; // minutes
+                            if ($free_time >= $min_free_slot) {
+                                $item['free_slot_before'] = array(
+                                    'duration' => round($free_time),
+                                    'start' => date('H:i', $current_arrival_timestamp),
+                                    'end' => date('H:i', $standard_limit)
+                                );
+                            }
+                        }
+
                         // Check for lateness
                         if ($current_arrival_timestamp > $show_start) {
                             // Level 3: Arrived after Show Start
@@ -316,6 +339,21 @@ class TMGMT_Tour_Manager {
                         // Arrival already set by previous travel
                     }
                 }
+            }
+        }
+
+        // Append Unroutable Events
+        if (!empty($unroutable_events)) {
+            foreach ($unroutable_events as $ue) {
+                $schedule[] = array(
+                    'type' => 'event',
+                    'id' => $ue['id'],
+                    'title' => $ue['title'],
+                    'location' => $ue['location'],
+                    'error' => $ue['error'],
+                    'show_start' => $ue['start_time'] ?: '??:??',
+                    'time_diff' => 0 // Placeholder
+                );
             }
         }
 
