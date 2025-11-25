@@ -14,7 +14,7 @@ class TMGMT_Dashboard {
             'edit.php?post_type=event',
             'Dashboard',
             'Dashboard',
-            'manage_options',
+            'tmgmt_view_dashboard',
             'tmgmt-dashboard',
             array($this, 'render_dashboard')
         );

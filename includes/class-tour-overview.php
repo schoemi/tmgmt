@@ -11,7 +11,7 @@ class TMGMT_Tour_Overview {
             'edit.php?post_type=event',
             'Touren-Übersicht',
             'Touren-Übersicht',
-            'manage_options',
+            'tmgmt_view_tour_overview',
             'tmgmt-tour-overview',
             array($this, 'render_page')
         );

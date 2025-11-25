@@ -68,7 +68,9 @@ class TMGMT_Tour_Post_Type {
             'has_archive'        => false,
             'hierarchical'       => false,
             'menu_position'      => null,
-            'supports'           => array('title')
+            'supports'           => array('title'),
+            'capability_type'    => 'tour',
+            'map_meta_cap'       => true,
         );
 
         register_post_type('tmgmt_tour', $args);

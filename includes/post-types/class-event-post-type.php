@@ -55,6 +55,8 @@ class TMGMT_Event_Post_Type {
             'menu_icon'          => 'dashicons-admin-settings',
             'supports'           => array('title', 'editor', 'custom-fields'),
             'show_in_rest'       => false, // Disables Gutenberg Editor
+            'capability_type'    => 'event',
+            'map_meta_cap'       => true,
         );
 
         register_post_type('event', $args);

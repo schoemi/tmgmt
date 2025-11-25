@@ -14,7 +14,7 @@ class TMGMT_Settings_Menu {
             'edit.php?post_type=event',
             'Einstellungen',
             'Einstellungen',
-            'manage_options',
+            'tmgmt_manage_settings',
             'tmgmt-settings',
             array($this, 'render_settings_page')
         );
@@ -23,7 +23,7 @@ class TMGMT_Settings_Menu {
             'tmgmt-settings-hidden', // Hidden parent to not show in menu but allow access
             'Routenplanung',
             'Routenplanung',
-            'manage_options',
+            'tmgmt_manage_settings',
             'tmgmt-route-settings',
             array($this, 'render_route_settings_page')
         );
@@ -32,7 +32,7 @@ class TMGMT_Settings_Menu {
             'tmgmt-settings-hidden',
             'Frontend Layout',
             'Frontend Layout',
-            'manage_options',
+            'tmgmt_manage_settings',
             'tmgmt-frontend-layout',
             array($this, 'render_frontend_layout_page')
         );

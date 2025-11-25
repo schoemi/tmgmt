@@ -11,7 +11,7 @@ class TMGMT_Appointment_List {
             'edit.php?post_type=event',
             'Terminliste',
             'Terminliste',
-            'edit_posts',
+            'tmgmt_view_appointment_list',
             'tmgmt-appointment-list',
             array($this, 'render_list')
         );

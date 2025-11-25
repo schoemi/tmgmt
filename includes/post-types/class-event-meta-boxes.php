@@ -433,6 +433,8 @@ class TMGMT_Event_Meta_Boxes {
             // get_all_statuses returns array ordered by menu_order ASC
             $status = array_key_first($statuses);
         }
+
+        $can_change_status = current_user_can('tmgmt_set_event_status_directly');
         ?>
         <div class="tmgmt-field" style="margin-bottom: 10px;">
             <label for="tmgmt_inquiry_date">Anfrage vom</label>
@@ -440,7 +442,7 @@ class TMGMT_Event_Meta_Boxes {
         </div>
         <div class="tmgmt-field">
             <label for="tmgmt_status">Status</label>
-            <select id="tmgmt_status" name="tmgmt_status" style="width:100%">
+            <select id="tmgmt_status" name="tmgmt_status" style="width:100%" <?php echo $can_change_status ? '' : 'disabled'; ?>>
                 <option value="">-- Bitte wählen --</option>
                 <?php foreach ($statuses as $key => $label) : ?>
                     <option value="<?php echo esc_attr($key); ?>" <?php selected($status, $key); ?>>
@@ -448,6 +450,13 @@ class TMGMT_Event_Meta_Boxes {
                     </option>
                 <?php endforeach; ?>
             </select>
+            <?php if (!$can_change_status): ?>
+                <input type="hidden" name="tmgmt_status" value="<?php echo esc_attr($status); ?>">
+                <p class="description" style="margin-top: 5px; color: #666;">
+                    <span class="dashicons dashicons-lock" style="font-size: 14px; vertical-align: text-top;"></span>
+                    Statusänderung nur über Workflow-Aktionen möglich.
+                </p>
+            <?php endif; ?>
         </div>
         <?php
     }
