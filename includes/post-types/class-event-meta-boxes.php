@@ -87,6 +87,15 @@ class TMGMT_Event_Meta_Boxes {
         );
 
         add_meta_box(
+            'tmgmt_tour_info',
+            'Tourenplanung',
+            array($this, 'render_tour_info_box'),
+            'event',
+            'side',
+            'default'
+        );
+
+        add_meta_box(
             'tmgmt_event_log',
             'Verlauf / Logbuch',
             array($this, 'render_log_box'),
@@ -94,6 +103,93 @@ class TMGMT_Event_Meta_Boxes {
             'normal',
             'low'
         );
+    }
+
+    public function render_tour_info_box($post) {
+        $date = get_post_meta($post->ID, '_tmgmt_event_date', true);
+        if (!$date) $date = get_post_meta($post->ID, 'tmgmt_event_date', true);
+
+        if (!$date) {
+            echo '<p><em>Kein Datum gesetzt.</em></p>';
+            return;
+        }
+
+        $tours = get_posts(array(
+            'post_type' => 'tmgmt_tour',
+            'numberposts' => -1,
+            'meta_query' => array(
+                array(
+                    'key' => 'tmgmt_tour_date',
+                    'value' => $date,
+                    'compare' => '='
+                )
+            )
+        ));
+
+        if (empty($tours)) {
+            echo '<p>Keine Tourenplanung für diesen Tag gefunden.</p>';
+            return;
+        }
+
+        echo '<ul style="margin: 0;">';
+        $found_in_any = false;
+
+        foreach ($tours as $tour) {
+            $data_json = get_post_meta($tour->ID, 'tmgmt_tour_data', true);
+            $schedule = json_decode($data_json, true);
+            $mode = get_post_meta($tour->ID, 'tmgmt_tour_mode', true);
+            if (!$mode) $mode = 'draft';
+
+            $is_in_tour = false;
+            $event_status_in_tour = ''; // OK, Warning, Error
+
+            if (is_array($schedule)) {
+                foreach ($schedule as $item) {
+                    if (isset($item['type']) && $item['type'] === 'event' && isset($item['id']) && $item['id'] == $post->ID) {
+                        $is_in_tour = true;
+                        if (isset($item['error'])) {
+                            $event_status_in_tour = 'error';
+                        } elseif (isset($item['warning'])) {
+                            $event_status_in_tour = 'warning';
+                        } else {
+                            $event_status_in_tour = 'ok';
+                        }
+                        break;
+                    }
+                }
+            }
+
+            if ($is_in_tour) {
+                $found_in_any = true;
+                $edit_link = get_edit_post_link($tour->ID);
+                
+                echo '<li style="margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #eee;">';
+                echo '<strong><a href="' . esc_url($edit_link) . '">' . esc_html($tour->post_title) . '</a></strong><br>';
+                
+                // Mode Badge
+                if ($mode === 'real') {
+                    echo '<span style="background: #00a32a; color: #fff; padding: 2px 6px; border-radius: 3px; font-size: 10px; text-transform: uppercase;">Echtplanung</span> ';
+                } else {
+                    echo '<span style="background: #666; color: #fff; padding: 2px 6px; border-radius: 3px; font-size: 10px; text-transform: uppercase;">Entwurf</span> ';
+                }
+
+                // Status Icon
+                if ($event_status_in_tour === 'error') {
+                    echo '<span class="dashicons dashicons-warning" style="color: #d63638; font-size: 16px; vertical-align: text-bottom;" title="Fehler im Plan"></span>';
+                } elseif ($event_status_in_tour === 'warning') {
+                    echo '<span class="dashicons dashicons-warning" style="color: #dba617; font-size: 16px; vertical-align: text-bottom;" title="Warnung im Plan"></span>';
+                } else {
+                    echo '<span class="dashicons dashicons-yes" style="color: #00a32a; font-size: 16px; vertical-align: text-bottom;" title="OK"></span>';
+                }
+
+                echo '</li>';
+            }
+        }
+        echo '</ul>';
+
+        if (!$found_in_any) {
+            echo '<p>Event ist in keiner der ' . count($tours) . ' Touren für diesen Tag enthalten (evtl. Status-Filter?).</p>';
+        }
     }
 
     public function render_log_box($post) {
