@@ -388,26 +388,61 @@ class TMGMT_Event_Meta_Boxes {
         $old_status = get_post_meta($post_id, '_tmgmt_status', true);
         $new_status = isset($_POST['tmgmt_status']) ? sanitize_text_field($_POST['tmgmt_status']) : '';
 
-        // Check for Start Time Change to flag Tour for update
+        // Check for changes relevant to Tour Planning (Time, Date, Status, Geo)
+        $tour_relevant_changes = false;
+        
+        // 1. Time
         $old_start_time = get_post_meta($post_id, '_tmgmt_event_start_time', true);
         $new_start_time = isset($_POST['tmgmt_event_start_time']) ? sanitize_text_field($_POST['tmgmt_event_start_time']) : '';
-        
-        if ($old_start_time !== $new_start_time) {
-            $event_date = isset($_POST['tmgmt_event_date']) ? sanitize_text_field($_POST['tmgmt_event_date']) : get_post_meta($post_id, '_tmgmt_event_date', true);
-            if ($event_date) {
+        if ($old_start_time !== $new_start_time) $tour_relevant_changes = true;
+
+        // 2. Date
+        $old_date = get_post_meta($post_id, '_tmgmt_event_date', true);
+        $new_date = isset($_POST['tmgmt_event_date']) ? sanitize_text_field($_POST['tmgmt_event_date']) : '';
+        if ($old_date !== $new_date) $tour_relevant_changes = true;
+
+        // 3. Status
+        if ($old_status !== $new_status) $tour_relevant_changes = true;
+
+        // 4. Geo
+        $old_lat = get_post_meta($post_id, '_tmgmt_geo_lat', true);
+        $new_lat = isset($_POST['tmgmt_geo_lat']) ? sanitize_text_field($_POST['tmgmt_geo_lat']) : '';
+        if ($old_lat !== $new_lat) $tour_relevant_changes = true;
+
+        if ($tour_relevant_changes) {
+            // Flag Tour for NEW date
+            if ($new_date) {
                 $tour_posts = get_posts(array(
                     'post_type' => 'tmgmt_tour',
                     'numberposts' => 1,
                     'meta_query' => array(
                         array(
                             'key' => 'tmgmt_tour_date',
-                            'value' => $event_date,
+                            'value' => $new_date,
                             'compare' => '='
                         )
                     )
                 ));
                 if ($tour_posts) {
                     update_post_meta($tour_posts[0]->ID, 'tmgmt_tour_update_required', true);
+                }
+            }
+            
+            // Flag Tour for OLD date (if date changed and old date existed)
+            if ($old_date && $old_date !== $new_date) {
+                $tour_posts_old = get_posts(array(
+                    'post_type' => 'tmgmt_tour',
+                    'numberposts' => 1,
+                    'meta_query' => array(
+                        array(
+                            'key' => 'tmgmt_tour_date',
+                            'value' => $old_date,
+                            'compare' => '='
+                        )
+                    )
+                ));
+                if ($tour_posts_old) {
+                    update_post_meta($tour_posts_old[0]->ID, 'tmgmt_tour_update_required', true);
                 }
             }
         }
