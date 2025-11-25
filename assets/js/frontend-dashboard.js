@@ -219,6 +219,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 header.style.borderTopLeftRadius = '6px';
                 header.style.borderTopRightRadius = '6px';
             }
+
+            // Mobile Accordion Toggle
+            header.addEventListener('click', () => {
+                if (window.innerWidth <= 768) {
+                    // Close others if we want strict accordion behavior (optional, but cleaner)
+                    // document.querySelectorAll('.tmgmt-column.expanded').forEach(c => {
+                    //     if (c !== colEl) c.classList.remove('expanded');
+                    // });
+                    
+                    colEl.classList.toggle('expanded');
+                }
+            });
+
             colEl.appendChild(header);
 
             // Body
@@ -401,8 +414,8 @@ document.addEventListener('DOMContentLoaded', function() {
         `;
 
         // Helper to create section
-        const createSection = (title, content, isCollapsed = false) => `
-            <div class="tmgmt-section ${isCollapsed ? 'collapsed' : ''}">
+        const createSection = (title, content, isCollapsed = false, style = '') => `
+            <div class="tmgmt-section ${isCollapsed ? 'collapsed' : ''}" style="${style}">
                 <div class="tmgmt-section-title">${title}</div>
                 <div class="tmgmt-section-content">
                     ${content}
@@ -487,22 +500,19 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // --- Right Column Content ---
 
-        // 0. Status & Actions Box (Non-Collapsible)
+        // 0. Status & Actions Box (Standard Section)
         let statusBoxHtml = `
-            <div class="tmgmt-box" style="background:#fff; border:1px solid #dfe1e6; border-radius:4px; margin-bottom:15px; padding:15px;">
-                <div class="tmgmt-box-title" style="font-weight:600; margin-bottom:10px; font-size:1.1em;">Status & Aktionen</div>
-                <div class="tmgmt-box-content">
-                    <div class="tmgmt-form-group">
-                        <label>Aktueller Status</label>
-                        <select name="status">
+            <div class="tmgmt-form-group">
+                <label>Aktueller Status</label>
+                <select name="status">
         `;
         for (const [slug, label] of Object.entries(tmgmtData.statuses)) {
             const selected = (meta.status === slug) ? 'selected' : '';
             statusBoxHtml += `<option value="${slug}" ${selected}>${label}</option>`;
         }
         statusBoxHtml += `
-                        </select>
-                    </div>
+                </select>
+            </div>
         `;
 
         // Actions Logic
@@ -539,10 +549,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             statusBoxHtml += '</div>';
         }
-        statusBoxHtml += `
-                </div>
-            </div>
-        `;
+
 
         // 1. Content / Notes
         let contentHtml = `
@@ -667,6 +674,44 @@ document.addEventListener('DOMContentLoaded', function() {
             </style>
         `;
 
+        // Layout Configuration
+        const layout = tmgmtData.layout_settings || {};
+        const isMobile = window.innerWidth <= 768;
+        
+        const getSectionConfig = (key, defaultOrder, defaultCollapsed) => {
+            if (layout[key]) {
+                const config = isMobile ? (layout[key].mobile || {}) : (layout[key].desktop || {});
+                return {
+                    order: config.order || defaultOrder,
+                    collapsed: config.collapsed !== undefined ? config.collapsed : defaultCollapsed
+                };
+            }
+            return { order: defaultOrder, collapsed: defaultCollapsed };
+        };
+
+        // Define Sections with Keys
+        const sections = [
+            { key: 'inquiry_details', title: 'Anfragedaten', content: inquiryHtml, defaultOrder: 1, defaultCollapsed: false },
+            { key: 'event_details', title: 'Veranstaltungsdaten', content: venueHtml, defaultOrder: 2, defaultCollapsed: false },
+            { key: 'planning', title: 'Planung', content: planningHtml, defaultOrder: 3, defaultCollapsed: false },
+            { key: 'contact_details', title: 'Kontaktdaten', content: contactHtml, defaultOrder: 4, defaultCollapsed: true },
+            { key: 'other_contacts', title: 'Weitere Ansprechpartner', content: otherContactsHtml, defaultOrder: 5, defaultCollapsed: true },
+            { key: 'contract_details', title: 'Vertragsdaten', content: contractHtml, defaultOrder: 6, defaultCollapsed: true },
+            { key: 'status_box', title: 'Status & Aktionen', content: statusBoxHtml, defaultOrder: 7, defaultCollapsed: false },
+            { key: 'notes', title: 'Notizen', content: contentHtml, defaultOrder: 8, defaultCollapsed: false },
+            { key: 'files', title: 'Dateien / Anhänge', content: attachmentsHtml, defaultOrder: 9, defaultCollapsed: false },
+            { key: 'map', title: 'Karte', content: mapHtml, defaultOrder: 10, defaultCollapsed: false },
+            { key: 'logs', title: 'Verlauf', content: bottomTabs + `<div class="tmgmt-tab-content active" id="tab-log">${logHtml}</div><div class="tmgmt-tab-content" id="tab-communication">${commHtml}</div>`, defaultOrder: 11, defaultCollapsed: false }
+        ];
+
+        // Generate HTML for sections with order styles
+        let sectionsHtml = '';
+        sections.forEach(sec => {
+            const config = getSectionConfig(sec.key, sec.defaultOrder, sec.defaultCollapsed);
+            const style = `order: ${config.order};`;
+            sectionsHtml += createSection(sec.title, sec.content, config.collapsed, style);
+        });
+
         const html = `
             <div class="tmgmt-modal-header">
                 <div style="display:flex; align-items:center; gap:10px; flex:1;">
@@ -675,29 +720,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
                 <span class="tmgmt-close">&times;</span>
             </div>
-            <div class="tmgmt-modal-body">
-                <div class="tmgmt-col-left">
-                    ${createSection('Anfragedaten', inquiryHtml)}
-                    ${createSection('Veranstaltungsdaten', venueHtml)}
-                    ${createSection('Planung', planningHtml)}
-                    ${createSection('Kontaktdaten', contactHtml, true)}
-                    ${createSection('Weitere Ansprechpartner', otherContactsHtml, true)}
-                    ${createSection('Vertragsdaten', contractHtml, true)}
-                </div>
-                <div class="tmgmt-col-right">
-                    ${statusBoxHtml}
-                    ${createSection('Notizen', contentHtml)}
-                    ${createSection('Dateien / Anhänge', attachmentsHtml)}
-                    ${createSection('Karte', mapHtml)}
-                    
-                    ${bottomTabs}
-                    <div class="tmgmt-tab-content active" id="tab-log">
-                        ${logHtml}
-                    </div>
-                    <div class="tmgmt-tab-content" id="tab-communication">
-                        ${commHtml}
-                    </div>
-                </div>
+            <div class="tmgmt-modal-body" style="display:flex; flex-wrap:wrap; gap:20px; align-content:flex-start;">
+                ${sectionsHtml}
             </div>
             <div class="tmgmt-modal-footer">
                 <div class="tmgmt-actions-left">

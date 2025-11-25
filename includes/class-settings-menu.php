@@ -27,6 +27,15 @@ class TMGMT_Settings_Menu {
             'tmgmt-route-settings',
             array($this, 'render_route_settings_page')
         );
+
+        add_submenu_page(
+            'tmgmt-settings-hidden',
+            'Frontend Layout',
+            'Frontend Layout',
+            'manage_options',
+            'tmgmt-frontend-layout',
+            array($this, 'render_frontend_layout_page')
+        );
     }
 
     public function register_settings() {
@@ -49,6 +58,12 @@ class TMGMT_Settings_Menu {
         
         register_setting('tmgmt_route_options', 'tmgmt_ors_api_key');
         register_setting('tmgmt_route_options', 'tmgmt_here_api_key');
+
+        // Frontend Layout Settings
+        register_setting('tmgmt_frontend_layout', 'tmgmt_frontend_layout_settings', array(
+            'type' => 'string', // Stored as JSON string
+            'default' => '{}'
+        ));
     }
 
     public function highlight_settings_menu($parent_file) {
@@ -136,11 +151,20 @@ class TMGMT_Settings_Menu {
                         <h2 style="margin:0; font-size: 16px;">Routenplanung</h2>
                     </div>
                     <div style="padding: 15px;">
-                        <p>Konfigurieren Sie den Startpunkt (Proberaum) und Pufferzeiten für die Routenberechnung.</p>
-                        <a href="admin.php?page=tmgmt-route-settings" class="button button-primary">Verwalten</a>
+                        <p>Konfigurieren Sie Startpunkt, Pufferzeiten und API-Keys für die Tourenberechnung.</p>
+                        <a href="admin.php?page=tmgmt-route-settings" class="button button-primary">Konfigurieren</a>
                     </div>
                 </div>
 
+                <div class="card" style="padding: 0; overflow: hidden;">
+                    <div style="padding: 15px; background: #f0f0f1; border-bottom: 1px solid #c3c4c7;">
+                        <h2 style="margin:0; font-size: 16px;">Frontend Layout</h2>
+                    </div>
+                    <div style="padding: 15px;">
+                        <p>Passen Sie die Reihenfolge und das Verhalten der Sektionen im Frontend-Modal an.</p>
+                        <a href="admin.php?page=tmgmt-frontend-layout" class="button button-primary">Layout anpassen</a>
+                    </div>
+                </div>
             </div>
         </div>
         <?php
@@ -324,6 +348,168 @@ class TMGMT_Settings_Menu {
                     });
             });
             </script>
+        </div>
+        <?php
+    }
+
+    public function render_frontend_layout_page() {
+        if (isset($_POST['submit_layout'])) {
+            check_admin_referer('tmgmt_save_layout');
+            $layout_data = array();
+            $sections = array(
+                'inquiry_details', 
+                'event_details', 
+                'planning',
+                'contact_details', 
+                'other_contacts',
+                'contract_details', 
+                'status_box',
+                'notes', 
+                'files', 
+                'map',
+                'logs'
+            );
+            
+            foreach ($sections as $sec) {
+                $layout_data[$sec] = array(
+                    'desktop' => array(
+                        'order' => intval($_POST[$sec . '_desktop_order']),
+                        'collapsed' => isset($_POST[$sec . '_desktop_collapsed'])
+                    ),
+                    'mobile' => array(
+                        'order' => intval($_POST[$sec . '_mobile_order']),
+                        'collapsed' => isset($_POST[$sec . '_mobile_collapsed'])
+                    )
+                );
+            }
+            
+            update_option('tmgmt_frontend_layout_settings', json_encode($layout_data));
+            echo '<div class="notice notice-success is-dismissible"><p>Layout gespeichert.</p></div>';
+        }
+
+        $saved_layout = json_decode(get_option('tmgmt_frontend_layout_settings', '{}'), true);
+        
+        // Defaults
+        $sections = array(
+            'inquiry_details' => 'Anfragedaten',
+            'event_details' => 'Veranstaltungsdaten',
+            'planning' => 'Planung',
+            'contact_details' => 'Kontaktdaten',
+            'other_contacts' => 'Weitere Ansprechpartner',
+            'contract_details' => 'Vertragsdaten',
+            'status_box' => 'Status & Aktionen',
+            'notes' => 'Notizen',
+            'files' => 'Dateien / Anhänge',
+            'map' => 'Karte',
+            'logs' => 'Logbuch / Kommunikation'
+        );
+
+        // Prepare data for sorting
+        $rows = array();
+        $i = 1;
+        foreach ($sections as $key => $label) {
+            $d_order = isset($saved_layout[$key]['desktop']['order']) ? $saved_layout[$key]['desktop']['order'] : $i;
+            $d_collapsed = isset($saved_layout[$key]['desktop']['collapsed']) ? $saved_layout[$key]['desktop']['collapsed'] : false;
+            $m_order = isset($saved_layout[$key]['mobile']['order']) ? $saved_layout[$key]['mobile']['order'] : $i;
+            $m_collapsed = isset($saved_layout[$key]['mobile']['collapsed']) ? $saved_layout[$key]['mobile']['collapsed'] : false;
+            
+            $rows[] = array(
+                'key' => $key,
+                'label' => $label,
+                'desktop_order' => $d_order,
+                'desktop_collapsed' => $d_collapsed,
+                'mobile_order' => $m_order,
+                'mobile_collapsed' => $m_collapsed
+            );
+            $i++;
+        }
+
+        // Sorting logic
+        $orderby = isset($_GET['orderby']) ? $_GET['orderby'] : 'label';
+        $order = isset($_GET['order']) ? strtoupper($_GET['order']) : 'ASC';
+        
+        // Validate orderby
+        $allowed_sort_columns = array('label', 'desktop_order', 'mobile_order');
+        if (!in_array($orderby, $allowed_sort_columns)) {
+            $orderby = 'label';
+        }
+
+        usort($rows, function($a, $b) use ($orderby, $order) {
+            $valA = $a[$orderby];
+            $valB = $b[$orderby];
+            
+            if ($valA == $valB) return 0;
+            
+            if ($order === 'ASC') {
+                return $valA < $valB ? -1 : 1;
+            } else {
+                return $valA > $valB ? -1 : 1;
+            }
+        });
+
+        // Helper for sort links
+        $get_sort_link = function($col_name, $label_text) use ($orderby, $order) {
+            $new_order = ($orderby === $col_name && $order === 'ASC') ? 'DESC' : 'ASC';
+            $url = add_query_arg(array('orderby' => $col_name, 'order' => $new_order));
+            $indicator = '';
+            if ($orderby === $col_name) {
+                $indicator = ($order === 'ASC') ? ' &uarr;' : ' &darr;';
+            }
+            return '<a href="' . esc_url($url) . '">' . esc_html($label_text) . $indicator . '</a>';
+        };
+        
+        ?>
+        <div class="wrap">
+            <h1>Frontend Layout Konfiguration</h1>
+            <form method="post">
+                <?php wp_nonce_field('tmgmt_save_layout'); ?>
+                
+                <table class="widefat fixed striped">
+                    <thead>
+                        <tr>
+                            <th><?php echo $get_sort_link('label', 'Sektion'); ?></th>
+                            <th colspan="2">Desktop</th>
+                            <th colspan="2">Mobile</th>
+                        </tr>
+                        <tr>
+                            <th></th>
+                            <th><?php echo $get_sort_link('desktop_order', 'Reihenfolge'); ?></th>
+                            <th>Initial eingeklappt</th>
+                            <th><?php echo $get_sort_link('mobile_order', 'Reihenfolge'); ?></th>
+                            <th>Initial eingeklappt</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php 
+                        foreach ($rows as $row): 
+                            $key = $row['key'];
+                        ?>
+                        <tr>
+                            <td><strong><?php echo esc_html($row['label']); ?></strong></td>
+                            <td>
+                                <input type="number" name="<?php echo $key; ?>_desktop_order" value="<?php echo $row['desktop_order']; ?>" min="1" max="20" style="width:60px;">
+                            </td>
+                            <td>
+                                <input type="checkbox" name="<?php echo $key; ?>_desktop_collapsed" <?php checked($row['desktop_collapsed']); ?>>
+                            </td>
+                            <td>
+                                <input type="number" name="<?php echo $key; ?>_mobile_order" value="<?php echo $row['mobile_order']; ?>" min="1" max="20" style="width:60px;">
+                            </td>
+                            <td>
+                                <input type="checkbox" name="<?php echo $key; ?>_mobile_collapsed" <?php checked($row['mobile_collapsed']); ?>>
+                            </td>
+                        </tr>
+                        <?php 
+                        endforeach; 
+                        ?>
+                    </tbody>
+                </table>
+                
+                <p class="submit">
+                    <button type="submit" name="submit_layout" class="button button-primary">Einstellungen speichern</button>
+                    <a href="admin.php?page=tmgmt-settings" class="button">Zurück</a>
+                </p>
+            </form>
         </div>
         <?php
     }

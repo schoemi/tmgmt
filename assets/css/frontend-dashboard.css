@@ -130,18 +130,27 @@
     padding: 20px;
     overflow-y: auto;
     flex-grow: 1;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 30px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    align-content: flex-start;
 }
 
 /* Sections */
 .tmgmt-section {
-    margin-bottom: 15px;
+    box-sizing: border-box;
+    margin-bottom: 0;
     background: #fff;
     border: 1px solid #dfe1e6;
     border-radius: 4px;
     overflow: hidden;
+    width: 100%; /* Default width */
+}
+
+@media (min-width: 769px) {
+    .tmgmt-section {
+        width: calc(50% - 10px); /* 2 columns with gap */
+    }
 }
 
 .tmgmt-section-title {
@@ -423,5 +432,86 @@
     .tmgmt-column {
         width: 85vw; /* Almost full width on mobile */
         min-width: 85vw;
+    }
+}
+
+/* Mobile Accordion View */
+@media (max-width: 768px) {
+    #tmgmt-kanban-app {
+        padding: 10px;
+        overflow-x: hidden; /* Disable horizontal scroll */
+    }
+
+    .tmgmt-board {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        padding-bottom: 0;
+    }
+
+    .tmgmt-column {
+        width: 100%;
+        min-width: 0;
+        max-height: none;
+        margin-bottom: 0;
+        transition: all 0.3s ease;
+    }
+
+    .tmgmt-column-header {
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: #fff; /* Make header stand out more */
+        border-radius: 6px; /* Rounded when collapsed */
+    }
+
+    /* Icon for accordion */
+    .tmgmt-column-header::after {
+        content: '';
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-right: 2px solid #172b4d;
+        border-bottom: 2px solid #172b4d;
+        transform: rotate(45deg);
+        transition: transform 0.3s;
+        margin-right: 5px;
+    }
+
+    .tmgmt-column.expanded .tmgmt-column-header::after {
+        transform: rotate(-135deg);
+    }
+
+    .tmgmt-column.expanded .tmgmt-column-header {
+        border-bottom-left-radius: 0;
+        border-bottom-right-radius: 0;
+        border-bottom: 1px solid #dfe1e6;
+    }
+
+    .tmgmt-column-body {
+        display: none;
+        background: #f4f5f7;
+        border-bottom-left-radius: 6px;
+        border-bottom-right-radius: 6px;
+    }
+
+    .tmgmt-column.expanded .tmgmt-column-body {
+        display: block;
+        animation: slideDown 0.3s ease-out;
+    }
+
+    @keyframes slideDown {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Mobile Modal Adjustments */
+    .tmgmt-modal-content {
+        width: 94%;
+        max-width: 94%;
+        height: 90vh;
+        max-height: 90vh;
+        margin: auto;
     }
 }

@@ -39,6 +39,7 @@ class TMGMT_Frontend_Dashboard {
             'statuses' => TMGMT_Event_Status::get_all_statuses(),
             'status_requirements' => TMGMT_Event_Status::get_status_requirements(),
             'can_delete_files' => current_user_can('administrator'), // Only admins can delete files
+            'layout_settings' => json_decode(get_option('tmgmt_frontend_layout_settings', '{}'), true),
             'field_map' => array(
                 'tmgmt_event_date' => 'date',
                 'tmgmt_event_start_time' => 'start_time',
