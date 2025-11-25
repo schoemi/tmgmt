@@ -36,6 +36,15 @@ class TMGMT_Settings_Menu {
             'tmgmt-frontend-layout',
             array($this, 'render_frontend_layout_page')
         );
+
+        add_submenu_page(
+            'tmgmt-settings-hidden',
+            'Allgemeine Einstellungen',
+            'Allgemeine Einstellungen',
+            'tmgmt_manage_settings',
+            'tmgmt-general-settings',
+            array($this, 'render_general_settings_page')
+        );
     }
 
     public function register_settings() {
@@ -58,6 +67,10 @@ class TMGMT_Settings_Menu {
         
         register_setting('tmgmt_route_options', 'tmgmt_ors_api_key');
         register_setting('tmgmt_route_options', 'tmgmt_here_api_key');
+
+        // General Settings
+        register_setting('tmgmt_general_options', 'tmgmt_hide_admin_bar_desktop');
+        register_setting('tmgmt_general_options', 'tmgmt_hide_admin_bar_mobile');
 
         // Frontend Layout Settings
         register_setting('tmgmt_frontend_layout', 'tmgmt_frontend_layout_settings', array(
@@ -158,6 +171,16 @@ class TMGMT_Settings_Menu {
 
                 <div class="card" style="padding: 0; overflow: hidden;">
                     <div style="padding: 15px; background: #f0f0f1; border-bottom: 1px solid #c3c4c7;">
+                        <h2 style="margin:0; font-size: 16px;">Allgemeine Einstellungen</h2>
+                    </div>
+                    <div style="padding: 15px;">
+                        <p>Globale Einstellungen wie Admin-Leiste und mehr.</p>
+                        <a href="admin.php?page=tmgmt-general-settings" class="button button-primary">Konfigurieren</a>
+                    </div>
+                </div>
+
+                <div class="card" style="padding: 0; overflow: hidden;">
+                    <div style="padding: 15px; background: #f0f0f1; border-bottom: 1px solid #c3c4c7;">
                         <h2 style="margin:0; font-size: 16px;">Frontend Layout</h2>
                     </div>
                     <div style="padding: 15px;">
@@ -166,6 +189,38 @@ class TMGMT_Settings_Menu {
                     </div>
                 </div>
             </div>
+        </div>
+        <?php
+    }
+
+    public function render_general_settings_page() {
+        ?>
+        <div class="wrap">
+            <h1>Allgemeine Einstellungen</h1>
+            <form method="post" action="options.php">
+                <?php settings_fields('tmgmt_general_options'); ?>
+                <?php do_settings_sections('tmgmt_general_options'); ?>
+                
+                <h2 class="title">Admin Leiste</h2>
+                <table class="form-table" role="presentation">
+                    <tr>
+                        <th scope="row"><label for="tmgmt_hide_admin_bar_desktop">Auf Desktop ausblenden</label></th>
+                        <td>
+                            <input name="tmgmt_hide_admin_bar_desktop" type="checkbox" id="tmgmt_hide_admin_bar_desktop" value="1" <?php checked(1, get_option('tmgmt_hide_admin_bar_desktop'), true); ?>>
+                            <p class="description">Versteckt die WordPress Admin-Leiste für Nicht-Admins auf Desktop-Geräten.</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="tmgmt_hide_admin_bar_mobile">Auf Mobilgeräten ausblenden</label></th>
+                        <td>
+                            <input name="tmgmt_hide_admin_bar_mobile" type="checkbox" id="tmgmt_hide_admin_bar_mobile" value="1" <?php checked(1, get_option('tmgmt_hide_admin_bar_mobile'), true); ?>>
+                            <p class="description">Versteckt die WordPress Admin-Leiste für Nicht-Admins auf Smartphones und Tablets.</p>
+                        </td>
+                    </tr>
+                </table>
+                
+                <?php submit_button(); ?>
+            </form>
         </div>
         <?php
     }

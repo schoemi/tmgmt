@@ -63,28 +63,62 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         if (missing.length > 0) {
-            showBottomSheet(targetStatus, missing);
+            showMissingFieldsModal(currentEditingId, targetStatus, missing, (payload) => {
+                // Update UI inputs immediately
+                for (const [key, val] of Object.entries(payload)) {
+                    const mainInput = modalContent.querySelector(`[name="${key}"]`);
+                    if (mainInput) mainInput.value = val;
+                }
+                
+                // Update Status Select UI
+                const statusSelect = modalContent.querySelector('select[name="status"]');
+                if (statusSelect) {
+                    statusSelect.value = targetStatus;
+                }
+                
+                // Reload Board & Modal
+                loadBoard();
+                openModal(currentEditingId);
+            });
             return false;
         }
         return true;
     };
 
-    const showBottomSheet = (targetStatus, missingFields) => {
-        const sheet = modalContent.querySelector('#tmgmt-bottom-sheet');
-        const container = sheet.querySelector('#tmgmt-sheet-body-missing');
-        const closeBtn = sheet.querySelector('.tmgmt-close-sheet');
-        
-        container.innerHTML = '';
-        
-        const closeSheet = () => {
-            sheet.classList.remove('open');
-            setTimeout(() => sheet.style.display = 'none', 300);
-        };
-
-        if (closeBtn) {
-            closeBtn.onclick = closeSheet;
+    const showMissingFieldsModal = (eventId, targetStatus, missingFields, onSuccess) => {
+        // Create Modal if not exists
+        let missingModal = document.getElementById('tmgmt-missing-modal');
+        if (!missingModal) {
+            missingModal = document.createElement('div');
+            missingModal.id = 'tmgmt-missing-modal';
+            missingModal.className = 'tmgmt-modal';
+            missingModal.style.zIndex = '100002'; // Above main modal (10000) and action sheets (100001)
+            missingModal.innerHTML = `
+                <div class="tmgmt-modal-content" style="max-width: 500px;">
+                    <div class="tmgmt-modal-header">
+                        <h3 style="margin:0;">Fehlende Angaben</h3>
+                        <span class="tmgmt-close-missing" style="cursor:pointer; font-size:24px;">&times;</span>
+                    </div>
+                    <div id="tmgmt-missing-body" class="tmgmt-modal-body" style="padding: 20px;"></div>
+                    <div class="tmgmt-modal-footer">
+                        <button id="tmgmt-save-missing-btn" class="tmgmt-btn tmgmt-btn-primary">Speichern & Fortfahren</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(missingModal);
+            
+            // Close events
+            const closeBtn = missingModal.querySelector('.tmgmt-close-missing');
+            closeBtn.onclick = () => missingModal.style.display = 'none';
+            
+            window.addEventListener('click', (e) => {
+                if (e.target === missingModal) missingModal.style.display = 'none';
+            });
         }
 
+        const container = missingModal.querySelector('#tmgmt-missing-body');
+        container.innerHTML = '';
+        
         missingFields.forEach(field => {
             const label = fieldLabels[field] || field;
             let type = 'text';
@@ -97,17 +131,13 @@ document.addEventListener('DOMContentLoaded', function() {
             div.className = 'tmgmt-form-group';
             div.innerHTML = `
                 <label>${label}</label>
-                <input type="${type}" name="${field}" class="tmgmt-sheet-input" style="width:100%; padding:8px; border:1px solid #dfe1e6; border-radius:4px;">
+                <input type="${type}" name="${field}" class="tmgmt-missing-input" style="width:100%; padding:8px; border:1px solid #dfe1e6; border-radius:4px;">
             `;
             container.appendChild(div);
         });
 
-        const btn = document.createElement('button');
-        btn.className = 'tmgmt-btn tmgmt-btn-primary';
-        btn.textContent = 'Speichern & Fortfahren';
-        btn.style.width = '100%';
-        btn.style.marginTop = '10px';
-        btn.onclick = () => {
+        const saveBtn = missingModal.querySelector('#tmgmt-save-missing-btn');
+        saveBtn.onclick = () => {
             const inputs = container.querySelectorAll('input');
             const payload = {};
             let allFilled = true;
@@ -121,39 +151,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
-            // Add status to payload to save it in one go
+            // Add status to payload
             payload['status'] = targetStatus;
 
-            updateEvent(currentEditingId, payload)
+            // Show loading state
+            saveBtn.textContent = 'Speichere...';
+            saveBtn.disabled = true;
+
+            updateEvent(eventId, payload)
                 .then(() => {
-                    // Update UI inputs immediately
-                    for (const [key, val] of Object.entries(payload)) {
-                        const mainInput = modalContent.querySelector(`[name="${key}"]`);
-                        if (mainInput) mainInput.value = val;
-                    }
-                    
-                    // Update Status Select UI
-                    const statusSelect = modalContent.querySelector('select[name="status"]');
-                    if (statusSelect) {
-                        statusSelect.value = targetStatus;
-                    }
-                    
-                    // Reload Board & Modal
-                    loadBoard();
-                    openModal(currentEditingId);
-                    
-                    closeSheet();
+                    missingModal.style.display = 'none';
+                    saveBtn.textContent = 'Speichern & Fortfahren';
+                    saveBtn.disabled = false;
+                    if (onSuccess) onSuccess(payload);
                 })
                 .catch(err => {
                     alert('Fehler beim Speichern: ' + err.message);
+                    saveBtn.textContent = 'Speichern & Fortfahren';
+                    saveBtn.disabled = false;
                 });
         };
-        container.appendChild(btn);
 
-        sheet.style.display = 'flex';
-        setTimeout(() => {
-            sheet.classList.add('open');
-        }, 10);
+        missingModal.style.display = 'flex';
     };
 
     // Initial Load
@@ -327,29 +346,96 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function handleDrop(eventId, targetCol) {
-        // Determine new status (first one in column)
         const newStatus = targetCol.statuses[0];
         if (!newStatus) return;
 
-        // Optimistic Update
         const eventIndex = boardData.events.findIndex(e => e.id == eventId);
-        if (eventIndex > -1) {
-            const oldStatus = boardData.events[eventIndex].status;
-            if (oldStatus === newStatus) return; // No change
+        if (eventIndex === -1) return;
+        
+        const oldStatus = boardData.events[eventIndex].status;
+        if (oldStatus === newStatus) return;
 
-            boardData.events[eventIndex].status = newStatus;
-            renderBoard(); // Re-render immediately
+        // Check Requirements
+        const requirements = tmgmtData.status_requirements || {};
+        const requiredFields = requirements[newStatus] || [];
 
-            // API Call
-            updateEvent(eventId, { status: newStatus })
-                .catch(err => {
-                    console.error('Update failed', err);
-                    // Revert on error
-                    boardData.events[eventIndex].status = oldStatus;
-                    renderBoard();
-                    alert('Fehler beim Speichern des Status.');
+        if (requiredFields.length > 0) {
+            // Fetch event details to validate
+            fetch(apiUrl + 'events/' + eventId, {
+                headers: { 'X-WP-Nonce': nonce }
+            })
+            .then(res => res.json())
+            .then(data => {
+                const meta = data.meta || {};
+                const missing = [];
+                const fieldMap = tmgmtData.field_map || {};
+                
+                // Map input names to meta keys where they differ
+                const dataKeyMap = {
+                    'date': 'event_date',
+                    'start_time': 'event_start_time',
+                    'arrival_time': 'event_arrival_time',
+                    'departure_time': 'event_departure_time'
+                };
+
+                requiredFields.forEach(rawField => {
+                    const field = fieldMap[rawField] || rawField;
+                    const dataKey = dataKeyMap[field] || field;
+                    
+                    let val = data[dataKey]; // Check root (e.g. title)
+                    if (val === undefined) val = meta[dataKey]; // Check meta
+                    
+                    if (!val || (typeof val === 'string' && val.trim() === '')) {
+                        missing.push(field);
+                    }
                 });
+
+                if (missing.length > 0) {
+                    // Show Modal
+                    showMissingFieldsModal(eventId, newStatus, missing, (payload) => {
+                        // On success, update local board data
+                        const idx = boardData.events.findIndex(e => e.id == eventId);
+                        if (idx > -1) {
+                            const ev = boardData.events[idx];
+                            ev.status = newStatus;
+                            
+                            // Update other fields if present in payload
+                            if (payload.date) ev.date = payload.date;
+                            if (payload.start_time) ev.time = payload.start_time;
+                            if (payload.venue_city) ev.city = payload.venue_city;
+                            
+                            renderBoard();
+                        }
+                    });
+                } else {
+                    // No missing fields, proceed with update
+                    performUpdate(eventId, newStatus, oldStatus, eventIndex);
+                }
+            })
+            .catch(err => {
+                console.error('Validation check failed', err);
+                alert('Fehler bei der Überprüfung der Daten.');
+            });
+            return;
         }
+
+        // No requirements, proceed directly
+        performUpdate(eventId, newStatus, oldStatus, eventIndex);
+    }
+
+    function performUpdate(eventId, newStatus, oldStatus, eventIndex) {
+        // Optimistic Update
+        boardData.events[eventIndex].status = newStatus;
+        renderBoard();
+
+        updateEvent(eventId, { status: newStatus })
+            .catch(err => {
+                console.error('Update failed', err);
+                // Revert on error
+                boardData.events[eventIndex].status = oldStatus;
+                renderBoard();
+                alert('Fehler beim Speichern des Status.');
+            });
     }
 
     // --- Modal & Editing ---
@@ -776,16 +862,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="tmgmt-actions-left">
                 </div>
                 <!-- Auto-Save enabled, no save button needed -->
-            </div>
-            <div id="tmgmt-bottom-sheet" class="tmgmt-bottom-sheet" style="display:none;">
-                <div class="tmgmt-sheet-overlay"></div>
-                <div class="tmgmt-sheet-content">
-                    <div class="tmgmt-sheet-header">
-                        <h3 class="tmgmt-bottom-sheet-title">Fehlende Angaben</h3>
-                        <span class="tmgmt-close-sheet" style="cursor:pointer; font-size:20px;">&times;</span>
-                    </div>
-                    <div id="tmgmt-sheet-body-missing" style="padding:20px; overflow-y:auto; flex:1;"></div>
-                </div>
             </div>
             
             <div id="tmgmt-side-drawer" class="tmgmt-side-drawer" style="display:none;">

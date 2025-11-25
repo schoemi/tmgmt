@@ -40,10 +40,12 @@ require_once TMGMT_PLUGIN_DIR . 'includes/class-frontend-dashboard.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/frontend/class-frontend-manager.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-settings-menu.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-admin-menu.php';
+require_once TMGMT_PLUGIN_DIR . 'includes/class-general-settings.php';
 
 // Initialize Plugin
 function tmgmt_init() {
     new TMGMT_Settings_Menu(); // Init first to register menu page
+    new TMGMT_General_Settings();
     new TMGMT_Event_Post_Type();
     new TMGMT_Event_Meta_Boxes();
     new TMGMT_Status_Definition_Post_Type();
