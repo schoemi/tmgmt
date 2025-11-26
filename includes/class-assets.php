@@ -42,7 +42,8 @@ class TMGMT_Assets {
                 }
 
                 wp_localize_script('tmgmt-admin-script', 'tmgmt_vars', array(
-                    'validation_rules' => $rules
+                    'validation_rules' => $rules,
+                    'nonce' => wp_create_nonce('wp_rest')
                 ));
             }
             

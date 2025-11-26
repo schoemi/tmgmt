@@ -45,6 +45,24 @@ class TMGMT_Settings_Menu {
             'tmgmt-general-settings',
             array($this, 'render_general_settings_page')
         );
+
+        add_submenu_page(
+            'tmgmt-settings-hidden',
+            'Organisation',
+            'Organisation',
+            'tmgmt_manage_settings',
+            'tmgmt-organization-settings',
+            array($this, 'render_organization_settings_page')
+        );
+
+        add_submenu_page(
+            'tmgmt-settings-hidden',
+            'PDF Export',
+            'PDF Export',
+            'tmgmt_manage_settings',
+            'tmgmt-pdf-settings',
+            array($this, 'render_pdf_settings_page')
+        );
     }
 
     public function register_settings() {
@@ -77,6 +95,23 @@ class TMGMT_Settings_Menu {
             'type' => 'string', // Stored as JSON string
             'default' => '{}'
         ));
+
+        // Organization Settings
+        register_setting('tmgmt_organization_options', 'tmgmt_org_name');
+        register_setting('tmgmt_organization_options', 'tmgmt_org_contact');
+        register_setting('tmgmt_organization_options', 'tmgmt_org_street');
+        register_setting('tmgmt_organization_options', 'tmgmt_org_number');
+        register_setting('tmgmt_organization_options', 'tmgmt_org_zip');
+        register_setting('tmgmt_organization_options', 'tmgmt_org_city');
+        register_setting('tmgmt_organization_options', 'tmgmt_org_country');
+        register_setting('tmgmt_organization_options', 'tmgmt_org_email');
+        register_setting('tmgmt_organization_options', 'tmgmt_org_phone');
+        register_setting('tmgmt_organization_options', 'tmgmt_org_tax_id');
+        register_setting('tmgmt_organization_options', 'tmgmt_org_vat_id');
+        register_setting('tmgmt_organization_options', 'tmgmt_org_logo');
+
+        // PDF Settings
+        register_setting('tmgmt_pdf_options', 'tmgmt_pdf_setlist_template');
     }
 
     public function highlight_settings_menu($parent_file) {
@@ -104,51 +139,8 @@ class TMGMT_Settings_Menu {
     public function render_settings_page() {
         ?>
         <div class="wrap">
-            <h1>TMGMT Einstellungen</h1>
-            <p>Verwalten Sie hier die Konfiguration für das Event Management.</p>
-            
-            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; margin-top: 20px;">
-                
-                <div class="card" style="padding: 0; overflow: hidden;">
-                    <div style="padding: 15px; background: #f0f0f1; border-bottom: 1px solid #c3c4c7;">
-                        <h2 style="margin:0; font-size: 16px;">Status Definitionen</h2>
-                    </div>
-                    <div style="padding: 15px;">
-                        <p>Definieren Sie die Status für den Workflow (z.B. Option, Fest, Abgesagt) und deren Regeln.</p>
-                        <a href="edit.php?post_type=tmgmt_status_def" class="button button-primary">Verwalten</a>
-                    </div>
-                </div>
-
-                <div class="card" style="padding: 0; overflow: hidden;">
-                    <div style="padding: 15px; background: #f0f0f1; border-bottom: 1px solid #c3c4c7;">
-                        <h2 style="margin:0; font-size: 16px;">Aktionen</h2>
-                    </div>
-                    <div style="padding: 15px;">
-                        <p>Erstellen Sie wiederverwendbare Aktionen (E-Mails, Webhooks), die bei Statuswechseln ausgelöst werden.</p>
-                        <a href="edit.php?post_type=tmgmt_action" class="button button-primary">Verwalten</a>
-                    </div>
-                </div>
-
-                <div class="card" style="padding: 0; overflow: hidden;">
-                    <div style="padding: 15px; background: #f0f0f1; border-bottom: 1px solid #c3c4c7;">
-                        <h2 style="margin:0; font-size: 16px;">E-Mail Vorlagen</h2>
-                    </div>
-                    <div style="padding: 15px;">
-                        <p>Verwalten Sie Textvorlagen für E-Mails mit Platzhaltern.</p>
-                        <a href="edit.php?post_type=tmgmt_email_template" class="button button-primary">Verwalten</a>
-                    </div>
-                </div>
-
-                <div class="card" style="padding: 0; overflow: hidden;">
-                    <div style="padding: 15px; background: #f0f0f1; border-bottom: 1px solid #c3c4c7;">
-                        <h2 style="margin:0; font-size: 16px;">Webhooks</h2>
-                    </div>
-                    <div style="padding: 15px;">
-                        <p>Konfigurieren Sie externe Endpunkte für Automatisierungen.</p>
-                        <a href="edit.php?post_type=tmgmt_webhook" class="button button-primary">Verwalten</a>
-                    </div>
-                </div>
-
+            <h1>Töns Management Einstellungen</h1>
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; margin-top: 20px;">
                 <div class="card" style="padding: 0; overflow: hidden;">
                     <div style="padding: 15px; background: #f0f0f1; border-bottom: 1px solid #c3c4c7;">
                         <h2 style="margin:0; font-size: 16px;">Kanban Spalten</h2>
@@ -171,11 +163,31 @@ class TMGMT_Settings_Menu {
 
                 <div class="card" style="padding: 0; overflow: hidden;">
                     <div style="padding: 15px; background: #f0f0f1; border-bottom: 1px solid #c3c4c7;">
+                        <h2 style="margin:0; font-size: 16px;">Organisation</h2>
+                    </div>
+                    <div style="padding: 15px;">
+                        <p>Hinterlegen Sie Ihre Absenderdaten für Dokumente und E-Mails.</p>
+                        <a href="admin.php?page=tmgmt-organization-settings" class="button button-primary">Verwalten</a>
+                    </div>
+                </div>
+
+                <div class="card" style="padding: 0; overflow: hidden;">
+                    <div style="padding: 15px; background: #f0f0f1; border-bottom: 1px solid #c3c4c7;">
+                        <h2 style="margin:0; font-size: 16px;">PDF Export</h2>
+                    </div>
+                    <div style="padding: 15px;">
+                        <p>Konfigurieren Sie Vorlagen für den PDF-Export (z.B. Setlists).</p>
+                        <a href="admin.php?page=tmgmt-pdf-settings" class="button button-primary">Verwalten</a>
+                    </div>
+                </div>
+
+                <div class="card" style="padding: 0; overflow: hidden;">
+                    <div style="padding: 15px; background: #f0f0f1; border-bottom: 1px solid #c3c4c7;">
                         <h2 style="margin:0; font-size: 16px;">Allgemeine Einstellungen</h2>
                     </div>
                     <div style="padding: 15px;">
-                        <p>Globale Einstellungen wie Admin-Leiste und mehr.</p>
-                        <a href="admin.php?page=tmgmt-general-settings" class="button button-primary">Konfigurieren</a>
+                        <p>Globale Einstellungen für das Plugin.</p>
+                        <a href="admin.php?page=tmgmt-general-settings" class="button button-primary">Verwalten</a>
                     </div>
                 </div>
 
@@ -192,6 +204,163 @@ class TMGMT_Settings_Menu {
         </div>
         <?php
     }
+
+    public function render_organization_settings_page() {
+        if (isset($_GET['settings-updated'])) {
+            add_settings_error('tmgmt_messages', 'tmgmt_message', __('Einstellungen gespeichert.', 'toens-mgmt'), 'updated');
+        }
+        settings_errors('tmgmt_messages');
+        
+        // Enqueue Media Uploader
+        wp_enqueue_media();
+        ?>
+        <div class="wrap">
+            <h1>Organisationseinstellungen</h1>
+            <form action="options.php" method="post">
+                <?php
+                settings_fields('tmgmt_organization_options');
+                // do_settings_sections('tmgmt_organization_options'); // We render manually
+                ?>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row"><label for="tmgmt_org_name">Name der Organisation</label></th>
+                        <td><input type="text" name="tmgmt_org_name" id="tmgmt_org_name" value="<?php echo esc_attr(get_option('tmgmt_org_name')); ?>" class="regular-text"></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="tmgmt_org_contact">Ansprechpartner</label></th>
+                        <td><input type="text" name="tmgmt_org_contact" id="tmgmt_org_contact" value="<?php echo esc_attr(get_option('tmgmt_org_contact')); ?>" class="regular-text"></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="tmgmt_org_street">Straße & Hausnummer</label></th>
+                        <td>
+                            <input type="text" name="tmgmt_org_street" id="tmgmt_org_street" value="<?php echo esc_attr(get_option('tmgmt_org_street')); ?>" placeholder="Straße" class="regular-text">
+                            <input type="text" name="tmgmt_org_number" id="tmgmt_org_number" value="<?php echo esc_attr(get_option('tmgmt_org_number')); ?>" placeholder="Nr." class="small-text">
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="tmgmt_org_zip">PLZ & Ort</label></th>
+                        <td>
+                            <input type="text" name="tmgmt_org_zip" id="tmgmt_org_zip" value="<?php echo esc_attr(get_option('tmgmt_org_zip')); ?>" placeholder="PLZ" class="small-text">
+                            <input type="text" name="tmgmt_org_city" id="tmgmt_org_city" value="<?php echo esc_attr(get_option('tmgmt_org_city')); ?>" placeholder="Ort" class="regular-text">
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="tmgmt_org_country">Land</label></th>
+                        <td><input type="text" name="tmgmt_org_country" id="tmgmt_org_country" value="<?php echo esc_attr(get_option('tmgmt_org_country')); ?>" class="regular-text"></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="tmgmt_org_email">E-Mail-Adresse</label></th>
+                        <td><input type="email" name="tmgmt_org_email" id="tmgmt_org_email" value="<?php echo esc_attr(get_option('tmgmt_org_email')); ?>" class="regular-text"></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="tmgmt_org_phone">Telefon</label></th>
+                        <td><input type="text" name="tmgmt_org_phone" id="tmgmt_org_phone" value="<?php echo esc_attr(get_option('tmgmt_org_phone')); ?>" class="regular-text"></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="tmgmt_org_tax_id">Steuernummer</label></th>
+                        <td><input type="text" name="tmgmt_org_tax_id" id="tmgmt_org_tax_id" value="<?php echo esc_attr(get_option('tmgmt_org_tax_id')); ?>" class="regular-text"></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="tmgmt_org_vat_id">Umsatzsteuer-ID</label></th>
+                        <td><input type="text" name="tmgmt_org_vat_id" id="tmgmt_org_vat_id" value="<?php echo esc_attr(get_option('tmgmt_org_vat_id')); ?>" class="regular-text"></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="tmgmt_org_logo">Logo</label></th>
+                        <td>
+                            <?php
+                            $logo_id = get_option('tmgmt_org_logo');
+                            $logo_url = $logo_id ? wp_get_attachment_url($logo_id) : '';
+                            ?>
+                            <div id="tmgmt-logo-preview" style="margin-bottom: 10px;">
+                                <?php if ($logo_url) : ?>
+                                    <img src="<?php echo esc_url($logo_url); ?>" style="max-width: 200px; height: auto;">
+                                <?php endif; ?>
+                            </div>
+                            <input type="hidden" name="tmgmt_org_logo" id="tmgmt_org_logo" value="<?php echo esc_attr($logo_id); ?>">
+                            <button type="button" class="button" id="tmgmt-upload-logo">Logo auswählen</button>
+                            <button type="button" class="button" id="tmgmt-remove-logo" <?php echo $logo_id ? '' : 'style="display:none;"'; ?>>Entfernen</button>
+                            
+                            <script>
+                            jQuery(document).ready(function($) {
+                                $('#tmgmt-upload-logo').click(function(e) {
+                                    e.preventDefault();
+                                    var image = wp.media({ 
+                                        title: 'Logo hochladen',
+                                        multiple: false
+                                    }).open()
+                                    .on('select', function(e){
+                                        var uploaded_image = image.state().get('selection').first();
+                                        var image_url = uploaded_image.toJSON().url;
+                                        var image_id = uploaded_image.toJSON().id;
+                                        $('#tmgmt_org_logo').val(image_id);
+                                        $('#tmgmt-logo-preview').html('<img src="' + image_url + '" style="max-width: 200px; height: auto;">');
+                                        $('#tmgmt-remove-logo').show();
+                                    });
+                                });
+                                $('#tmgmt-remove-logo').click(function(e) {
+                                    e.preventDefault();
+                                    $('#tmgmt_org_logo').val('');
+                                    $('#tmgmt-logo-preview').empty();
+                                    $(this).hide();
+                                });
+                            });
+                            </script>
+                        </td>
+                    </tr>
+                </table>
+                <?php submit_button(); ?>
+            </form>
+        </div>
+        <?php
+    }
+
+    public function render_pdf_settings_page() {
+        if (isset($_GET['settings-updated'])) {
+            add_settings_error('tmgmt_messages', 'tmgmt_message', __('Einstellungen gespeichert.', 'toens-mgmt'), 'updated');
+        }
+        settings_errors('tmgmt_messages');
+        
+        // Scan for templates
+        $template_dir = TMGMT_PLUGIN_DIR . 'templates/setlist/';
+        $templates = array();
+        if (is_dir($template_dir)) {
+            $files = scandir($template_dir);
+            foreach ($files as $file) {
+                if (pathinfo($file, PATHINFO_EXTENSION) === 'php' || pathinfo($file, PATHINFO_EXTENSION) === 'html') {
+                    $templates[$file] = $file;
+                }
+            }
+        }
+        
+        $current_template = get_option('tmgmt_pdf_setlist_template');
+        ?>
+        <div class="wrap">
+            <h1>PDF Export Einstellungen</h1>
+            <form action="options.php" method="post">
+                <?php settings_fields('tmgmt_pdf_options'); ?>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row"><label for="tmgmt_pdf_setlist_template">Setlist Template</label></th>
+                        <td>
+                            <select name="tmgmt_pdf_setlist_template" id="tmgmt_pdf_setlist_template">
+                                <option value="">-- Standard Template --</option>
+                                <?php foreach ($templates as $file => $name) : ?>
+                                    <option value="<?php echo esc_attr($file); ?>" <?php selected($current_template, $file); ?>><?php echo esc_html($name); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <p class="description">
+                                Wählen Sie eine Vorlage aus dem Ordner <code><?php echo esc_html($template_dir); ?></code>.<br>
+                                <a href="https://github.com/schoemi/tons-mgmt/blob/main/Instructions/setlist_templates.md" target="_blank">Dokumentation zur Erstellung von Templates</a>
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+                <?php submit_button(); ?>
+            </form>
+        </div>
+        <?php
+    }
+
 
     public function render_general_settings_page() {
         ?>

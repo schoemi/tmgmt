@@ -98,6 +98,41 @@ class TMGMT_REST_API {
                 return current_user_can('administrator');
             },
         ));
+
+        // Get Email Templates
+        register_rest_route(self::NAMESPACE, '/email-templates', array(
+            'methods'             => 'GET',
+            'callback'            => array($this, 'get_email_templates'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
+        // Preview Email
+        register_rest_route(self::NAMESPACE, '/events/(?P<id>\d+)/email-preview', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'preview_email'),
+            'permission_callback' => array($this, 'check_permission'),
+            'args'                => array(
+                'template_id' => array(
+                    'required' => true,
+                    'validate_callback' => function($param, $request, $key) {
+                        return is_numeric($param);
+                    }
+                ),
+            ),
+        ));
+
+        // Send Email
+        register_rest_route(self::NAMESPACE, '/events/(?P<id>\d+)/email-send', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'send_email'),
+            'permission_callback' => array($this, 'check_permission'),
+            'args'                => array(
+                'recipient' => array('required' => true, 'type' => 'string'),
+                'subject' => array('required' => true, 'type' => 'string'),
+                'body' => array('required' => true, 'type' => 'string'),
+                'attach_pdf' => array('required' => false, 'type' => 'boolean'),
+            ),
+        ));
     }
 
     public function check_permission($request) {
@@ -1012,5 +1047,137 @@ class TMGMT_REST_API {
         } else {
             return new WP_Error('not_found', 'Anhang nicht in diesem Event gefunden', array('status' => 404));
         }
+    }
+
+    public function get_email_templates($request) {
+        $templates = get_posts(array(
+            'post_type' => 'tmgmt_email_template',
+            'numberposts' => -1,
+            'post_status' => 'publish',
+            'orderby' => 'title',
+            'order' => 'ASC'
+        ));
+
+        $data = array();
+        foreach ($templates as $post) {
+            $data[] = array(
+                'id' => $post->ID,
+                'title' => $post->post_title
+            );
+        }
+
+        return rest_ensure_response($data);
+    }
+
+    public function preview_email($request) {
+        $event_id = $request['id'];
+        $template_id = $request['template_id'];
+
+        $event = get_post($event_id);
+        if (!$event || $event->post_type !== 'event') {
+            return new WP_Error('invalid_event', 'Event not found', array('status' => 404));
+        }
+
+        $recipient_raw = get_post_meta($template_id, '_tmgmt_email_recipient', true);
+        $subject_raw = get_post_meta($template_id, '_tmgmt_email_subject', true);
+        $body_raw = get_post_meta($template_id, '_tmgmt_email_body', true);
+
+        // Default recipient if empty
+        if (empty($recipient_raw)) {
+            $recipient_raw = '[contact_email_contract]';
+        }
+        // Default subject if empty
+        if (empty($subject_raw)) {
+            $subject_raw = 'Info: [event_title]';
+        }
+
+        $recipient = TMGMT_Placeholder_Parser::parse($recipient_raw, $event_id);
+        $subject = TMGMT_Placeholder_Parser::parse($subject_raw, $event_id);
+        $body = TMGMT_Placeholder_Parser::parse($body_raw, $event_id);
+
+        return rest_ensure_response(array(
+            'recipient' => $recipient,
+            'subject' => $subject,
+            'body' => $body
+        ));
+    }
+
+    public function send_email($request) {
+        $event_id = $request['id'];
+        $recipient = $request['recipient'];
+        $subject = $request['subject'];
+        $body = $request['body'];
+        $attach_pdf = $request['attach_pdf'];
+
+        $event = get_post($event_id);
+        if (!$event || $event->post_type !== 'event') {
+            return new WP_Error('invalid_event', 'Event not found', array('status' => 404));
+        }
+
+        $attachments = array();
+        $temp_file = '';
+
+        if ($attach_pdf) {
+            if (!class_exists('TMGMT_PDF_Generator')) {
+                require_once TMGMT_PLUGIN_DIR . 'includes/class-pdf-generator.php';
+            }
+            
+            $pdf_gen = new TMGMT_PDF_Generator();
+            $upload_dir = wp_upload_dir();
+            $temp_dir = $upload_dir['basedir'] . '/tmgmt_temp';
+            
+            if (!file_exists($temp_dir)) {
+                mkdir($temp_dir, 0755, true);
+            }
+            
+            $filename = 'Setlist-' . sanitize_title($event->post_title) . '.pdf';
+            $temp_file = $temp_dir . '/' . $filename;
+            
+            $result = $pdf_gen->generate_setlist_pdf($event_id, '', 'F', $temp_file);
+            
+            if (is_wp_error($result)) {
+                return $result;
+            }
+            
+            $attachments[] = $temp_file;
+        }
+
+        $headers = array('Content-Type: text/html; charset=UTF-8');
+        $sent = wp_mail($recipient, $subject, nl2br($body), $headers, $attachments);
+
+        // Cleanup
+        if ($temp_file && file_exists($temp_file)) {
+            unlink($temp_file);
+        }
+
+        if ($sent) {
+            $log_manager = new TMGMT_Log_Manager();
+            $comm_manager = new TMGMT_Communication_Manager();
+            
+            $comm_id = $comm_manager->add_entry($event_id, 'email', $recipient, $subject, $body);
+            $log_manager->log($event_id, 'email_sent', "E-Mail '$subject' an $recipient gesendet." . ($attach_pdf ? " (mit PDF)" : ""), null, $comm_id);
+            
+            return rest_ensure_response(array('success' => true, 'message' => 'E-Mail erfolgreich versendet.'));
+        } else {
+            return new WP_Error('email_failed', 'E-Mail konnte nicht gesendet werden.', array('status' => 500));
+        }
+    }
+
+    private function generate_event_pdf($event_id) {
+        // Implement PDF generation logic here
+        // This is a placeholder function. You should replace this with actual PDF generation code.
+        
+        $event = get_post($event_id);
+        if (!$event || $event->post_type !== 'event') {
+            return new WP_Error('not_found', 'Event nicht gefunden', array('status' => 404));
+        }
+
+        // Example: Generate a simple PDF with event title and content
+        $pdf_content = "<h1>" . get_the_title($event_id) . "</h1>";
+        $pdf_content .= "<div>" . apply_filters('the_content', $event->post_content) . "</div>";
+
+        // Convert to PDF (using a library like TCPDF, FPDF, etc.)
+        // For this example, we'll just return the HTML content as a string.
+        return $pdf_content;
     }
 }

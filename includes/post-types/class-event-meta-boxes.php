@@ -96,6 +96,15 @@ class TMGMT_Event_Meta_Boxes {
         );
 
         add_meta_box(
+            'tmgmt_pdf_export',
+            'PDF Export',
+            array($this, 'render_pdf_export_box'),
+            'event',
+            'side',
+            'default'
+        );
+
+        add_meta_box(
             'tmgmt_event_log',
             'Verlauf / Logbuch',
             array($this, 'render_log_box'),
@@ -244,10 +253,18 @@ class TMGMT_Event_Meta_Boxes {
             <div class="tmgmt-field">
                 <label for="tmgmt_event_arrival_time">Geplante Anreisezeit</label>
                 <input type="time" id="tmgmt_event_arrival_time" name="tmgmt_event_arrival_time" value="<?php echo esc_attr($arrival_time); ?>">
-            </div>
+        <div class="tmgmt-row">
             <div class="tmgmt-field">
                 <label for="tmgmt_event_departure_time">Geplante Abreisezeit</label>
                 <input type="time" id="tmgmt_event_departure_time" name="tmgmt_event_departure_time" value="<?php echo esc_attr($departure_time); ?>">
+            </div>
+        </div>
+
+        <div class="tmgmt-section-title">Ort aus Datenbank laden</div>
+        <div class="tmgmt-row" style="position: relative;">
+            <div class="tmgmt-field">
+                <input type="text" id="tmgmt_location_search" placeholder="Ort suchen..." autocomplete="off" style="width: 100%;">
+                <div id="tmgmt_location_search_results" style="position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #ccc; z-index: 100; max-height: 200px; overflow-y: auto; display: none; box-shadow: 0 2px 5px rgba(0,0,0,0.1);"></div>
             </div>
         </div>
 
@@ -293,10 +310,122 @@ class TMGMT_Event_Meta_Boxes {
                 <label for="tmgmt_geo_lng">Longitude</label>
                 <input type="text" id="tmgmt_geo_lng" name="tmgmt_geo_lng" value="<?php echo esc_attr($geo_lng); ?>" readonly>
             </div>
-            <div class="tmgmt-field" style="display: flex; align-items: flex-end;">
+            <div class="tmgmt-field" style="display: flex; align-items: flex-end; gap: 10px;">
                 <button type="button" id="tmgmt-geocode-btn" class="button button-secondary">Adresse auflösen</button>
+                <button type="button" id="tmgmt-save-location-btn" class="button button-secondary">Als neuen Ort speichern</button>
             </div>
         </div>
+        
+        <script>
+        jQuery(document).ready(function($) {
+            // Search
+            let searchTimeout;
+            $('#tmgmt_location_search').on('input', function() {
+                clearTimeout(searchTimeout);
+                const term = $(this).val();
+                if (term.length < 2) {
+                    $('#tmgmt_location_search_results').hide();
+                    return;
+                }
+                
+                searchTimeout = setTimeout(function() {
+                    $.ajax({
+                        url: ajaxurl,
+                        data: {
+                            action: 'tmgmt_search_locations',
+                            term: term
+                        },
+                        success: function(res) {
+                            if (res.success && res.data.length > 0) {
+                                let html = '';
+                                res.data.forEach(item => {
+                                    html += `<div class="tmgmt-location-result" style="padding: 8px; cursor: pointer; border-bottom: 1px solid #eee;"
+                                        data-street="${item.street}"
+                                        data-number="${item.number}"
+                                        data-zip="${item.zip}"
+                                        data-city="${item.city}"
+                                        data-country="${item.country}"
+                                        data-lat="${item.lat}"
+                                        data-lng="${item.lng}"
+                                        data-notes="${item.notes}"
+                                        data-name="${item.title}"
+                                    ><strong>${item.title}</strong><br><small>${item.street} ${item.number}, ${item.zip} ${item.city}</small></div>`;
+                                });
+                                $('#tmgmt_location_search_results').html(html).show();
+                            } else {
+                                $('#tmgmt_location_search_results').hide();
+                            }
+                        }
+                    });
+                }, 300);
+            });
+
+            // Select
+            $(document).on('click', '.tmgmt-location-result', function() {
+                const data = $(this).data();
+                $('#tmgmt_venue_name').val(data.name);
+                $('#tmgmt_venue_street').val(data.street);
+                $('#tmgmt_venue_number').val(data.number);
+                $('#tmgmt_venue_zip').val(data.zip);
+                $('#tmgmt_venue_city').val(data.city);
+                $('#tmgmt_venue_country').val(data.country);
+                $('#tmgmt_geo_lat').val(data.lat);
+                $('#tmgmt_geo_lng').val(data.lng);
+                $('#tmgmt_arrival_notes').val(data.notes);
+                
+                $('#tmgmt_location_search_results').hide();
+                $('#tmgmt_location_search').val('');
+            });
+
+            // Save
+            $('#tmgmt-save-location-btn').on('click', function() {
+                const name = $('#tmgmt_venue_name').val();
+                if (!name) {
+                    alert('Bitte geben Sie einen Namen für den Veranstaltungsort ein.');
+                    return;
+                }
+                
+                const btn = $(this);
+                btn.prop('disabled', true).text('Speichere...');
+                
+                $.ajax({
+                    url: ajaxurl,
+                    method: 'POST',
+                    data: {
+                        action: 'tmgmt_save_location_from_event',
+                        name: name,
+                        street: $('#tmgmt_venue_street').val(),
+                        number: $('#tmgmt_venue_number').val(),
+                        zip: $('#tmgmt_venue_zip').val(),
+                        city: $('#tmgmt_venue_city').val(),
+                        country: $('#tmgmt_venue_country').val(),
+                        lat: $('#tmgmt_geo_lat').val(),
+                        lng: $('#tmgmt_geo_lng').val(),
+                        notes: $('#tmgmt_arrival_notes').val()
+                    },
+                    success: function(res) {
+                        btn.prop('disabled', false).text('Als neuen Ort speichern');
+                        if (res.success) {
+                            alert('Ort erfolgreich gespeichert!');
+                        } else {
+                            alert('Fehler: ' + res.data);
+                        }
+                    },
+                    error: function() {
+                        btn.prop('disabled', false).text('Als neuen Ort speichern');
+                        alert('Ein Fehler ist aufgetreten.');
+                    }
+                });
+            });
+            
+            // Close search on click outside
+            $(document).on('click', function(e) {
+                if (!$(e.target).closest('#tmgmt_location_search, #tmgmt_location_search_results').length) {
+                    $('#tmgmt_location_search_results').hide();
+                }
+            });
+        });
+        </script>
         
         <div id="tmgmt-map-container">
             <div id="tmgmt-map"></div>
@@ -484,6 +613,258 @@ class TMGMT_Event_Meta_Boxes {
         <?php
     }
 
+    public function render_pdf_export_box($post) {
+        $selected_setlist_id = get_post_meta($post->ID, '_tmgmt_selected_setlist', true);
+        
+        // Fallback check
+        if (!$selected_setlist_id) {
+             $linked_setlists = get_posts(array(
+                'post_type' => 'tmgmt_setlist',
+                'meta_key' => '_tmgmt_setlist_event',
+                'meta_value' => $post->ID,
+                'numberposts' => 1
+            ));
+            if ($linked_setlists) {
+                $selected_setlist_id = $linked_setlists[0]->ID;
+            }
+        }
+
+        // Get all available setlists (Standard + Custom)
+        $all_setlists = get_posts(array(
+            'post_type' => 'tmgmt_setlist',
+            'numberposts' => -1,
+            'orderby' => 'title',
+            'order' => 'ASC'
+        ));
+        ?>
+        
+        <div class="tmgmt-setlist-selector" style="margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 15px;">
+            <label for="tmgmt_selected_setlist"><strong>Setlist zuweisen:</strong></label>
+            <select name="tmgmt_selected_setlist" id="tmgmt_selected_setlist" style="width:100%; margin-top:5px;">
+                <option value="">-- Keine Setlist --</option>
+                <?php foreach ($all_setlists as $sl): 
+                    $type = get_post_meta($sl->ID, '_tmgmt_setlist_type', true);
+                    if ($type === 'template') continue; // Skip templates
+                    
+                    $assigned_event = get_post_meta($sl->ID, '_tmgmt_setlist_event', true);
+                    $is_assigned_to_other = ($assigned_event && $assigned_event != $post->ID);
+                    
+                    // Label formatting
+                    $label = $sl->post_title . ' (' . ucfirst($type) . ')';
+                    if ($is_assigned_to_other) {
+                        $other_event = get_post($assigned_event);
+                        $label .= ' [Verwendet in: ' . ($other_event ? $other_event->post_title : 'Unbekannt') . ']';
+                    }
+                ?>
+                    <option value="<?php echo $sl->ID; ?>" <?php selected($selected_setlist_id, $sl->ID); ?>>
+                        <?php echo esc_html($label); ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+            <p class="description">Wähle eine Setlist für diesen Gig.</p>
+            
+            <div style="margin-top: 10px;">
+                <button type="button" class="button" id="tmgmt-create-custom-setlist-btn">Spezielle Setlist erstellen</button>
+            </div>
+        </div>
+
+        <!-- Custom Setlist Modal -->
+        <div id="tmgmt-custom-setlist-modal" title="Spezielle Setlist erstellen" style="display:none;">
+            <p>Wähle eine Vorlage als Basis für die neue Setlist:</p>
+            <select id="tmgmt-setlist-template-select" style="width:100%;">
+                <option value="">-- Vorlage wählen --</option>
+                <?php 
+                $templates = get_posts(array(
+                    'post_type' => 'tmgmt_setlist',
+                    'numberposts' => -1,
+                    'meta_key' => '_tmgmt_setlist_type',
+                    'meta_value' => 'template'
+                ));
+                foreach ($templates as $tpl) {
+                    echo '<option value="' . $tpl->ID . '">' . esc_html($tpl->post_title) . '</option>';
+                }
+                ?>
+            </select>
+            <p class="description">Eine Kopie dieser Vorlage wird erstellt und diesem Event zugewiesen.</p>
+        </div>
+
+        <?php if ($selected_setlist_id): ?>
+            <p>
+                <a href="<?php echo esc_url(admin_url('admin-post.php?action=tmgmt_generate_setlist_pdf&event_id=' . $post->ID)); ?>" class="button button-secondary" target="_blank">Setlist PDF herunterladen</a>
+            </p>
+            <p>
+                <button type="button" class="button button-primary" id="tmgmt-email-pdf-btn">Per E-Mail senden</button>
+            </p>
+            <p class="description">
+                Generiert die Setlist als PDF basierend auf dem gewählten Template.
+            </p>
+        <?php else: ?>
+            <p><em>Bitte weisen Sie eine Setlist zu, um die Export-Funktionen zu nutzen.</em></p>
+        <?php endif; ?>
+
+        <!-- Email Modal -->
+        <div id="tmgmt-email-modal" title="Setlist per E-Mail senden" style="display:none;">
+            <p>
+                <label for="tmgmt-email-template">Vorlage wählen:</label><br>
+                <select id="tmgmt-email-template" style="width:100%;">
+                    <option value="">-- Bitte wählen --</option>
+                </select>
+            </p>
+            <div id="tmgmt-email-preview" style="display:none;">
+                <p>
+                    <label for="tmgmt-email-recipient">Empfänger:</label><br>
+                    <input type="text" id="tmgmt-email-recipient" style="width:100%;">
+                </p>
+                <p>
+                    <label for="tmgmt-email-subject">Betreff:</label><br>
+                    <input type="text" id="tmgmt-email-subject" style="width:100%;">
+                </p>
+                <p>
+                    <label for="tmgmt-email-body">Nachricht:</label><br>
+                    <textarea id="tmgmt-email-body" rows="8" style="width:100%;"></textarea>
+                </p>
+                <p>
+                    <label>
+                        <input type="checkbox" id="tmgmt-email-attach-pdf" checked> 
+                        Setlist PDF anhängen
+                    </label>
+                </p>
+            </div>
+        </div>
+
+        <script>
+        jQuery(document).ready(function($) {
+            var eventId = <?php echo $post->ID; ?>;
+            var modal = $('#tmgmt-email-modal');
+            var templateSelect = $('#tmgmt-email-template');
+            var previewDiv = $('#tmgmt-email-preview');
+            
+            // Custom Setlist Logic
+            var customSetlistModal = $('#tmgmt-custom-setlist-modal');
+            var customSetlistBtn = $('#tmgmt-create-custom-setlist-btn');
+            var customSetlistTemplateSelect = $('#tmgmt-setlist-template-select');
+
+            customSetlistBtn.click(function() {
+                customSetlistModal.dialog({
+                    modal: true,
+                    width: 400,
+                    buttons: {
+                        "Erstellen": function() {
+                            var templateId = customSetlistTemplateSelect.val();
+                            if (!templateId) {
+                                alert('Bitte wählen Sie eine Vorlage.');
+                                return;
+                            }
+                            
+                            var dialog = $(this);
+                            var btn = dialog.parent().find('.ui-dialog-buttonpane button:first');
+                            btn.prop('disabled', true).text('Erstelle...');
+
+                            $.post(ajaxurl, {
+                                action: 'tmgmt_create_custom_setlist',
+                                nonce: '<?php echo wp_create_nonce('tmgmt_create_custom_setlist_nonce'); ?>',
+                                event_id: eventId,
+                                template_id: templateId
+                            }, function(response) {
+                                if (response.success) {
+                                    // Open new setlist in new tab
+                                    window.open(response.data.edit_url, '_blank');
+                                    // Reload current page to update selection
+                                    location.reload();
+                                } else {
+                                    alert('Fehler: ' + (response.data || 'Unbekannter Fehler'));
+                                    btn.prop('disabled', false).text('Erstellen');
+                                }
+                            });
+                        },
+                        "Abbrechen": function() {
+                            $(this).dialog("close");
+                        }
+                    }
+                });
+            });
+
+            // Load Templates
+            $('#tmgmt-email-pdf-btn').click(function() {
+                // Reset
+                templateSelect.empty().append('<option value="">-- Bitte wählen --</option>');
+                previewDiv.hide();
+                
+                // Fetch Templates
+                $.get('/wp-json/tmgmt/v1/email-templates', function(data) {
+                    $.each(data, function(i, item) {
+                        templateSelect.append($('<option>', { 
+                            value: item.id,
+                            text : item.title 
+                        }));
+                    });
+                    
+                    modal.dialog({
+                        modal: true,
+                        width: 500,
+                        buttons: {
+                            "Senden": function() {
+                                sendEmail($(this));
+                            },
+                            "Abbrechen": function() {
+                                $(this).dialog("close");
+                            }
+                        }
+                    });
+                });
+            });
+
+            // Load Preview on Template Change
+            templateSelect.change(function() {
+                var templateId = $(this).val();
+                if (!templateId) {
+                    previewDiv.hide();
+                    return;
+                }
+
+                $.post('/wp-json/tmgmt/v1/events/' + eventId + '/email-preview', {
+                    template_id: templateId,
+                    _wpnonce: tmgmt_vars.nonce
+                }, function(data) {
+                    $('#tmgmt-email-recipient').val(data.recipient);
+                    $('#tmgmt-email-subject').val(data.subject);
+                    $('#tmgmt-email-body').val(data.body);
+                    previewDiv.show();
+                });
+            });
+
+            function sendEmail(dialogRef) {
+                var btn = dialogRef.parent().find('.ui-dialog-buttonpane button:contains("Senden")');
+                btn.prop('disabled', true).text('Sende...');
+
+                $.post('/wp-json/tmgmt/v1/events/' + eventId + '/email-send', {
+                    recipient: $('#tmgmt-email-recipient').val(),
+                    subject: $('#tmgmt-email-subject').val(),
+                    body: $('#tmgmt-email-body').val(),
+                    attach_pdf: $('#tmgmt-email-attach-pdf').is(':checked') ? 1 : 0,
+                    _wpnonce: tmgmt_vars.nonce
+                }, function(response) {
+                    if (response.success) {
+                        alert(response.message);
+                        dialogRef.dialog("close");
+                    } else {
+                        alert('Fehler: ' + response.message);
+                    }
+                    btn.prop('disabled', false).text('Senden');
+                }).fail(function(xhr) {
+                    var msg = 'Unbekannter Fehler';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        msg = xhr.responseJSON.message;
+                    }
+                    alert('Fehler: ' + msg);
+                    btn.prop('disabled', false).text('Senden');
+                });
+            }
+        });
+        </script>
+        <?php
+    }
+
     public function save_meta_boxes($post_id) {
         if (!isset($_POST['tmgmt_event_meta_nonce']) || !wp_verify_nonce($_POST['tmgmt_event_meta_nonce'], 'tmgmt_save_event_meta')) {
             return;
@@ -584,6 +965,24 @@ class TMGMT_Event_Meta_Boxes {
             $log_manager->log($post_id, 'status_change', $message);
         }
 
+        // Handle Setlist Back-Link Logic
+        $old_setlist_id = get_post_meta($post_id, '_tmgmt_selected_setlist', true);
+        $new_setlist_id = isset($_POST['tmgmt_selected_setlist']) ? intval($_POST['tmgmt_selected_setlist']) : 0;
+
+        if ($old_setlist_id && $old_setlist_id != $new_setlist_id) {
+             $old_linked_event = get_post_meta($old_setlist_id, '_tmgmt_setlist_event', true);
+             if ($old_linked_event == $post_id) {
+                 delete_post_meta($old_setlist_id, '_tmgmt_setlist_event');
+             }
+        }
+
+        if ($new_setlist_id && $new_setlist_id != $old_setlist_id) {
+             $type = get_post_meta($new_setlist_id, '_tmgmt_setlist_type', true);
+             if ($type === 'custom') {
+                 update_post_meta($new_setlist_id, '_tmgmt_setlist_event', $post_id);
+             }
+        }
+
         $fields = array(
             // Event Details
             'tmgmt_event_date', 'tmgmt_event_start_time', 'tmgmt_event_arrival_time', 'tmgmt_event_departure_time',
@@ -598,7 +997,9 @@ class TMGMT_Event_Meta_Boxes {
             // Inquiry
             'tmgmt_inquiry_date', 'tmgmt_status',
             // Contract
-            'tmgmt_fee', 'tmgmt_deposit'
+            'tmgmt_fee', 'tmgmt_deposit',
+            // Setlist
+            'tmgmt_selected_setlist'
         );
 
         foreach ($fields as $field) {

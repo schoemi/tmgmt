@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Töns Management
  * Description: Gig Management Plugin for WordPress
- * Version: 0.2.0
+ * Version: 0.4.0
  */
 
 if (!defined('ABSPATH')) {
@@ -10,9 +10,14 @@ if (!defined('ABSPATH')) {
 }
 
 // Define Constants
-define( 'TMGMT_VERSION', '0.2.0' );
+define( 'TMGMT_VERSION', '0.4.0' );
 define('TMGMT_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('TMGMT_PLUGIN_URL', plugin_dir_url(__FILE__));
+
+// Composer Autoload
+if (file_exists(TMGMT_PLUGIN_DIR . 'vendor/autoload.php')) {
+    require_once TMGMT_PLUGIN_DIR . 'vendor/autoload.php';
+}
 
 // Include Post Types
 require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-event-post-type.php';
@@ -25,6 +30,9 @@ require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-action-post-type.php'
 require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-kanban-column-post-type.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-tour-post-type.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-shuttle-post-type.php';
+require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-title-post-type.php';
+require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-setlist-post-type.php';
+require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-location-post-type.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-placeholder-parser.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-action-handler.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-dashboard.php';
@@ -41,6 +49,7 @@ require_once TMGMT_PLUGIN_DIR . 'includes/frontend/class-frontend-manager.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-settings-menu.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-admin-menu.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-general-settings.php';
+require_once TMGMT_PLUGIN_DIR . 'includes/class-pdf-generator.php';
 
 // Initialize Plugin
 function tmgmt_init() {
@@ -55,6 +64,9 @@ function tmgmt_init() {
     new TMGMT_Kanban_Column_Post_Type();
     new TMGMT_Tour_Post_Type();
     new TMGMT_Shuttle_Post_Type();
+    new TMGMT_Title_Post_Type();
+    new TMGMT_Setlist_Post_Type();
+    new TMGMT_Location_Post_Type();
     new TMGMT_Action_Handler();
     new TMGMT_Dashboard();
     new TMGMT_Appointment_List();
@@ -66,6 +78,7 @@ function tmgmt_init() {
     new TMGMT_Tour_Manager();
     new TMGMT_Tour_Overview();
     new TMGMT_Admin_Menu();
+    new TMGMT_PDF_Generator();
 }
 add_action('plugins_loaded', 'tmgmt_init');
 
@@ -78,4 +91,3 @@ function tmgmt_activate() {
     $comm_manager = new TMGMT_Communication_Manager();
     $comm_manager->create_table();
 }
-
