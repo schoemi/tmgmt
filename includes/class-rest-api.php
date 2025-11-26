@@ -144,6 +144,9 @@ class TMGMT_REST_API {
             }
         }
 
+        // Set Inquiry Date to today
+        update_post_meta($post_id, 'tmgmt_inquiry_date', current_time('Y-m-d\TH:i'));
+
         // Log creation
         $log_manager = new TMGMT_Log_Manager();
         $log_manager->log($post_id, 'api_create', 'Event erstellt');

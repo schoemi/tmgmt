@@ -427,6 +427,12 @@ class TMGMT_Event_Meta_Boxes {
 
     public function render_inquiry_details_box($post) {
         $inquiry_date = get_post_meta($post->ID, '_tmgmt_inquiry_date', true);
+        
+        // Set default date for new posts or empty values
+        if (empty($inquiry_date)) {
+            $inquiry_date = current_time('Y-m-d\TH:i');
+        }
+
         $status = get_post_meta($post->ID, '_tmgmt_status', true);
         $statuses = TMGMT_Event_Status::get_all_statuses();
 
