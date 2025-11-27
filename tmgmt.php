@@ -50,6 +50,7 @@ require_once TMGMT_PLUGIN_DIR . 'includes/class-settings-menu.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-admin-menu.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-general-settings.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-pdf-generator.php';
+require_once TMGMT_PLUGIN_DIR . 'includes/class-live-tracking.php';
 
 // Initialize Plugin
 function tmgmt_init() {
@@ -79,6 +80,7 @@ function tmgmt_init() {
     new TMGMT_Tour_Overview();
     new TMGMT_Admin_Menu();
     new TMGMT_PDF_Generator();
+    new TMGMT_Live_Tracking();
 }
 add_action('plugins_loaded', 'tmgmt_init');
 

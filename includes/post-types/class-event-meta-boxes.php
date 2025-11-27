@@ -649,6 +649,11 @@ class TMGMT_Event_Meta_Boxes {
                     $assigned_event = get_post_meta($sl->ID, '_tmgmt_setlist_event', true);
                     $is_assigned_to_other = ($assigned_event && $assigned_event != $post->ID);
                     
+                    // Filter out custom setlists assigned to other events
+                    if ($type === 'custom' && $is_assigned_to_other) {
+                        continue;
+                    }
+
                     // Label formatting
                     $label = $sl->post_title . ' (' . ucfirst($type) . ')';
                     if ($is_assigned_to_other) {

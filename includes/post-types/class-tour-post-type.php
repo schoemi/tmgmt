@@ -9,6 +9,18 @@ class TMGMT_Tour_Post_Type {
         add_action('admin_post_tmgmt_print_tour', array($this, 'handle_print_tour'));
         add_filter('manage_tmgmt_tour_posts_columns', array($this, 'add_custom_columns'));
         add_action('manage_tmgmt_tour_posts_custom_column', array($this, 'render_custom_columns'), 10, 2);
+        add_filter('single_template', array($this, 'load_single_template'));
+    }
+
+    public function load_single_template($template) {
+        global $post;
+        if ($post->post_type === 'tmgmt_tour') {
+            $plugin_template = TMGMT_PLUGIN_DIR . 'templates/single-tmgmt-tour.php';
+            if (file_exists($plugin_template)) {
+                return $plugin_template;
+            }
+        }
+        return $template;
     }
 
     public function add_custom_columns($columns) {

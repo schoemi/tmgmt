@@ -82,10 +82,52 @@ class TMGMT_Action_Handler {
         echo '</div>';
 
         // Hidden container for dialogs
+        $attachments_data = get_post_meta($post->ID, '_tmgmt_event_attachments', true);
+        $attachments_data = maybe_unserialize($attachments_data);
+        if (!is_array($attachments_data)) $attachments_data = array();
         ?>
         <div id="tmgmt-action-dialog" style="display:none;">
             <p id="tmgmt-action-description"></p>
             <textarea id="tmgmt-action-note" rows="5" class="widefat" placeholder="Notiz eingeben..."></textarea>
+        </div>
+
+        <div id="tmgmt-action-email-dialog" style="display:none;">
+            <p>
+                <label>Empfänger:</label><br>
+                <input type="text" id="tmgmt-action-email-recipient" class="widefat">
+            </p>
+            <p>
+                <label>Betreff:</label><br>
+                <input type="text" id="tmgmt-action-email-subject" class="widefat">
+            </p>
+            <p>
+                <label>Nachricht:</label><br>
+                <textarea id="tmgmt-action-email-body" rows="10" class="widefat"></textarea>
+            </p>
+            
+            <hr>
+            <p><strong>Anhänge:</strong></p>
+            
+            <?php if (!empty($attachments_data)): ?>
+                <div style="margin-bottom: 10px; max-height: 100px; overflow-y: auto; border: 1px solid #ddd; padding: 5px;">
+                    <?php foreach ($attachments_data as $att): 
+                        $att_id = isset($att['id']) ? $att['id'] : $att;
+                        $att_post = get_post($att_id);
+                        if (!$att_post) continue;
+                    ?>
+                        <label style="display:block;">
+                            <input type="checkbox" class="tmgmt-email-existing-file" value="<?php echo esc_attr($att_id); ?>">
+                            <?php echo esc_html($att_post->post_title); ?> 
+                            <small>(<?php echo esc_html(basename(get_attached_file($att_id))); ?>)</small>
+                        </label>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+
+            <p>
+                <label>Neue Datei hochladen:</label><br>
+                <input type="file" id="tmgmt-action-email-file">
+            </p>
         </div>
 
         <script>
@@ -116,6 +158,65 @@ class TMGMT_Action_Handler {
                             }
                         }
                     });
+                } else if (type === 'email') {
+                    // Fetch Preview
+                    btn.prop('disabled', true).text('Lade Vorschau...');
+                    
+                    // Reset inputs
+                    $('#tmgmt-action-email-file').val('');
+                    $('.tmgmt-email-existing-file').prop('checked', false);
+
+                    $.ajax({
+                        url: '/wp-json/tmgmt/v1/events/' + eventId + '/actions/' + actionId + '/preview',
+                        method: 'GET',
+                        beforeSend: function ( xhr ) {
+                            xhr.setRequestHeader( 'X-WP-Nonce', tmgmt_vars.nonce );
+                        },
+                        success: function(data) {
+                            btn.prop('disabled', false).text(label);
+                            
+                            $('#tmgmt-action-email-recipient').val(data.recipient);
+                            $('#tmgmt-action-email-subject').val(data.subject);
+                            $('#tmgmt-action-email-body').val(data.body);
+                            
+                            $('#tmgmt-action-email-dialog').dialog({
+                                title: 'E-Mail senden: ' + label,
+                                modal: true,
+                                width: 500,
+                                buttons: {
+                                    "Senden": function() {
+                                        var formData = new FormData();
+                                        
+                                        // File Upload
+                                        var fileInput = $('#tmgmt-action-email-file')[0];
+                                        if (fileInput.files.length > 0) {
+                                            formData.append('email_attachment_upload', fileInput.files[0]);
+                                        }
+
+                                        // Existing Files
+                                        $('.tmgmt-email-existing-file:checked').each(function() {
+                                            formData.append('email_existing_attachments[]', $(this).val());
+                                        });
+
+                                        var emailData = {
+                                            email_recipient: $('#tmgmt-action-email-recipient').val(),
+                                            email_subject: $('#tmgmt-action-email-subject').val(),
+                                            email_body: $('#tmgmt-action-email-body').val()
+                                        };
+                                        
+                                        executeAction(actionId, '', $(this), emailData, formData);
+                                    },
+                                    "Abbrechen": function() {
+                                        $(this).dialog("close");
+                                    }
+                                }
+                            });
+                        },
+                        error: function() {
+                            btn.prop('disabled', false).text(label);
+                            alert('Fehler beim Laden der Vorschau.');
+                        }
+                    });
                 } else {
                     // Webhook - Confirm?
                     if (confirm('Möchten Sie die Aktion "' + label + '" wirklich ausführen?')) {
@@ -123,28 +224,66 @@ class TMGMT_Action_Handler {
                     }
                 }
 
-                function executeAction(actionId, note, dialog) {
+                function executeAction(actionId, note, dialog, extraData, formData) {
                     // Show loading state?
                     btn.prop('disabled', true).text('Verarbeite...');
 
-                    $.post(ajaxurl, {
-                        action: 'tmgmt_execute_action',
-                        event_id: eventId,
-                        action_id: actionId,
-                        note: note,
-                        nonce: '<?php echo wp_create_nonce('tmgmt_execute_action_nonce'); ?>'
-                    }, function(response) {
-                        if (dialog) {
-                            dialog.dialog("close");
+                    var dataToSend;
+                    var processData = true;
+                    var contentType = 'application/x-www-form-urlencoded; charset=UTF-8';
+
+                    if (formData) {
+                        dataToSend = formData;
+                        dataToSend.append('action', 'tmgmt_execute_action');
+                        dataToSend.append('event_id', eventId);
+                        dataToSend.append('action_id', actionId);
+                        dataToSend.append('note', note);
+                        dataToSend.append('nonce', '<?php echo wp_create_nonce('tmgmt_execute_action_nonce'); ?>');
+                        
+                        if (extraData) {
+                            for (var key in extraData) {
+                                dataToSend.append(key, extraData[key]);
+                            }
                         }
                         
-                        if (response.success) {
-                            alert(response.data.message);
-                            // Reload page to show new status / logs
-                            location.reload();
-                        } else {
-                            alert('Fehler: ' + response.data.message);
-                            btn.prop('disabled', false).text(label);
+                        processData = false;
+                        contentType = false;
+                    } else {
+                        dataToSend = {
+                            action: 'tmgmt_execute_action',
+                            event_id: eventId,
+                            action_id: actionId,
+                            note: note,
+                            nonce: '<?php echo wp_create_nonce('tmgmt_execute_action_nonce'); ?>'
+                        };
+                        if (extraData) {
+                            $.extend(dataToSend, extraData);
+                        }
+                    }
+
+                    $.ajax({
+                        url: ajaxurl,
+                        type: 'POST',
+                        data: dataToSend,
+                        processData: processData,
+                        contentType: contentType,
+                        success: function(response) {
+                            if (dialog) {
+                                dialog.dialog("close");
+                            }
+                            
+                            if (response.success) {
+                                alert(response.data.message);
+                                // Reload page to show new status / logs
+                                location.reload();
+                            } else {
+                                alert('Fehler: ' + (response.data ? response.data.message : 'Unbekannt'));
+                                btn.prop('disabled', false).text(label);
+                            }
+                        },
+                        error: function() {
+                             alert('Systemfehler');
+                             btn.prop('disabled', false).text(label);
                         }
                     });
                 }
@@ -228,9 +367,21 @@ class TMGMT_Action_Handler {
                 wp_send_json_error(array('message' => 'Keine E-Mail Vorlage ausgewählt.'));
             }
 
-            $recipient_raw = get_post_meta($email_template_id, '_tmgmt_email_recipient', true);
-            $subject_raw = get_post_meta($email_template_id, '_tmgmt_email_subject', true);
-            $body_raw = get_post_meta($email_template_id, '_tmgmt_email_body', true);
+            // Check for overrides from dialog
+            if (isset($_POST['email_recipient']) && isset($_POST['email_subject']) && isset($_POST['email_body'])) {
+                $recipient = sanitize_text_field($_POST['email_recipient']);
+                $subject = sanitize_text_field($_POST['email_subject']);
+                $body = wp_kses_post($_POST['email_body']);
+            } else {
+                $recipient_raw = get_post_meta($email_template_id, '_tmgmt_email_recipient', true);
+                $subject_raw = get_post_meta($email_template_id, '_tmgmt_email_subject', true);
+                $body_raw = get_post_meta($email_template_id, '_tmgmt_email_body', true);
+
+                $recipient = TMGMT_Placeholder_Parser::parse($recipient_raw, $event_id);
+                $subject = TMGMT_Placeholder_Parser::parse($subject_raw, $event_id);
+                $body = TMGMT_Placeholder_Parser::parse($body_raw, $event_id);
+            }
+
             $cc_raw = get_post_meta($email_template_id, '_tmgmt_email_cc', true);
             $bcc_raw = get_post_meta($email_template_id, '_tmgmt_email_bcc', true);
             $reply_to_raw = get_post_meta($email_template_id, '_tmgmt_email_reply_to', true);
@@ -257,8 +408,62 @@ class TMGMT_Action_Handler {
                 if (!empty($reply_to)) $headers[] = 'Reply-To: ' . $reply_to;
             }
 
+            // Handle Attachments
+            $attachments = array();
+
+            // 1. Existing Attachments
+            if (isset($_POST['email_existing_attachments']) && is_array($_POST['email_existing_attachments'])) {
+                foreach ($_POST['email_existing_attachments'] as $att_id) {
+                    $path = get_attached_file($att_id);
+                    if ($path && file_exists($path)) {
+                        $attachments[] = $path;
+                    }
+                }
+            }
+
+            // 2. New File Upload
+            if (!empty($_FILES['email_attachment_upload'])) {
+                require_once(ABSPATH . 'wp-admin/includes/image.php');
+                require_once(ABSPATH . 'wp-admin/includes/file.php');
+                require_once(ABSPATH . 'wp-admin/includes/media.php');
+
+                $file = $_FILES['email_attachment_upload'];
+                $attachment_id = media_handle_upload('email_attachment_upload', $event_id);
+
+                if (!is_wp_error($attachment_id)) {
+                    // Add to Event Meta
+                    $current_data = get_post_meta($event_id, '_tmgmt_event_attachments', true);
+                    $current_data = maybe_unserialize($current_data);
+                    if (!is_array($current_data)) $current_data = array();
+                    
+                    // Normalize current data
+                    $normalized_current = array();
+                    foreach ($current_data as $item) {
+                        if (is_numeric($item)) {
+                            $normalized_current[] = array('id' => intval($item), 'category' => '');
+                        } elseif (is_array($item) && isset($item['id'])) {
+                            $normalized_current[] = $item;
+                        }
+                    }
+
+                    $normalized_current[] = array('id' => $attachment_id, 'category' => 'E-Mail Upload');
+                    update_post_meta($event_id, '_tmgmt_event_attachments', $normalized_current);
+
+                    // Log
+                    $log_manager->log($event_id, 'attachment_added', 'Datei ' . basename($file['name']) . ' wurde per E-Mail versendet und hochgeladen.');
+
+                    // Add to email attachments
+                    $path = get_attached_file($attachment_id);
+                    if ($path) {
+                        $attachments[] = $path;
+                    }
+                } else {
+                    $log_manager->log($event_id, 'upload_error', 'Fehler beim Upload: ' . $attachment_id->get_error_message());
+                }
+            }
+
             // Send
-            $sent = wp_mail($recipient, $subject, nl2br($body), $headers);
+            $sent = wp_mail($recipient, $subject, nl2br($body), $headers, $attachments);
 
             if ($sent) {
                 $log_message .= " - E-Mail gesendet an: $recipient";

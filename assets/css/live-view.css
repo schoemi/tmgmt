@@ -1,0 +1,328 @@
+#tmgmt-live-view-app {
+    position: relative;
+    width: 100%;
+    height: 80vh; /* Adjust based on theme */
+    min-height: 500px;
+    overflow: hidden;
+}
+
+#tmgmt-live-map {
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+}
+
+#tmgmt-live-overlay {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 300px;
+    background: rgba(255, 255, 255, 0.95);
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    z-index: 1000;
+    backdrop-filter: blur(5px);
+}
+
+.tmgmt-live-header {
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+    margin-bottom: 15px;
+}
+
+.tmgmt-live-header h1 {
+    font-size: 18px;
+    margin: 0 0 5px 0;
+    line-height: 1.2;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+    text-transform: uppercase;
+    background: #eee;
+    color: #666;
+}
+
+.status-badge.ok { background: #d4edda; color: #155724; }
+.status-badge.warning { background: #fff3cd; color: #856404; }
+.status-badge.late { background: #f8d7da; color: #721c24; }
+
+.tmgmt-live-info .info-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+
+.tmgmt-live-info .label {
+    color: #666;
+}
+
+.tmgmt-live-info .value {
+    font-weight: 600;
+}
+
+.tmgmt-live-info {
+    margin-bottom: 15px;
+}
+
+/* Timeline */
+.tmgmt-timeline {
+    max-height: 200px;
+    overflow-y: auto;
+    border-top: 1px solid #eee;
+    padding-top: 10px;
+    margin-bottom: 15px;
+}
+
+.tmgmt-timeline-item {
+    display: flex;
+    align-items: center;
+    padding: 6px 0;
+    font-size: 13px;
+    color: #666;
+    border-bottom: 1px solid #f5f5f5;
+}
+
+.tmgmt-timeline-item:last-child {
+    border-bottom: none;
+}
+
+.tmgmt-timeline-item.active {
+    color: #0073aa;
+    font-weight: bold;
+    background: #f0f7fc;
+    margin: 0 -10px;
+    padding: 6px 10px;
+    border-radius: 4px;
+}
+
+.tmgmt-timeline-item.passed {
+    color: #aaa;
+    text-decoration: line-through;
+}
+
+.tmgmt-timeline-time {
+    width: 50px;
+    flex-shrink: 0;
+}
+
+.tmgmt-timeline-icon {
+    width: 20px;
+    text-align: center;
+    margin-right: 8px;
+}
+
+.tmgmt-timeline-name {
+    flex-grow: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tmgmt-timeline-eta {
+    font-size: 11px;
+    color: #999;
+    margin-left: 5px;
+}
+
+.tmgmt-timeline-item.active .tmgmt-timeline-eta {
+    color: #0073aa;
+}
+
+#tmgmt-test-controls {
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid #eee;
+    background: #f9f9f9;
+    padding: 10px;
+    border-radius: 4px;
+}
+
+#tmgmt-test-controls h3 {
+    margin: 0 0 10px 0;
+    font-size: 14px;
+    text-transform: uppercase;
+    color: #888;
+}
+
+.control-group {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+.tmgmt-btn-test {
+    padding: 4px 8px;
+    font-size: 12px;
+    cursor: pointer;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+}
+
+.tmgmt-btn-test:hover {
+    background: #f0f0f0;
+}
+
+.hint {
+    font-size: 11px;
+    color: #999;
+    margin: 5px 0 0 0;
+    font-style: italic;
+}
+
+/* Mobile adjustments */
+@media (max-width: 600px) {
+    #tmgmt-live-overlay {
+        top: auto;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        border-radius: 15px 15px 0 0;
+        padding-bottom: 30px; /* Safe area */
+    }
+}
+
+/* Tabs & Layout */
+.tmgmt-tour-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.tmgmt-tabs-nav {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #eee;
+}
+
+.tmgmt-tab-btn {
+    padding: 10px 20px;
+    border: none;
+    background: none;
+    font-size: 16px;
+    font-weight: 600;
+    color: #666;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s;
+}
+
+.tmgmt-tab-btn:hover {
+    color: #333;
+    background: #f9f9f9;
+}
+
+.tmgmt-tab-btn.active {
+    color: #0073aa;
+    border-bottom-color: #0073aa;
+}
+
+.tmgmt-tab-content {
+    display: none;
+}
+
+.tmgmt-tab-content.active {
+    display: block;
+}
+
+/* Plan Table Styles */
+.tmgmt-plan-header {
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.tmgmt-table-responsive {
+    overflow-x: auto;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.tmgmt-tour-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 600px;
+}
+
+.tmgmt-tour-table th,
+.tmgmt-tour-table td {
+    padding: 12px 15px;
+    text-align: left;
+    border-bottom: 1px solid #eee;
+}
+
+.tmgmt-tour-table th {
+    background: #f8f9fa;
+    font-weight: 600;
+    color: #444;
+}
+
+.tmgmt-tour-table tr:last-child td {
+    border-bottom: none;
+}
+
+.tmgmt-tour-table tr:hover {
+    background-color: #fcfcfc;
+}
+
+/* Badges */
+.tmgmt-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    background: #eee;
+    color: #666;
+}
+
+.tmgmt-badge.start { background: #e3f2fd; color: #1565c0; }
+.tmgmt-badge.pickup { background: #e8f5e9; color: #2e7d32; }
+.tmgmt-badge.drive { background: #fff3e0; color: #ef6c00; }
+.tmgmt-badge.event { background: #f3e5f5; color: #7b1fa2; }
+.tmgmt-badge.break { background: #fafafa; color: #757575; border: 1px solid #eee; }
+.tmgmt-badge.end { background: #ffebee; color: #c62828; }
+
+/* Tour Meta */
+.tmgmt-tour-meta {
+    color: #666;
+    font-size: 14px;
+    margin-top: 5px;
+}
+
+.tmgmt-tour-meta .sep {
+    margin: 0 8px;
+    color: #ccc;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    #tmgmt-live-overlay {
+        position: relative;
+        top: 0;
+        right: 0;
+        width: 100%;
+        margin-top: -20px; /* Pull up over map slightly if desired, or just stack */
+        border-radius: 0;
+        box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+    }
+    
+    #tmgmt-live-map {
+        height: 50vh;
+    }
+}

@@ -4,6 +4,39 @@ class TMGMT_Assets {
 
     public function __construct() {
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
+        add_action('wp_enqueue_scripts', array($this, 'enqueue_frontend_scripts'));
+    }
+
+    public function enqueue_frontend_scripts() {
+        if (is_singular('tmgmt_tour')) {
+            global $post;
+            
+            // Leaflet
+            wp_enqueue_style('leaflet-css', 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css');
+            wp_enqueue_script('leaflet-js', 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js', array(), '1.9.4', true);
+
+            // Live View Assets
+            wp_enqueue_style(
+                'tmgmt-live-view-css',
+                TMGMT_PLUGIN_URL . 'assets/css/live-view.css',
+                array(),
+                TMGMT_VERSION
+            );
+
+            wp_enqueue_script(
+                'tmgmt-live-view-js',
+                TMGMT_PLUGIN_URL . 'assets/js/live-view.js',
+                array('jquery', 'leaflet-js'),
+                TMGMT_VERSION,
+                true
+            );
+
+            wp_localize_script('tmgmt-live-view-js', 'tmgmt_live_vars', array(
+                'tour_id' => $post->ID,
+                'api_url' => rest_url('tmgmt/v1'),
+                'nonce' => wp_create_nonce('wp_rest')
+            ));
+        }
     }
 
     public function enqueue_admin_scripts($hook) {

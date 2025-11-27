@@ -63,6 +63,15 @@ class TMGMT_Settings_Menu {
             'tmgmt-pdf-settings',
             array($this, 'render_pdf_settings_page')
         );
+
+        add_submenu_page(
+            'tmgmt-settings-hidden',
+            'Live Tracking',
+            'Live Tracking',
+            'tmgmt_manage_settings',
+            'tmgmt-live-tracking-settings',
+            array($this, 'render_live_tracking_settings_page')
+        );
     }
 
     public function register_settings() {
@@ -85,6 +94,12 @@ class TMGMT_Settings_Menu {
         
         register_setting('tmgmt_route_options', 'tmgmt_ors_api_key');
         register_setting('tmgmt_route_options', 'tmgmt_here_api_key');
+
+        // Live Tracking Settings
+        register_setting('tmgmt_live_tracking_options', 'tmgmt_live_test_mode_active');
+        register_setting('tmgmt_live_tracking_options', 'tmgmt_live_test_lat');
+        register_setting('tmgmt_live_tracking_options', 'tmgmt_live_test_lng');
+        register_setting('tmgmt_live_tracking_options', 'tmgmt_live_test_time_offset');
 
         // General Settings
         register_setting('tmgmt_general_options', 'tmgmt_hide_admin_bar_desktop');
@@ -153,6 +168,46 @@ class TMGMT_Settings_Menu {
 
                 <div class="card" style="padding: 0; overflow: hidden;">
                     <div style="padding: 15px; background: #f0f0f1; border-bottom: 1px solid #c3c4c7;">
+                        <h2 style="margin:0; font-size: 16px;">Status Definitionen</h2>
+                    </div>
+                    <div style="padding: 15px;">
+                        <p>Definieren Sie Status und deren Eigenschaften.</p>
+                        <a href="edit.php?post_type=tmgmt_status_def" class="button button-primary">Verwalten</a>
+                    </div>
+                </div>
+
+                <div class="card" style="padding: 0; overflow: hidden;">
+                    <div style="padding: 15px; background: #f0f0f1; border-bottom: 1px solid #c3c4c7;">
+                        <h2 style="margin:0; font-size: 16px;">Aktionen</h2>
+                    </div>
+                    <div style="padding: 15px;">
+                        <p>Definieren Sie Aktionen (E-Mails, Webhooks), die ausgeführt werden können.</p>
+                        <a href="edit.php?post_type=tmgmt_action" class="button button-primary">Verwalten</a>
+                    </div>
+                </div>
+
+                <div class="card" style="padding: 0; overflow: hidden;">
+                    <div style="padding: 15px; background: #f0f0f1; border-bottom: 1px solid #c3c4c7;">
+                        <h2 style="margin:0; font-size: 16px;">Webhooks</h2>
+                    </div>
+                    <div style="padding: 15px;">
+                        <p>Verwalten Sie Webhook-Endpunkte für externe Integrationen.</p>
+                        <a href="edit.php?post_type=tmgmt_webhook" class="button button-primary">Verwalten</a>
+                    </div>
+                </div>
+
+                <div class="card" style="padding: 0; overflow: hidden;">
+                    <div style="padding: 15px; background: #f0f0f1; border-bottom: 1px solid #c3c4c7;">
+                        <h2 style="margin:0; font-size: 16px;">E-Mail Vorlagen</h2>
+                    </div>
+                    <div style="padding: 15px;">
+                        <p>Erstellen und bearbeiten Sie Vorlagen für E-Mail-Benachrichtigungen.</p>
+                        <a href="edit.php?post_type=tmgmt_email_template" class="button button-primary">Verwalten</a>
+                    </div>
+                </div>
+
+                <div class="card" style="padding: 0; overflow: hidden;">
+                    <div style="padding: 15px; background: #f0f0f1; border-bottom: 1px solid #c3c4c7;">
                         <h2 style="margin:0; font-size: 16px;">Routenplanung</h2>
                     </div>
                     <div style="padding: 15px;">
@@ -198,6 +253,16 @@ class TMGMT_Settings_Menu {
                     <div style="padding: 15px;">
                         <p>Passen Sie die Reihenfolge und das Verhalten der Sektionen im Frontend-Modal an.</p>
                         <a href="admin.php?page=tmgmt-frontend-layout" class="button button-primary">Layout anpassen</a>
+                    </div>
+                </div>
+
+                <div class="card" style="padding: 0; overflow: hidden;">
+                    <div style="padding: 15px; background: #f0f0f1; border-bottom: 1px solid #c3c4c7;">
+                        <h2 style="margin:0; font-size: 16px;">Live Tracking</h2>
+                    </div>
+                    <div style="padding: 15px;">
+                        <p>Konfigurieren Sie den Testmodus und Simulationseinstellungen für das Live Tracking.</p>
+                        <a href="admin.php?page=tmgmt-live-tracking-settings" class="button button-primary">Konfigurieren</a>
                     </div>
                 </div>
             </div>
@@ -770,6 +835,87 @@ class TMGMT_Settings_Menu {
                     <button type="submit" name="submit_layout" class="button button-primary">Einstellungen speichern</button>
                     <a href="admin.php?page=tmgmt-settings" class="button">Zurück</a>
                 </p>
+            </form>
+        </div>
+        <?php
+    }
+
+    public function render_live_tracking_settings_page() {
+        if (!current_user_can('tmgmt_manage_settings')) {
+            return;
+        }
+        
+        // Handle Reset
+        if (isset($_POST['reset_test_mode'])) {
+            check_admin_referer('tmgmt_reset_test_mode');
+            update_option('tmgmt_live_test_mode_active', 0);
+            update_option('tmgmt_live_test_lat', '');
+            update_option('tmgmt_live_test_lng', '');
+            update_option('tmgmt_live_test_time_offset', 0);
+            echo '<div class="notice notice-success"><p>Test Modus zurückgesetzt.</p></div>';
+        }
+        ?>
+        <div class="wrap">
+            <h1>Live Tracking Konfiguration</h1>
+            
+            <form method="post" action="options.php">
+                <?php
+                settings_fields('tmgmt_live_tracking_options');
+                do_settings_sections('tmgmt_live_tracking_options');
+                ?>
+                
+                <table class="form-table">
+                    <tr valign="top">
+                        <th scope="row">Test Modus aktivieren</th>
+                        <td>
+                            <input type="checkbox" name="tmgmt_live_test_mode_active" value="1" <?php checked(get_option('tmgmt_live_test_mode_active'), 1); ?> />
+                            <p class="description">Wenn aktiviert, wird die Position nicht vom GPS des Geräts, sondern von den unten stehenden Werten (oder per Klick auf die Karte) genommen.</p>
+                        </td>
+                    </tr>
+                    <tr valign="top">
+                        <th scope="row">Simulierte Position (Lat/Lng)</th>
+                        <td>
+                            <input type="text" name="tmgmt_live_test_lat" value="<?php echo esc_attr(get_option('tmgmt_live_test_lat')); ?>" placeholder="Latitude" />
+                            <input type="text" name="tmgmt_live_test_lng" value="<?php echo esc_attr(get_option('tmgmt_live_test_lng')); ?>" placeholder="Longitude" />
+                        </td>
+                    </tr>
+                    <tr valign="top">
+                        <th scope="row">Simulierte Zeit</th>
+                        <td>
+                            <?php 
+                            $offset = (int)get_option('tmgmt_live_test_time_offset', 0);
+                            $sim_time = current_time('timestamp') + $offset;
+                            $sim_time_iso = date('Y-m-d\TH:i', $sim_time);
+                            ?>
+                            <input type="datetime-local" id="tmgmt_live_sim_time" value="<?php echo esc_attr($sim_time_iso); ?>" onchange="updateOffset(this.value)" />
+                            <input type="hidden" name="tmgmt_live_test_time_offset" id="tmgmt_live_test_time_offset" value="<?php echo esc_attr($offset); ?>" />
+                            <p class="description">Setzen Sie die simulierte Zeit. Der Offset wird automatisch berechnet.</p>
+                            
+                            <script>
+                            function updateOffset(val) {
+                                if (!val) return;
+                                const simDate = new Date(val);
+                                const now = new Date();
+                                // Adjust for timezone offset if needed, but simpler to just let PHP handle it on save if we posted the date.
+                                // But here we are posting the offset.
+                                // Let's do a rough calculation or just rely on the hidden field being updated by PHP on reload?
+                                // Actually, it's better to calculate it here.
+                                const diffSeconds = Math.floor((simDate.getTime() - now.getTime()) / 1000);
+                                document.getElementById('tmgmt_live_test_time_offset').value = diffSeconds;
+                            }
+                            </script>
+                        </td>
+                    </tr>
+                </table>
+                
+                <?php submit_button(); ?>
+            </form>
+            
+            <hr>
+            
+            <form method="post">
+                <?php wp_nonce_field('tmgmt_reset_test_mode'); ?>
+                <button type="submit" name="reset_test_mode" class="button button-secondary" style="color: #d63638; border-color: #d63638;">Test Modus zurücksetzen</button>
             </form>
         </div>
         <?php
