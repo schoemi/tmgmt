@@ -145,19 +145,29 @@ class TMGMT_Confirmation_Manager {
                     $subject_meta = get_post_meta($template_id, '_tmgmt_email_subject', true);
                     if ($subject_meta) $subject = $subject_meta;
 
-                    $content = $template_post->post_content;
+                    $content = get_post_meta($template_id, '_tmgmt_email_body', true);
 
-                    // Simple placeholder replacement (could use Placeholder Parser if needed, but context is limited)
-                    // We have event_id, so we CAN use the parser!
-                    
+                    // Simple placeholder replacement
                     if (class_exists('TMGMT_Placeholder_Parser')) {
-                        $parser = new TMGMT_Placeholder_Parser($entry->event_id);
-                        $subject = $parser->parse($subject);
-                        $content = $parser->parse($content);
+                        $subject = TMGMT_Placeholder_Parser::parse($subject, $entry->event_id);
+                        $content = TMGMT_Placeholder_Parser::parse($content, $entry->event_id);
                     }
 
                     $headers = array('Content-Type: text/html; charset=UTF-8');
-                    wp_mail($entry->recipient_email, $subject, $content, $headers);
+                    
+                    // Attachments from Template
+                    $attachments = array();
+                    $tpl_attachments = get_post_meta($template_id, '_tmgmt_email_attachments', true);
+                    if (is_array($tpl_attachments)) {
+                        foreach ($tpl_attachments as $att_id) {
+                            $path = get_attached_file($att_id);
+                            if ($path && file_exists($path)) {
+                                $attachments[] = $path;
+                            }
+                        }
+                    }
+
+                    wp_mail($entry->recipient_email, $subject, nl2br($content), $headers, $attachments);
                 }
             }
         }
