@@ -5,6 +5,9 @@ class TMGMT_Action_Handler {
     public function __construct() {
         add_action('add_meta_boxes', array($this, 'add_meta_boxes'));
         add_action('wp_ajax_tmgmt_execute_action', array($this, 'handle_execute_action'));
+        add_action('wp_ajax_tmgmt_delete_file', array($this, 'handle_delete_file'));
+        add_action('wp_ajax_tmgmt_get_event_details', array($this, 'handle_get_event_details'));
+        add_action('wp_ajax_nopriv_tmgmt_get_event_details', array($this, 'handle_get_event_details'));
     }
 
     public function add_meta_boxes() {
@@ -214,14 +217,23 @@ class TMGMT_Action_Handler {
                         },
                         error: function() {
                             btn.prop('disabled', false).text(label);
-                            alert('Fehler beim Laden der Vorschau.');
+                            Swal.fire('Fehler', 'Fehler beim Laden der Vorschau.', 'error');
                         }
                     });
                 } else {
                     // Webhook - Confirm?
-                    if (confirm('Möchten Sie die Aktion "' + label + '" wirklich ausführen?')) {
-                        executeAction(actionId, '', null);
-                    }
+                    Swal.fire({
+                        title: 'Aktion ausführen?',
+                        text: 'Möchten Sie die Aktion "' + label + '" wirklich ausführen?',
+                        icon: 'question',
+                        showCancelButton: true,
+                        confirmButtonText: 'Ja, ausführen',
+                        cancelButtonText: 'Abbrechen'
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            executeAction(actionId, '', null);
+                        }
+                    });
                 }
 
                 function executeAction(actionId, note, dialog, extraData, formData) {
@@ -273,16 +285,20 @@ class TMGMT_Action_Handler {
                             }
                             
                             if (response.success) {
-                                alert(response.data.message);
-                                // Reload page to show new status / logs
-                                location.reload();
+                                Swal.fire({
+                                    title: 'Erfolg',
+                                    text: response.data.message,
+                                    icon: 'success'
+                                }).then(() => {
+                                    location.reload();
+                                });
                             } else {
-                                alert('Fehler: ' + (response.data ? response.data.message : 'Unbekannt'));
+                                Swal.fire('Fehler', 'Fehler: ' + (response.data ? response.data.message : 'Unbekannt'), 'error');
                                 btn.prop('disabled', false).text(label);
                             }
                         },
                         error: function() {
-                             alert('Systemfehler');
+                             Swal.fire('Systemfehler', 'Ein unerwarteter Fehler ist aufgetreten.', 'error');
                              btn.prop('disabled', false).text(label);
                         }
                     });
@@ -386,10 +402,6 @@ class TMGMT_Action_Handler {
             $bcc_raw = get_post_meta($email_template_id, '_tmgmt_email_bcc', true);
             $reply_to_raw = get_post_meta($email_template_id, '_tmgmt_email_reply_to', true);
 
-            $recipient = TMGMT_Placeholder_Parser::parse($recipient_raw, $event_id);
-            $subject = TMGMT_Placeholder_Parser::parse($subject_raw, $event_id);
-            $body = TMGMT_Placeholder_Parser::parse($body_raw, $event_id);
-            
             // Optional Headers
             $headers = array('Content-Type: text/html; charset=UTF-8');
             
@@ -510,6 +522,90 @@ class TMGMT_Action_Handler {
         }
 
         wp_send_json_success(array('message' => 'Aktion erfolgreich ausgeführt.'));
+    }
+
+    public function handle_delete_file() {
+        check_ajax_referer('wp_rest', 'nonce');
+
+        if (!current_user_can('upload_files')) {
+             wp_send_json_error(array('message' => 'Keine Berechtigung.'));
+        }
+
+        $attachment_id = isset($_POST['attachment_id']) ? intval($_POST['attachment_id']) : 0;
+        if (!$attachment_id) {
+            wp_send_json_error(array('message' => 'Keine Datei ID.'));
+        }
+
+        // Check if attachment exists and user can delete it
+        if (!current_user_can('delete_post', $attachment_id)) {
+            wp_send_json_error(array('message' => 'Keine Berechtigung zum Löschen dieser Datei.'));
+        }
+
+        $deleted = wp_delete_attachment($attachment_id, true);
+        if ($deleted) {
+            wp_send_json_success(array('message' => 'Datei gelöscht.'));
+        } else {
+            wp_send_json_error(array('message' => 'Fehler beim Löschen.'));
+        }
+    }
+
+    public function handle_get_event_details() {
+        // Nonce check is good practice, but if we want public access we might skip it or use a public nonce
+        // check_ajax_referer('wp_rest', 'nonce'); 
+
+        $event_id = isset($_POST['event_id']) ? intval($_POST['event_id']) : 0;
+        if (!$event_id) {
+            wp_send_json_error(array('message' => 'Keine Event ID.'));
+        }
+
+        $post = get_post($event_id);
+        if (!$post || $post->post_type !== 'event') {
+            wp_send_json_error(array('message' => 'Event nicht gefunden.'));
+        }
+
+        $meta = get_post_meta($event_id);
+        $fields = array();
+
+        // Helper to get meta safely
+        $get_meta = function($key) use ($meta) {
+            return isset($meta[$key]) ? $meta[$key][0] : '';
+        };
+
+        // Basic Info
+        $fields['title'] = $post->post_title;
+        $fields['date'] = $get_meta('_tmgmt_event_date');
+        $fields['start_time'] = $get_meta('_tmgmt_event_start_time');
+        $fields['arrival_time'] = $get_meta('_tmgmt_event_arrival_time');
+        $fields['departure_time'] = $get_meta('_tmgmt_event_departure_time');
+        
+        // Venue
+        $fields['venue_name'] = $get_meta('_tmgmt_venue_name');
+        $fields['venue_street'] = $get_meta('_tmgmt_venue_street');
+        $fields['venue_number'] = $get_meta('_tmgmt_venue_number');
+        $fields['venue_zip'] = $get_meta('_tmgmt_venue_zip');
+        $fields['venue_city'] = $get_meta('_tmgmt_venue_city');
+        $fields['venue_country'] = $get_meta('_tmgmt_venue_country');
+        $fields['arrival_notes'] = $get_meta('_tmgmt_arrival_notes');
+
+        // Contacts
+        $contacts = array();
+        $contacts[] = array('role' => 'Vertrag', 'name' => $get_meta('_tmgmt_contact_firstname') . ' ' . $get_meta('_tmgmt_contact_lastname'), 'phone' => $get_meta('_tmgmt_contact_phone_contract'), 'email' => $get_meta('_tmgmt_contact_email_contract'));
+        $contacts[] = array('role' => 'Technik', 'name' => $get_meta('_tmgmt_contact_name_tech'), 'phone' => $get_meta('_tmgmt_contact_phone_tech'), 'email' => $get_meta('_tmgmt_contact_email_tech'));
+        $contacts[] = array('role' => 'Programm', 'name' => $get_meta('_tmgmt_contact_name_program'), 'phone' => $get_meta('_tmgmt_contact_phone_program'), 'email' => $get_meta('_tmgmt_contact_email_program'));
+        
+        $fields['contacts'] = array_filter($contacts, function($c) {
+            return !empty(trim($c['name'])) || !empty($c['phone']) || !empty($c['email']);
+        });
+
+        // Permissions
+        $can_edit = current_user_can('edit_post', $event_id);
+        $edit_link = $can_edit ? get_edit_post_link($event_id, 'raw') : '';
+
+        wp_send_json_success(array(
+            'data' => $fields,
+            'can_edit' => $can_edit,
+            'edit_link' => $edit_link
+        ));
     }
 
     private function get_event_payload($event_id) {

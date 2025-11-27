@@ -147,7 +147,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
 
             if (!allFilled) {
-                alert('Bitte alle Felder ausfüllen.');
+                Swal.fire('Fehlende Angaben', 'Bitte alle Felder ausfüllen.', 'warning');
                 return;
             }
 

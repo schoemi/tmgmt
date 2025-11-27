@@ -96,6 +96,15 @@ class TMGMT_Event_Meta_Boxes {
         );
 
         add_meta_box(
+            'tmgmt_event_files',
+            'Dateien',
+            array($this, 'render_event_files_box'),
+            'event',
+            'normal',
+            'default'
+        );
+
+        add_meta_box(
             'tmgmt_pdf_export',
             'PDF Export',
             array($this, 'render_pdf_export_box'),
@@ -381,7 +390,7 @@ class TMGMT_Event_Meta_Boxes {
             $('#tmgmt-save-location-btn').on('click', function() {
                 const name = $('#tmgmt_venue_name').val();
                 if (!name) {
-                    alert('Bitte geben Sie einen Namen für den Veranstaltungsort ein.');
+                    Swal.fire('Fehlende Angabe', 'Bitte geben Sie einen Namen für den Veranstaltungsort ein.', 'warning');
                     return;
                 }
                 
@@ -406,14 +415,14 @@ class TMGMT_Event_Meta_Boxes {
                     success: function(res) {
                         btn.prop('disabled', false).text('Als neuen Ort speichern');
                         if (res.success) {
-                            alert('Ort erfolgreich gespeichert!');
+                            Swal.fire('Gespeichert', 'Ort erfolgreich gespeichert!', 'success');
                         } else {
-                            alert('Fehler: ' + res.data);
+                            Swal.fire('Fehler', 'Fehler: ' + res.data, 'error');
                         }
                     },
                     error: function() {
                         btn.prop('disabled', false).text('Als neuen Ort speichern');
-                        alert('Ein Fehler ist aufgetreten.');
+                        Swal.fire('Fehler', 'Ein Fehler ist aufgetreten.', 'error');
                     }
                 });
             });
@@ -757,7 +766,7 @@ class TMGMT_Event_Meta_Boxes {
                         "Erstellen": function() {
                             var templateId = customSetlistTemplateSelect.val();
                             if (!templateId) {
-                                alert('Bitte wählen Sie eine Vorlage.');
+                                Swal.fire('Fehlende Angabe', 'Bitte wählen Sie eine Vorlage.', 'warning');
                                 return;
                             }
                             
@@ -777,7 +786,7 @@ class TMGMT_Event_Meta_Boxes {
                                     // Reload current page to update selection
                                     location.reload();
                                 } else {
-                                    alert('Fehler: ' + (response.data || 'Unbekannter Fehler'));
+                                    Swal.fire('Fehler', 'Fehler: ' + (response.data || 'Unbekannter Fehler'), 'error');
                                     btn.prop('disabled', false).text('Erstellen');
                                 }
                             });
@@ -850,10 +859,10 @@ class TMGMT_Event_Meta_Boxes {
                     _wpnonce: tmgmt_vars.nonce
                 }, function(response) {
                     if (response.success) {
-                        alert(response.message);
+                        Swal.fire('Gesendet', response.message, 'success');
                         dialogRef.dialog("close");
                     } else {
-                        alert('Fehler: ' + response.message);
+                        Swal.fire('Fehler', 'Fehler: ' + response.message, 'error');
                     }
                     btn.prop('disabled', false).text('Senden');
                 }).fail(function(xhr) {
@@ -861,13 +870,49 @@ class TMGMT_Event_Meta_Boxes {
                     if (xhr.responseJSON && xhr.responseJSON.message) {
                         msg = xhr.responseJSON.message;
                     }
-                    alert('Fehler: ' + msg);
+                    Swal.fire('Fehler', 'Fehler: ' + msg, 'error');
                     btn.prop('disabled', false).text('Senden');
                 });
             }
         });
         </script>
         <?php
+    }
+
+    public function render_event_files_box($post) {
+        $attachments = get_posts(array(
+            'post_type' => 'attachment',
+            'posts_per_page' => -1,
+            'post_parent' => $post->ID,
+        ));
+
+        if (empty($attachments)) {
+            echo '<p>Keine Dateien vorhanden.</p>';
+            return;
+        }
+
+        echo '<table class="widefat fixed striped">';
+        echo '<thead><tr><th>Datei</th><th>Datum</th><th>Typ</th><th>Aktionen</th></tr></thead>';
+        echo '<tbody>';
+        foreach ($attachments as $attachment) {
+            $url = wp_get_attachment_url($attachment->ID);
+            $filename = basename($url);
+            $date = get_the_date('d.m.Y H:i', $attachment->ID);
+            $type = get_post_mime_type($attachment->ID);
+            
+            echo '<tr>';
+            echo '<td><a href="' . esc_url($url) . '" target="_blank">' . esc_html($filename) . '</a></td>';
+            echo '<td>' . esc_html($date) . '</td>';
+            echo '<td>' . esc_html($type) . '</td>';
+            echo '<td>';
+            if (current_user_can('delete_post', $attachment->ID)) {
+                echo '<button type="button" class="button tmgmt-delete-file" data-id="' . esc_attr($attachment->ID) . '">Löschen</button>';
+            }
+            echo '</td>';
+            echo '</tr>';
+        }
+        echo '</tbody>';
+        echo '</table>';
     }
 
     public function save_meta_boxes($post_id) {

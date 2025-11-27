@@ -203,7 +203,11 @@ jQuery(document).ready(function($) {
         console.log('Address data:', street, number, zip, city, country);
 
         if (!street || !city) {
-            alert('Bitte mindestens Straße und Ort angeben.');
+            Swal.fire({
+                icon: 'warning',
+                title: 'Fehlende Angaben',
+                text: 'Bitte mindestens Straße und Ort angeben.'
+            });
             return;
         }
 
@@ -232,12 +236,74 @@ jQuery(document).ready(function($) {
                     
                     initMap(lat, lon);
                 } else {
-                    alert('Adresse konnte nicht gefunden werden.');
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Nicht gefunden',
+                        text: 'Adresse konnte nicht gefunden werden.'
+                    });
                 }
             },
             error: function() {
                 btn.prop('disabled', false).text('Adresse auflösen');
-                alert('Fehler bei der Geocodierung.');
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Fehler',
+                    text: 'Fehler bei der Geocodierung.'
+                });
+            }
+        });
+    });
+    
+    // --- File Deletion ---
+    $(document).on('click', '.tmgmt-delete-file', function() {
+        var btn = $(this);
+        var attachmentId = btn.data('id');
+
+        Swal.fire({
+            title: 'Datei löschen?',
+            text: "Möchten Sie diese Datei wirklich löschen? Dies kann nicht rückgängig gemacht werden.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Ja, löschen!',
+            cancelButtonText: 'Abbrechen'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'tmgmt_delete_file',
+                        attachment_id: attachmentId,
+                        nonce: tmgmt_vars.nonce
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            btn.closest('tr').fadeOut(function() {
+                                $(this).remove();
+                            });
+                            Swal.fire(
+                                'Gelöscht!',
+                                'Die Datei wurde gelöscht.',
+                                'success'
+                            );
+                        } else {
+                            Swal.fire(
+                                'Fehler!',
+                                response.data.message,
+                                'error'
+                            );
+                        }
+                    },
+                    error: function() {
+                        Swal.fire(
+                            'Fehler!',
+                            'Fehler beim Löschen.',
+                            'error'
+                        );
+                    }
+                });
             }
         });
     });

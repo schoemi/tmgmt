@@ -29,6 +29,10 @@ class TMGMT_Assets {
             wp_enqueue_style('leaflet-css', 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css');
             wp_enqueue_script('leaflet-js', 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js', array(), '1.9.4', true);
 
+            // SweetAlert2
+            wp_enqueue_script('sweetalert2', 'https://cdn.jsdelivr.net/npm/sweetalert2@11', array(), '11.0.0', true);
+            wp_enqueue_style('sweetalert2-css', 'https://cdn.jsdelivr.net/npm/@sweetalert2/theme-wordpress-admin/wordpress-admin.css');
+
             // Live View Assets
             wp_enqueue_style(
                 'tmgmt-live-view-css',
@@ -48,6 +52,7 @@ class TMGMT_Assets {
             wp_localize_script('tmgmt-live-view-js', 'tmgmt_live_vars', array(
                 'tour_id' => $post->ID,
                 'api_url' => rest_url('tmgmt/v1'),
+                'ajaxurl' => admin_url('admin-ajax.php'),
                 'nonce' => wp_create_nonce('wp_rest')
             ));
         }
@@ -69,6 +74,10 @@ class TMGMT_Assets {
                 // Leaflet
                 wp_enqueue_style('leaflet-css', 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css');
                 wp_enqueue_script('leaflet-js', 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js', array(), '1.9.4', true);
+
+                // SweetAlert2
+                wp_enqueue_script('sweetalert2', 'https://cdn.jsdelivr.net/npm/sweetalert2@11', array(), '11.0.0', true);
+                wp_enqueue_style('sweetalert2-css', 'https://cdn.jsdelivr.net/npm/@sweetalert2/theme-wordpress-admin/wordpress-admin.css');
 
                 wp_enqueue_script(
                     'tmgmt-admin-script',

@@ -454,4 +454,84 @@ jQuery(document).ready(function($) {
     
     // Poll for updates (every 10s)
     setInterval(loadTourData, 10000);
+
+    // --- Event Details Modal ---
+    $(document).on('click', '.tmgmt-view-details-btn', function(e) {
+        e.preventDefault();
+        var eventId = $(this).data('id');
+        
+        // Show Loading
+        Swal.fire({
+            title: 'Lade Details...',
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
+        $.post(tmgmt_live_vars.ajaxurl, {
+            action: 'tmgmt_get_event_details',
+            event_id: eventId
+        }, function(response) {
+            if (response.success) {
+                var data = response.data.data;
+                var canEdit = response.data.can_edit;
+                var editLink = response.data.edit_link;
+                
+                var html = '<div style="text-align:left; font-size:0.9em;">';
+                
+                // Date & Time
+                html += '<p><strong>Datum:</strong> ' + (data.date || '-') + '</p>';
+                html += '<p><strong>Zeiten:</strong><br>';
+                html += 'Ankunft: ' + (data.arrival_time || '-') + '<br>';
+                html += 'Auftritt: ' + (data.start_time || '-') + '<br>';
+                html += 'Abfahrt: ' + (data.departure_time || '-') + '</p>';
+                
+                // Venue
+                html += '<hr><p><strong>Veranstaltungsort:</strong><br>';
+                html += '<strong>' + (data.venue_name || '-') + '</strong><br>';
+                html += (data.venue_street || '') + ' ' + (data.venue_number || '') + '<br>';
+                html += (data.venue_zip || '') + ' ' + (data.venue_city || '') + '<br>';
+                html += (data.venue_country || '') + '</p>';
+                
+                if (data.arrival_notes) {
+                    html += '<p><strong>Anreise-Infos:</strong><br><em>' + data.arrival_notes + '</em></p>';
+                }
+                
+                // Contacts
+                if (data.contacts && data.contacts.length > 0) {
+                    html += '<hr><p><strong>Kontakte:</strong></p>';
+                    data.contacts.forEach(function(c) {
+                        html += '<div style="margin-bottom:5px;">';
+                        html += '<strong>' + c.role + ':</strong> ' + (c.name || '-') + '<br>';
+                        if (c.phone) html += '<a href="tel:' + c.phone + '">' + c.phone + '</a><br>';
+                        if (c.email) html += '<a href="mailto:' + c.email + '">' + c.email + '</a>';
+                        html += '</div>';
+                    });
+                }
+                
+                html += '</div>';
+
+                Swal.fire({
+                    title: data.title,
+                    html: html,
+                    width: 600,
+                    showCloseButton: true,
+                    showConfirmButton: canEdit,
+                    confirmButtonText: '<i class="fas fa-edit"></i> Bearbeiten',
+                    confirmButtonColor: '#0073aa',
+                    showCancelButton: true,
+                    cancelButtonText: 'Schließen'
+                }).then((result) => {
+                    if (result.isConfirmed && canEdit) {
+                        window.open(editLink, '_blank');
+                    }
+                });
+
+            } else {
+                Swal.fire('Fehler', response.data.message, 'error');
+            }
+        }).fail(function() {
+            Swal.fire('Fehler', 'Verbindungsfehler.', 'error');
+        });
+    });
 });

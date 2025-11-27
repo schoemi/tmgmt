@@ -4,6 +4,7 @@ class TMGMT_PDF_Generator {
 
     public function __construct() {
         add_action('admin_post_tmgmt_generate_setlist_pdf', array($this, 'handle_pdf_generation'));
+        add_action('admin_post_tmgmt_export_tours_pdf', array($this, 'handle_tour_export_pdf'));
     }
 
     public function handle_pdf_generation() {
@@ -100,6 +101,222 @@ class TMGMT_PDF_Generator {
                 $mpdf->Output('Setlist-' . $event_id . '.pdf', $output_mode);
                 exit;
             }
+
+        } catch (\Mpdf\MpdfException $e) {
+            return new WP_Error('mpdf_error', $e->getMessage());
+        }
+    }
+
+    public function handle_tour_export_pdf() {
+        if (!current_user_can('edit_posts')) {
+            wp_die('Unauthorized');
+        }
+
+        $start_date = isset($_POST['export_start']) ? sanitize_text_field($_POST['export_start']) : '';
+        $end_date = isset($_POST['export_end']) ? sanitize_text_field($_POST['export_end']) : '';
+
+        if (!$start_date || !$end_date) {
+            wp_die('Bitte Zeitraum wählen.');
+        }
+
+        // Clear output
+        while (ob_get_level()) {
+            ob_end_clean();
+        }
+
+        $result = $this->generate_tour_export_pdf($start_date, $end_date, 'I');
+
+        if (is_wp_error($result)) {
+            wp_die($result->get_error_message());
+        }
+    }
+
+    public function generate_tour_export_pdf($start_date, $end_date, $output_mode = 'I') {
+        if (!class_exists('\Mpdf\Mpdf')) {
+            return new WP_Error('mpdf_missing', 'mPDF library is not installed.');
+        }
+
+        // 1. Fetch Tours
+        $args = array(
+            'post_type' => 'tmgmt_tour',
+            'numberposts' => -1,
+            'meta_query' => array(
+                'relation' => 'AND',
+                array(
+                    'key' => 'tmgmt_tour_date',
+                    'value' => array($start_date, $end_date),
+                    'compare' => 'BETWEEN'
+                ),
+                array(
+                    'key' => 'tmgmt_tour_mode',
+                    'value' => 'real'
+                )
+            ),
+            'orderby' => 'meta_value',
+            'meta_key' => 'tmgmt_tour_date',
+            'order' => 'ASC'
+        );
+        
+        $posts = get_posts($args);
+        
+        if (empty($posts)) {
+            // Debugging: Check if any tours exist in that range regardless of mode
+            $check_args = array(
+                'post_type' => 'tmgmt_tour',
+                'numberposts' => 1,
+                'meta_query' => array(
+                    array(
+                        'key' => 'tmgmt_tour_date',
+                        'value' => array($start_date, $end_date),
+                        'compare' => 'BETWEEN'
+                    )
+                )
+            );
+            $check_posts = get_posts($check_args);
+            if (!empty($check_posts)) {
+                return new WP_Error('no_real_tours', 'Touren gefunden, aber keine mit Status "Echtplanung".');
+            }
+            return new WP_Error('no_tours', 'Keine Touren im gewählten Zeitraum gefunden (' . $start_date . ' bis ' . $end_date . ').');
+        }
+
+        $tours_data = array();
+
+        foreach ($posts as $post) {
+            $data_json = get_post_meta($post->ID, 'tmgmt_tour_data', true);
+            $schedule = json_decode($data_json, true);
+            
+            if (!is_array($schedule)) continue;
+
+            $waypoints = array();
+            $total_distance = 0;
+
+            foreach ($schedule as $item) {
+                $type = isset($item['type']) ? $item['type'] : '';
+                
+                // Filter relevant waypoints
+                // We want: Start, Shuttle Stops, Events
+                // We might also want "End" if it's different?
+                
+                $is_relevant = false;
+                $label = '';
+                $time = '';
+                $name = '';
+                $address = '';
+                $notes = '';
+                $lat = '';
+                $lng = '';
+
+                if ($type === 'start') {
+                    $is_relevant = true;
+                    $label = 'Start / Laden';
+                    $time = isset($item['departure_time']) ? $item['departure_time'] : ''; // Start time
+                    $name = isset($item['location']) ? $item['location'] : 'Start';
+                    $address = isset($item['address']) ? $item['address'] : '';
+                    $lat = isset($item['lat']) ? $item['lat'] : '';
+                    $lng = isset($item['lng']) ? $item['lng'] : '';
+                } elseif ($type === 'shuttle_stop') {
+                    $is_relevant = true;
+                    $label = 'Shuttle Stop';
+                    $time = isset($item['arrival_time']) ? $item['arrival_time'] : '';
+                    $name = isset($item['location']) ? $item['location'] : 'Stop';
+                    $address = isset($item['address']) ? $item['address'] : '';
+                    $lat = isset($item['lat']) ? $item['lat'] : '';
+                    $lng = isset($item['lng']) ? $item['lng'] : '';
+                } elseif ($type === 'event') {
+                    $is_relevant = true;
+                    $label = 'Auftritt';
+                    $time = isset($item['arrival_time']) ? $item['arrival_time'] : '';
+                    $name = isset($item['location']) ? $item['location'] : 'Event';
+                    $address = isset($item['address']) ? $item['address'] : '';
+                    $notes = isset($item['arrival_notes']) ? $item['arrival_notes'] : ''; // Need to fetch this?
+                    // Wait, schedule item might not have arrival_notes if it wasn't saved in tour data.
+                    // Tour data usually has minimal info. Let's check if we need to fetch event meta.
+                    // In class-tour-manager.php, we see:
+                    // 'address' => $event['address'],
+                    // 'arrival_notes' is NOT in the schedule array in class-tour-manager.php!
+                    // We need to fetch it from the event ID.
+                    
+                    if (isset($item['id'])) {
+                        $notes = get_post_meta($item['id'], '_tmgmt_arrival_notes', true);
+                        
+                        // Fetch address from event meta to ensure it is up to date
+                        $street = get_post_meta($item['id'], '_tmgmt_venue_street', true);
+                        $number = get_post_meta($item['id'], '_tmgmt_venue_number', true);
+                        $zip = get_post_meta($item['id'], '_tmgmt_venue_zip', true);
+                        $city = get_post_meta($item['id'], '_tmgmt_venue_city', true);
+                        
+                        $full_address = array();
+                        if ($street) $full_address[] = $street . ' ' . $number;
+                        if ($zip || $city) $full_address[] = trim($zip . ' ' . $city);
+                        
+                        if (!empty($full_address)) {
+                            $address = implode(', ', $full_address);
+                        }
+                    }
+                    
+                    $lat = isset($item['lat']) ? $item['lat'] : '';
+                    $lng = isset($item['lng']) ? $item['lng'] : '';
+                } elseif ($type === 'end') {
+                    $is_relevant = true;
+                    $label = 'Rückkehr / Ende';
+                    $time = isset($item['arrival_time']) ? $item['arrival_time'] : '';
+                    $name = isset($item['location']) ? $item['location'] : 'Ende';
+                    $address = isset($item['address']) ? $item['address'] : '';
+                    $lat = isset($item['lat']) ? $item['lat'] : '';
+                    $lng = isset($item['lng']) ? $item['lng'] : '';
+                }
+
+                if (isset($item['distance'])) {
+                    $total_distance += floatval($item['distance']);
+                }
+
+                if ($is_relevant) {
+                    $waypoints[] = array(
+                        'type_label' => $label,
+                        'time' => $time,
+                        'name' => $name,
+                        'address' => $address,
+                        'notes' => $notes,
+                        'lat' => $lat,
+                        'lng' => $lng
+                    );
+                }
+            }
+
+            $tours_data[] = array(
+                'date' => get_post_meta($post->ID, 'tmgmt_tour_date', true),
+                'stop_count' => count($waypoints),
+                'total_distance' => $total_distance,
+                'waypoints' => $waypoints
+            );
+        }
+
+        $org_data = $this->get_organization_data();
+
+        // 2. Render HTML
+        ob_start();
+        $tours = $tours_data; // Make available to template
+        include TMGMT_PLUGIN_DIR . 'templates/tour-export.php';
+        $html = ob_get_clean();
+
+        // 3. Generate PDF
+        try {
+            $mpdf = new \Mpdf\Mpdf([
+                'mode' => 'utf-8',
+                'format' => 'A4',
+                'orientation' => 'P'
+            ]);
+            
+            $mpdf->SetTitle('Bus Briefing - ' . $start_date . ' bis ' . $end_date);
+            $mpdf->SetAuthor($org_data['name']);
+            
+            $mpdf->WriteHTML($html);
+
+            header('Content-Type: application/pdf');
+            header('Content-Disposition: inline; filename="Bus-Briefing.pdf"');
+            
+            $mpdf->Output('Bus-Briefing.pdf', $output_mode);
+            return true;
 
         } catch (\Mpdf\MpdfException $e) {
             return new WP_Error('mpdf_error', $e->getMessage());

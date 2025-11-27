@@ -68,9 +68,9 @@ jQuery(document).ready(function($) {
         $.post(tmgmt_vars.ajaxurl, data, function(response) {
             btn.prop('disabled', false);
             if (response.success) {
-                alert('Einstellungen gespeichert.');
+                Swal.fire('Gespeichert', 'Einstellungen gespeichert.', 'success');
             } else {
-                alert('Fehler: ' + response.data);
+                Swal.fire('Fehler', 'Fehler: ' + response.data, 'error');
             }
         });
     });
@@ -85,7 +85,7 @@ jQuery(document).ready(function($) {
         var tour_id = $('#tmgmt_tour_id').val();
         
         if (!date) {
-            alert('Bitte wählen Sie ein Datum.');
+            Swal.fire('Fehlende Angabe', 'Bitte wählen Sie ein Datum.', 'warning');
             return;
         }
         
@@ -109,7 +109,7 @@ jQuery(document).ready(function($) {
             if (!saveResponse.success) {
                 btn.prop('disabled', false);
                 spinner.removeClass('is-active');
-                alert('Fehler beim Speichern: ' + saveResponse.data);
+                Swal.fire('Fehler', 'Fehler beim Speichern: ' + saveResponse.data, 'error');
                 return;
             }
 
@@ -143,13 +143,13 @@ jQuery(document).ready(function($) {
                         if (saveResultResponse.success) {
                             location.reload(); // Reload to show new data
                         } else {
-                            alert('Fehler beim Speichern des Ergebnisses.');
+                            Swal.fire('Fehler', 'Fehler beim Speichern des Ergebnisses.', 'error');
                         }
                     });
                 } else {
                     btn.prop('disabled', false);
                     spinner.removeClass('is-active');
-                    alert('Fehler bei der Berechnung: ' + response.data);
+                    Swal.fire('Fehler', 'Fehler bei der Berechnung: ' + response.data, 'error');
                 }
             });
         });

@@ -121,6 +121,10 @@ $dropoff_shuttle_name = $dropoff_shuttle_id ? get_the_title($dropoff_shuttle_id)
                                 echo '<br>';
                                 if (isset($item['address'])) echo '<small>' . esc_html($item['address']) . '</small>';
                                 elseif (isset($item['location'])) echo '<small>' . esc_html($item['location']) . '</small>';
+                                
+                                if (isset($item['id'])) {
+                                    echo '<br><button type="button" class="tmgmt-view-details-btn" data-id="' . esc_attr($item['id']) . '" style="margin-top:5px; cursor:pointer; background:none; border:none; color:#0073aa; text-decoration:underline; padding:0;"><i class="fas fa-info-circle"></i> Details anzeigen</button>';
+                                }
                             } else {
                                 if (isset($item['location'])) echo '<strong>' . esc_html($item['location']) . '</strong><br>';
                                 if (isset($item['address'])) echo '<small>' . esc_html($item['address']) . '</small>';
@@ -208,7 +212,7 @@ $dropoff_shuttle_name = $dropoff_shuttle_id ? get_the_title($dropoff_shuttle_id)
                     <!-- Timeline items will be injected by JS -->
                 </div>
 
-                <div id="tmgmt-test-controls" style="display:none;">
+                                <div id="tmgmt-test-controls" style="display:none;">
                     <h3>Test Modus</h3>
                     <div class="control-group" style="margin-bottom: 10px; text-align: center;">
                         <input type="datetime-local" id="tmgmt-test-time" style="font-size: 12px; padding: 4px; width: 180px;">
@@ -224,6 +228,94 @@ $dropoff_shuttle_name = $dropoff_shuttle_id ? get_the_title($dropoff_shuttle_id)
             </div>
         </div>
     </div>
+
+<?php get_footer(); ?>
+            </div>
+        </div>
+    </div>
 </div>
+
+<script>
+jQuery(document).ready(function($) {
+    $('.tmgmt-view-details-btn').on('click', function(e) {
+        e.preventDefault();
+        var eventId = $(this).data('id');
+        
+        // Show Loading
+        Swal.fire({
+            title: 'Lade Details...',
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
+        $.post(tmgmt_live_vars.ajaxurl, {
+            action: 'tmgmt_get_event_details',
+            event_id: eventId
+        }, function(response) {
+            if (response.success) {
+                var data = response.data.data;
+                var canEdit = response.data.can_edit;
+                var editLink = response.data.edit_link;
+                
+                var html = '<div style="text-align:left; font-size:0.9em;">';
+                
+                // Date & Time
+                html += '<p><strong>Datum:</strong> ' + (data.date || '-') + '</p>';
+                html += '<p><strong>Zeiten:</strong><br>';
+                html += 'Ankunft: ' + (data.arrival_time || '-') + '<br>';
+                html += 'Auftritt: ' + (data.start_time || '-') + '<br>';
+                html += 'Abfahrt: ' + (data.departure_time || '-') + '</p>';
+                
+                // Venue
+                html += '<hr><p><strong>Veranstaltungsort:</strong><br>';
+                html += '<strong>' + (data.venue_name || '-') + '</strong><br>';
+                html += (data.venue_street || '') + ' ' + (data.venue_number || '') + '<br>';
+                html += (data.venue_zip || '') + ' ' + (data.venue_city || '') + '<br>';
+                html += (data.venue_country || '') + '</p>';
+                
+                if (data.arrival_notes) {
+                    html += '<p><strong>Anreise-Infos:</strong><br><em>' + data.arrival_notes + '</em></p>';
+                }
+                
+                // Contacts
+                if (data.contacts && data.contacts.length > 0) {
+                    html += '<hr><p><strong>Kontakte:</strong></p>';
+                    data.contacts.forEach(function(c) {
+                        html += '<div style="margin-bottom:5px;">';
+                        html += '<strong>' + c.role + ':</strong> ' + (c.name || '-') + '<br>';
+                        if (c.phone) html += '<a href="tel:' + c.phone + '">' + c.phone + '</a><br>';
+                        if (c.email) html += '<a href="mailto:' + c.email + '">' + c.email + '</a>';
+                        html += '</div>';
+                    });
+                }
+                
+                html += '</div>';
+
+                Swal.fire({
+                    title: data.title,
+                    html: html,
+                    width: 600,
+                    showCloseButton: true,
+                    showConfirmButton: canEdit,
+                    confirmButtonText: '<i class="fas fa-edit"></i> Bearbeiten',
+                    confirmButtonColor: '#0073aa',
+                    showCancelButton: true,
+                    cancelButtonText: 'Schließen'
+                }).then((result) => {
+                    if (result.isConfirmed && canEdit) {
+                        window.open(editLink, '_blank');
+                    }
+                });
+
+            } else {
+                Swal.fire('Fehler', response.data.message, 'error');
+            }
+        }).fail(function() {
+            Swal.fire('Fehler', 'Verbindungsfehler.', 'error');
+        });
+    });
+});
+</script>
 
 <?php get_footer(); ?>

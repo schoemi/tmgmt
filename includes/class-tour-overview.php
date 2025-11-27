@@ -107,6 +107,28 @@ class TMGMT_Tour_Overview {
             </div>
         </form>
 
+        <!-- Bulk Export -->
+        <div style="margin: 20px 0; background: #fff; padding: 15px; border: 1px solid #ccd0d4; box-shadow: 0 1px 1px rgba(0,0,0,.04);">
+            <h3 style="margin-top:0;">Bulk Export (Bus-Briefing)</h3>
+            <p>Exportiert alle Touren mit Status "Echtplanung" im gewählten Zeitraum.</p>
+            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" target="_blank">
+                <input type="hidden" name="action" value="tmgmt_export_tours_pdf">
+                <div style="display: flex; gap: 15px; align-items: flex-end;">
+                    <div>
+                        <label for="export_start" style="display:block; font-weight:bold; margin-bottom:5px;">Von</label>
+                        <input type="date" name="export_start" id="export_start" value="<?php echo $year; ?>-01-01" required>
+                    </div>
+                    <div>
+                        <label for="export_end" style="display:block; font-weight:bold; margin-bottom:5px;">Bis</label>
+                        <input type="date" name="export_end" id="export_end" value="<?php echo $year; ?>-12-31" required>
+                    </div>
+                    <div>
+                        <button type="submit" class="button button-secondary"><span class="dashicons dashicons-pdf" style="margin-top:3px;"></span> PDF Exportieren</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
         <?php
         // Calculate Statistics
         $count_real_tours = 0;

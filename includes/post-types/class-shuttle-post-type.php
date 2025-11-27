@@ -135,7 +135,7 @@ class TMGMT_Shuttle_Post_Type {
                 var lngInput = row.find('input[name="tmgmt_stops_lng[]"]');
                 
                 if (!address) {
-                    alert('Bitte erst eine Adresse eingeben.');
+                    Swal.fire('Fehlende Angabe', 'Bitte erst eine Adresse eingeben.', 'warning');
                     return;
                 }
                 
@@ -148,11 +148,11 @@ class TMGMT_Shuttle_Post_Type {
                         latInput.val(data[0].lat);
                         lngInput.val(data[0].lon);
                     } else {
-                        alert('Adresse nicht gefunden.');
+                        Swal.fire('Nicht gefunden', 'Adresse nicht gefunden.', 'error');
                     }
                 }).fail(function() {
                     btn.prop('disabled', false);
-                    alert('Fehler beim Abrufen der Geodaten.');
+                    Swal.fire('Fehler', 'Fehler beim Abrufen der Geodaten.', 'error');
                 });
             });
         });
