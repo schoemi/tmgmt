@@ -196,12 +196,12 @@ $dropoff_shuttle_name = $dropoff_shuttle_id ? get_the_title($dropoff_shuttle_id)
 
                 <div id="tmgmt-test-controls" style="display:none;">
                     <h3>Test Modus</h3>
-                    <div class="control-group">
+                    <div class="control-group" style="margin-bottom: 10px; text-align: center;">
+                        <input type="datetime-local" id="tmgmt-test-time" style="font-size: 12px; padding: 4px; width: 180px;">
+                    </div>
+                    <div class="control-group" style="text-align: center;">
                         <button type="button" class="tmgmt-btn-test" data-action="offset" data-value="-15">-15m</button>
                         <button type="button" class="tmgmt-btn-test" data-action="offset" data-value="-5">-5m</button>
-                        
-                        <input type="datetime-local" id="tmgmt-test-time" style="font-size: 12px; padding: 4px; width: 140px;">
-                        
                         <button type="button" class="tmgmt-btn-test" data-action="offset" data-value="5">+5m</button>
                         <button type="button" class="tmgmt-btn-test" data-action="offset" data-value="15">+15m</button>
                     </div>

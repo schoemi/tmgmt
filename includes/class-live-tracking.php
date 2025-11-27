@@ -56,14 +56,44 @@ class TMGMT_Live_Tracking {
                 // We only care about items with location and time
                 if (empty($item['lat']) || empty($item['lng'])) continue;
 
+                $type = isset($item['type']) ? $item['type'] : 'unknown';
+                
+                // Determine Name based on Type
+                $name = 'Unbekannt';
+                if (!empty($item['location_name'])) {
+                    $name = $item['location_name'];
+                } elseif (!empty($item['location'])) {
+                    $name = $item['location'];
+                } elseif (!empty($item['address'])) {
+                    $name = $item['address'];
+                }
+
+                if ($type === 'event' && !empty($item['title'])) {
+                    $name = $item['title'];
+                } elseif ($type === 'travel') {
+                    $to = isset($item['to']) ? $item['to'] : '';
+                    $name = $to ? "Fahrt nach $to" : "Fahrt";
+                } elseif ($type === 'shuttle_travel') {
+                    $to = isset($item['to']) ? $item['to'] : '';
+                    $name = $to ? "Shuttle nach $to" : "Shuttle Fahrt";
+                } elseif ($type === 'start') {
+                    $name = ($name !== 'Unbekannt') ? "Start: $name" : "Start";
+                } elseif ($type === 'shuttle_stop') {
+                    $name = ($name !== 'Unbekannt') ? "Shuttle: $name" : "Shuttle Stop";
+                }
+
                 $wp = array(
-                    'type' => isset($item['type']) ? $item['type'] : 'unknown',
-                    'name' => isset($item['location_name']) ? $item['location_name'] : 'Unbekannt',
+                    'type' => $type,
+                    'name' => $name,
                     'lat' => floatval($item['lat']),
                     'lng' => floatval($item['lng']),
                     'planned_arrival' => isset($item['arrival_time']) ? $item['arrival_time'] : null,
                     'planned_departure' => isset($item['departure_time']) ? $item['departure_time'] : null,
-                    'event_id' => isset($item['id']) ? $item['id'] : null
+                    'event_id' => isset($item['id']) ? $item['id'] : null,
+                    // Extra details for popup
+                    'event_name' => isset($item['title']) ? $item['title'] : '',
+                    'organizer' => isset($item['organizer']) ? $item['organizer'] : '',
+                    'show_start' => isset($item['show_start']) ? $item['show_start'] : '',
                 );
                 
                 $waypoints[] = $wp;

@@ -158,17 +158,26 @@
     margin-bottom: 5px;
 }
 
+/* Test Controls */
+#tmgmt-test-controls .control-group {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
 .tmgmt-btn-test {
     padding: 4px 8px;
     font-size: 12px;
     cursor: pointer;
-    background: #fff;
+    background: #f7f7f7;
     border: 1px solid #ccc;
     border-radius: 3px;
 }
 
 .tmgmt-btn-test:hover {
-    background: #f0f0f0;
+    background: #eee;
+    border-color: #999;
 }
 
 .hint {

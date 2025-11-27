@@ -106,6 +106,7 @@ jQuery(document).ready(function($) {
             let color = '#3388ff';
             if (wp.type === 'start') color = '#28a745';
             if (wp.type === 'end') color = '#dc3545';
+            if (wp.type && wp.type.indexOf('shuttle') !== -1) color = '#fd7e14';
 
             const markerHtml = `<div style="background-color: ${color}; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 4px rgba(0,0,0,0.3);"></div>`;
             
@@ -116,8 +117,15 @@ jQuery(document).ready(function($) {
                 iconAnchor: [8, 8]
             });
 
+            let popupContent = `<strong>${wp.name}</strong>`;
+            if (wp.type === 'event') {
+                if (wp.organizer) popupContent += `<br><small>Veranstalter: ${wp.organizer}</small>`;
+                if (wp.show_start) popupContent += `<br><strong>Showtime: ${wp.show_start} Uhr</strong>`;
+            }
+            popupContent += `<br><span style="color:#666">Geplant: ${wp.planned_arrival || '-'}</span>`;
+
             L.marker(latlng, { icon: icon })
-                .bindPopup(`<strong>${wp.name}</strong><br>Geplant: ${wp.planned_arrival || '-'}`)
+                .bindPopup(popupContent)
                 .addTo(markers);
         });
 
@@ -136,7 +144,12 @@ jQuery(document).ready(function($) {
 
         waypoints.forEach((wp, index) => {
             const time = wp.planned_arrival || wp.planned_departure || '--:--';
-            const icon = wp.type === 'event' ? '🎤' : (wp.type === 'start' ? '🏁' : '📍');
+            
+            let icon = '📍';
+            if (wp.type === 'event') icon = '🎤';
+            else if (wp.type === 'start') icon = '🏁';
+            else if (wp.type === 'end') icon = '🏁';
+            else if (wp.type && wp.type.indexOf('shuttle') !== -1) icon = '🚌';
             
             const html = `
                 <div class="tmgmt-timeline-item" id="wp-item-${index}">
