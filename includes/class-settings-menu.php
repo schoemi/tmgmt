@@ -72,9 +72,21 @@ class TMGMT_Settings_Menu {
             'tmgmt-live-tracking-settings',
             array($this, 'render_live_tracking_settings_page')
         );
+
+        add_submenu_page(
+            'tmgmt-settings-hidden',
+            'Berechtigungen',
+            'Berechtigungen',
+            'tmgmt_manage_settings',
+            'tmgmt-permissions-settings',
+            array($this, 'render_permissions_settings_page')
+        );
     }
 
     public function register_settings() {
+        // Permissions Settings
+        register_setting('tmgmt_permissions_options', 'tmgmt_role_caps');
+
         // Route Planning Settings
         register_setting('tmgmt_route_options', 'tmgmt_route_start_name');
         register_setting('tmgmt_route_options', 'tmgmt_route_start_address');
@@ -193,6 +205,16 @@ class TMGMT_Settings_Menu {
                     <div style="padding: 15px;">
                         <p>Verwalten Sie Webhook-Endpunkte für externe Integrationen.</p>
                         <a href="edit.php?post_type=tmgmt_webhook" class="button button-primary">Verwalten</a>
+                    </div>
+                </div>
+
+                <div class="card" style="padding: 0; overflow: hidden;">
+                    <div style="padding: 15px; background: #f0f0f1; border-bottom: 1px solid #c3c4c7;">
+                        <h2 style="margin:0; font-size: 16px;">Berechtigungen</h2>
+                    </div>
+                    <div style="padding: 15px;">
+                        <p>Verwalten Sie Rollen und deren Zugriffsrechte.</p>
+                        <a href="admin.php?page=tmgmt-permissions-settings" class="button button-primary">Verwalten</a>
                     </div>
                 </div>
 
@@ -916,6 +938,100 @@ class TMGMT_Settings_Menu {
             <form method="post">
                 <?php wp_nonce_field('tmgmt_reset_test_mode'); ?>
                 <button type="submit" name="reset_test_mode" class="button button-secondary" style="color: #d63638; border-color: #d63638;">Test Modus zurücksetzen</button>
+            </form>
+        </div>
+        <?php
+    }
+
+    public function render_permissions_settings_page() {
+        if (!current_user_can('tmgmt_manage_settings')) {
+            return;
+        }
+        
+        $all_caps = TMGMT_Roles::get_all_caps();
+        $managed_roles = TMGMT_Roles::get_managed_roles();
+        
+        // Get saved caps or defaults
+        $saved_caps = get_option('tmgmt_role_caps');
+        if (empty($saved_caps) || !is_array($saved_caps)) {
+            $saved_caps = TMGMT_Roles::get_default_caps();
+        }
+
+        ?>
+        <div class="wrap">
+            <h1>Berechtigungen</h1>
+            <p>Hier können Sie festlegen, welche Benutzerrollen Zugriff auf welche Funktionen haben.</p>
+            
+            <form method="post" action="options.php">
+                <?php settings_fields('tmgmt_permissions_options'); ?>
+                
+                <style>
+                    .tmgmt-perms-table th, .tmgmt-perms-table td { padding: 10px; text-align: center; vertical-align: middle; }
+                    .tmgmt-perms-table th.cap-name, .tmgmt-perms-table td.cap-name { text-align: left; }
+                    .tmgmt-perms-table tr:nth-child(even) { background: #f9f9f9; }
+                    .tmgmt-perms-table tr:hover { background: #f0f0f1; }
+                    .tmgmt-group-header { background: #e5e5e5 !important; font-weight: bold; text-align: left; padding: 10px; }
+                </style>
+
+                <table class="widefat fixed striped tmgmt-perms-table">
+                    <thead>
+                        <tr>
+                            <th class="cap-name" style="width: 40%;">Berechtigung</th>
+                            <?php foreach ($managed_roles as $role_key => $role_name): ?>
+                                <th><?php echo esc_html($role_name); ?></th>
+                            <?php endforeach; ?>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($all_caps as $group_name => $caps): ?>
+                            <tr>
+                                <td colspan="<?php echo count($managed_roles) + 1; ?>" class="tmgmt-group-header">
+                                    <?php echo esc_html($group_name); ?>
+                                </td>
+                            </tr>
+                            <?php foreach ($caps as $cap_key => $cap_label): ?>
+                                <tr>
+                                    <td class="cap-name">
+                                        <strong><?php echo esc_html($cap_label); ?></strong>
+                                        <br><small style="color: #888;"><?php echo esc_html($cap_key); ?></small>
+                                    </td>
+                                    <?php foreach ($managed_roles as $role_key => $role_name): ?>
+                                        <td>
+                                            <?php 
+                                            $checked = isset($saved_caps[$role_key][$cap_key]) && $saved_caps[$role_key][$cap_key];
+                                            
+                                            // Safety checks
+                                            $disabled = false;
+                                            
+                                            // Admin always has manage settings
+                                            if ($role_key === 'administrator' && $cap_key === TMGMT_Roles::CAP_MANAGE_SETTINGS) {
+                                                $disabled = true;
+                                                $checked = true;
+                                            }
+                                            
+                                            // Admin always has dashboard
+                                            if ($role_key === 'administrator' && $cap_key === TMGMT_Roles::CAP_VIEW_DASHBOARD) {
+                                                $disabled = true;
+                                                $checked = true;
+                                            }
+                                            ?>
+                                            <input type="checkbox" 
+                                                   name="tmgmt_role_caps[<?php echo esc_attr($role_key); ?>][<?php echo esc_attr($cap_key); ?>]" 
+                                                   value="1" 
+                                                   <?php checked($checked); ?> 
+                                                   <?php echo $disabled ? 'disabled' : ''; ?>>
+                                            <?php if ($disabled): ?>
+                                                <input type="hidden" name="tmgmt_role_caps[<?php echo esc_attr($role_key); ?>][<?php echo esc_attr($cap_key); ?>]" value="1">
+                                            <?php endif; ?>
+                                        </td>
+                                    <?php endforeach; ?>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+
+                <?php submit_button(); ?>
             </form>
         </div>
         <?php

@@ -155,37 +155,87 @@ class TMGMT_Email_Template_Post_Type {
             </div>
         </div>
 
-        <div style="margin-bottom: 15px;">
-            <label for="tmgmt_email_body" style="display:block; font-weight:bold; margin-bottom:5px;">Nachricht</label>
-            <textarea id="tmgmt_email_body" name="tmgmt_email_body" rows="10" class="widefat"><?php echo esc_textarea($body); ?></textarea>
-        </div>
+        <div style="display: flex; gap: 20px;">
+            <div style="flex: 3;">
+                <div style="margin-bottom: 15px;">
+                    <label for="tmgmt_email_body" style="display:block; font-weight:bold; margin-bottom:5px;">Nachricht</label>
+                    <?php 
+                    wp_editor($body, 'tmgmt_email_body', array(
+                        'media_buttons' => false,
+                        'textarea_rows' => 20,
+                        'teeny' => false,
+                        'quicktags' => true
+                    )); 
+                    ?>
+                </div>
 
-        <div style="margin-bottom: 15px;">
-            <label style="display:block; font-weight:bold; margin-bottom:5px;">Dateianhänge</label>
-            <div id="tmgmt-attachments-list" style="margin-bottom: 10px; background: #f1f1f1; padding: 10px; border: 1px solid #ddd;">
-                <?php 
-                $attachments = get_post_meta($post->ID, '_tmgmt_email_attachments', true);
-                if (is_array($attachments)) {
-                    foreach ($attachments as $att_id) {
-                        $att_path = get_attached_file($att_id);
-                        if ($att_path) {
-                            $filename = basename($att_path);
-                            echo '<div id="attachment-row-' . $att_id . '" style="margin-bottom: 5px; padding: 5px; background: #fff; border: 1px solid #ddd; display: flex; align-items: center;">';
-                            echo '<input type="hidden" name="tmgmt_email_attachments[]" value="' . esc_attr($att_id) . '">';
-                            echo '<span style="flex-grow: 1;">' . esc_html($filename) . '</span>';
-                            echo '<a href="#" class="tmgmt-remove-attachment" style="color: #a00; text-decoration: none;">Entfernen</a>';
+                <div style="margin-bottom: 15px;">
+                    <label style="display:block; font-weight:bold; margin-bottom:5px;">Dateianhänge</label>
+                    <div id="tmgmt-attachments-list" style="margin-bottom: 10px; background: #f1f1f1; padding: 10px; border: 1px solid #ddd;">
+                        <?php 
+                        $attachments = get_post_meta($post->ID, '_tmgmt_email_attachments', true);
+                        if (is_array($attachments)) {
+                            foreach ($attachments as $att_id) {
+                                $att_path = get_attached_file($att_id);
+                                if ($att_path) {
+                                    $filename = basename($att_path);
+                                    echo '<div id="attachment-row-' . $att_id . '" style="margin-bottom: 5px; padding: 5px; background: #fff; border: 1px solid #ddd; display: flex; align-items: center;">';
+                                    echo '<input type="hidden" name="tmgmt_email_attachments[]" value="' . esc_attr($att_id) . '">';
+                                    echo '<span style="flex-grow: 1;">' . esc_html($filename) . '</span>';
+                                    echo '<a href="#" class="tmgmt-remove-attachment" style="color: #a00; text-decoration: none;">Entfernen</a>';
+                                    echo '</div>';
+                                }
+                            }
+                        }
+                        ?>
+                    </div>
+                    <button type="button" class="button" id="tmgmt-add-attachments">Dateien hinzufügen</button>
+                </div>
+            </div>
+            
+            <div style="flex: 1; min-width: 250px;">
+                <div style="background: #f9f9f9; border: 1px solid #ddd; padding: 10px;">
+                    <h3 style="margin-top: 0;">Platzhalter</h3>
+                    <p style="font-size: 12px; color: #666;">Klicken Sie auf einen Platzhalter, um ihn in den Editor einzufügen.</p>
+                    <div style="max-height: 500px; overflow-y: auto;">
+                        <?php
+                        $placeholders = TMGMT_Placeholder_Parser::get_placeholders();
+                        foreach ($placeholders as $code => $label) {
+                            echo '<div class="tmgmt-placeholder-item" style="margin-bottom: 5px; cursor: pointer; padding: 5px; background: #fff; border: 1px solid #eee;" data-code="' . esc_attr($code) . '">';
+                            echo '<strong>' . esc_html($label) . '</strong><br>';
+                            echo '<code style="font-size: 11px; color: #0073aa;">' . esc_html($code) . '</code>';
                             echo '</div>';
                         }
-                    }
-                }
-                ?>
+                        ?>
+                    </div>
+                </div>
             </div>
-            <button type="button" class="button" id="tmgmt-add-attachments">Dateien hinzufügen</button>
         </div>
 
-        <div style="font-size: 12px; color: #666; background: #f9f9f9; padding: 10px; border: 1px solid #ddd;">
-            <strong>Verfügbare Platzhalter:</strong> [event_title], [event_date], [event_start_time], [venue_name], [contact_firstname], [contact_lastname], [contact_email_contract], [fee], [deposit] ...
-        </div>
+        <script>
+        jQuery(document).ready(function($) {
+            $('.tmgmt-placeholder-item').on('click', function() {
+                var code = $(this).data('code');
+                
+                if (typeof wp !== 'undefined' && wp.editor && wp.editor.initialize) {
+                    // Gutenberg / New Editor logic if needed, but wp_editor uses TinyMCE
+                }
+
+                if (typeof tinymce !== 'undefined' && tinymce.get('tmgmt_email_body') && !tinymce.get('tmgmt_email_body').isHidden()) {
+                    tinymce.get('tmgmt_email_body').execCommand('mceInsertContent', false, code);
+                } else {
+                    // Fallback for text mode
+                    var textarea = document.getElementById('tmgmt_email_body');
+                    if (textarea) {
+                        var startPos = textarea.selectionStart;
+                        var endPos = textarea.selectionEnd;
+                        textarea.value = textarea.value.substring(0, startPos) + code + textarea.value.substring(endPos, textarea.value.length);
+                        textarea.selectionStart = textarea.selectionEnd = startPos + code.length;
+                    }
+                }
+            });
+        });
+        </script>
         <?php
     }
 

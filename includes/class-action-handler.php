@@ -8,6 +8,17 @@ class TMGMT_Action_Handler {
         add_action('wp_ajax_tmgmt_delete_file', array($this, 'handle_delete_file'));
         add_action('wp_ajax_tmgmt_get_event_details', array($this, 'handle_get_event_details'));
         add_action('wp_ajax_nopriv_tmgmt_get_event_details', array($this, 'handle_get_event_details'));
+        add_action('admin_enqueue_scripts', array($this, 'enqueue_scripts'));
+    }
+
+    public function enqueue_scripts($hook) {
+        global $post_type;
+        if ($hook == 'post.php' || $hook == 'post-new.php') {
+            if ($post_type === 'event') {
+                // Enqueue editor scripts so we can use wp.editor in JS
+                wp_enqueue_editor();
+            }
+        }
     }
 
     public function add_meta_boxes() {
@@ -199,7 +210,26 @@ class TMGMT_Action_Handler {
                             $('#tmgmt-action-email-dialog').dialog({
                                 title: 'E-Mail senden: ' + label,
                                 modal: true,
-                                width: 500,
+                                width: 800,
+                                open: function() {
+                                    // Initialize Editor
+                                    if (typeof wp !== 'undefined' && wp.editor) {
+                                        wp.editor.remove('tmgmt-action-email-body');
+                                        wp.editor.initialize('tmgmt-action-email-body', {
+                                            tinymce: {
+                                                wpautop: true,
+                                                toolbar1: 'bold italic underline strikethrough | bullist numlist | blockquote hr | alignleft aligncenter alignright | link unlink | wp_more | spellchecker',
+                                                height: 300
+                                            },
+                                            quicktags: true
+                                        });
+                                    }
+                                },
+                                close: function() {
+                                    if (typeof wp !== 'undefined' && wp.editor) {
+                                        wp.editor.remove('tmgmt-action-email-body');
+                                    }
+                                },
                                 buttons: {
                                     "Senden": function() {
                                         var formData = new FormData();
@@ -215,10 +245,18 @@ class TMGMT_Action_Handler {
                                             formData.append('email_existing_attachments[]', $(this).val());
                                         });
 
+                                        // Get content from editor
+                                        var bodyContent = $('#tmgmt-action-email-body').val();
+                                        if (typeof wp !== 'undefined' && wp.editor) {
+                                            if (tinymce.get('tmgmt-action-email-body') && !tinymce.get('tmgmt-action-email-body').isHidden()) {
+                                                bodyContent = tinymce.get('tmgmt-action-email-body').getContent();
+                                            }
+                                        }
+
                                         var emailData = {
                                             email_recipient: $('#tmgmt-action-email-recipient').val(),
                                             email_subject: $('#tmgmt-action-email-subject').val(),
-                                            email_body: $('#tmgmt-action-email-body').val()
+                                            email_body: bodyContent
                                         };
                                         
                                         executeAction(actionId, '', $(this), emailData, formData);

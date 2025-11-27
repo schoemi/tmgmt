@@ -3,6 +3,70 @@
 class TMGMT_Placeholder_Parser {
 
     /**
+     * Returns a list of all available placeholders.
+     * 
+     * @return array List of placeholders
+     */
+    public static function get_placeholders() {
+        $core_placeholders = array(
+            '[event_id]' => 'Event ID',
+            '[event_title]' => 'Event Titel',
+            '[event_content]' => 'Event Beschreibung',
+            '[event_link]' => 'Event Link',
+        );
+
+        $meta_placeholders = array(
+            // Event Details
+            '[event_date]' => 'Datum',
+            '[event_start_time]' => 'Startzeit',
+            '[event_arrival_time]' => 'Ankunftszeit',
+            '[event_departure_time]' => 'Abfahrtszeit',
+            '[arrival_notes]' => 'Anreise Notizen',
+            
+            // Venue
+            '[venue_name]' => 'Location Name',
+            '[venue_street]' => 'Location Straße',
+            '[venue_number]' => 'Location Hausnummer',
+            '[venue_zip]' => 'Location PLZ',
+            '[venue_city]' => 'Location Stadt',
+            '[venue_country]' => 'Location Land',
+            
+            // Contact
+            '[contact_salutation]' => 'Anrede',
+            '[contact_firstname]' => 'Vorname',
+            '[contact_lastname]' => 'Nachname',
+            '[contact_company]' => 'Firma',
+            '[contact_street]' => 'Straße',
+            '[contact_number]' => 'Hausnummer',
+            '[contact_zip]' => 'PLZ',
+            '[contact_city]' => 'Stadt',
+            '[contact_country]' => 'Land',
+            '[contact_email]' => 'E-Mail',
+            '[contact_phone]' => 'Telefon',
+            
+            // Communication
+            '[contact_email_contract]' => 'E-Mail (Vertrag)',
+            '[contact_phone_contract]' => 'Telefon (Vertrag)',
+            '[contact_name_tech]' => 'Name (Technik)',
+            '[contact_email_tech]' => 'E-Mail (Technik)',
+            '[contact_phone_tech]' => 'Telefon (Technik)',
+            '[contact_name_program]' => 'Name (Programm)',
+            '[contact_email_program]' => 'E-Mail (Programm)',
+            '[contact_phone_program]' => 'Telefon (Programm)',
+            
+            // Contract
+            '[fee]' => 'Gage',
+            '[deposit]' => 'Anzahlung',
+            '[inquiry_date]' => 'Anfragedatum',
+            
+            // Confirmation
+            '[confirmation_link]' => 'Bestätigungs-Link',
+        );
+
+        return array_merge($core_placeholders, $meta_placeholders);
+    }
+
+    /**
      * Replaces placeholders in text with event data.
      * 
      * @param string $text The text containing placeholders like [event_date]
