@@ -19,6 +19,22 @@ jQuery(document).ready(function($) {
         }
     });
 
+    // Map Toggle Logic (Mobile)
+    $('#tmgmt-map-toggle').on('click', function() {
+        const $map = $('#tmgmt-live-map');
+        $map.toggleClass('collapsed');
+        
+        if ($map.hasClass('collapsed')) {
+            $(this).html('<i class="fas fa-map"></i> Karte anzeigen');
+        } else {
+            $(this).html('<i class="fas fa-map"></i> Karte ausblenden');
+            // Invalidate size after transition to ensure map renders correctly
+            setTimeout(function() {
+                if (map) map.invalidateSize();
+            }, 350);
+        }
+    });
+
     if (!$('#tmgmt-live-map').length) return;
 
     const tourId = tmgmt_live_vars.tour_id;

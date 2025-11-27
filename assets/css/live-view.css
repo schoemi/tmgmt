@@ -312,11 +312,25 @@
 /* Responsive adjustments */
 @media (max-width: 768px) {
     #tmgmt-live-view-app {
-        height: auto;
-        min-height: auto;
-        overflow: visible;
+        height: auto !important;
+        min-height: auto !important;
+        overflow: visible !important;
         display: flex;
         flex-direction: column;
+    }
+
+    #tmgmt-map-toggle {
+        display: block !important;
+        width: 100%;
+        padding: 10px;
+        background: #f1f1f1;
+        border: none;
+        border-bottom: 1px solid #ddd;
+        color: #333;
+        font-weight: 600;
+        cursor: pointer;
+        text-align: center;
+        z-index: 3;
     }
 
     #tmgmt-live-overlay {
@@ -329,7 +343,7 @@
         box-shadow: none;
         border-top: 1px solid #eee;
         z-index: 2;
-        box-sizing: border-box; /* Ensure padding doesn't add to width */
+        box-sizing: border-box;
         padding: 15px;
     }
     
@@ -337,10 +351,28 @@
         height: 50vh;
         min-height: 300px;
         flex-shrink: 0;
+        transition: height 0.3s ease;
+    }
+
+    #tmgmt-live-map.collapsed {
+        height: 0;
+        min-height: 0;
+        overflow: hidden;
     }
 
     .tmgmt-timeline {
-        max-height: none; /* Allow full height on mobile */
-        overflow-y: visible;
+        max-height: none !important;
+        overflow-y: visible !important;
+    }
+
+    /* Fix Info Row Width */
+    .tmgmt-live-info .info-row {
+        flex-wrap: wrap;
+    }
+    
+    .tmgmt-live-info .value {
+        text-align: right;
+        margin-left: auto; /* Push to right */
+        max-width: 60%; /* Prevent taking too much space if single line */
     }
 }

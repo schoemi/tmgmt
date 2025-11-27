@@ -165,6 +165,10 @@ $dropoff_shuttle_name = $dropoff_shuttle_id ? get_the_title($dropoff_shuttle_id)
         <div id="tmgmt-live-view-app">
             <div id="tmgmt-live-map"></div>
             
+            <button id="tmgmt-map-toggle" type="button" style="display:none;">
+                <i class="fas fa-map"></i> Karte ausblenden
+            </button>
+
             <div id="tmgmt-live-overlay">
                 <div class="tmgmt-live-header">
                     <h1 id="tmgmt-tour-title">Lade Tour...</h1>
