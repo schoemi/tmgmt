@@ -415,7 +415,7 @@ class TMGMT_Settings_Menu {
                             </select>
                             <p class="description">
                                 Wählen Sie eine Vorlage aus dem Ordner <code><?php echo esc_html($template_dir); ?></code>.<br>
-                                <a href="https://github.com/schoemi/tons-mgmt/blob/main/Instructions/setlist_templates.md" target="_blank">Dokumentation zur Erstellung von Templates</a>
+                                <a href="<?php echo TMGMT_PLUGIN_URL . 'docs/setlist_templates.md'; ?>" target="_blank">Dokumentation zur Erstellung von Templates</a>
                             </p>
                         </td>
                     </tr>
