@@ -7,6 +7,20 @@ class TMGMT_Assets {
         add_action('wp_enqueue_scripts', array($this, 'enqueue_frontend_scripts'));
     }
 
+    /**
+     * Get version for assets.
+     * Returns filemtime if WP_DEBUG is true, otherwise TMGMT_VERSION.
+     */
+    public static function get_version($file = '') {
+        if (defined('WP_DEBUG') && WP_DEBUG && $file) {
+            $file_path = TMGMT_PLUGIN_DIR . $file;
+            if (file_exists($file_path)) {
+                return filemtime($file_path);
+            }
+        }
+        return TMGMT_VERSION;
+    }
+
     public function enqueue_frontend_scripts() {
         if (is_singular('tmgmt_tour')) {
             global $post;
@@ -20,14 +34,14 @@ class TMGMT_Assets {
                 'tmgmt-live-view-css',
                 TMGMT_PLUGIN_URL . 'assets/css/live-view.css',
                 array(),
-                TMGMT_VERSION
+                self::get_version('assets/css/live-view.css')
             );
 
             wp_enqueue_script(
                 'tmgmt-live-view-js',
                 TMGMT_PLUGIN_URL . 'assets/js/live-view.js',
                 array('jquery', 'leaflet-js'),
-                TMGMT_VERSION,
+                self::get_version('assets/js/live-view.js'),
                 true
             );
 
@@ -60,7 +74,7 @@ class TMGMT_Assets {
                     'tmgmt-admin-script',
                     TMGMT_PLUGIN_URL . 'assets/js/admin-script.js',
                     array('jquery', 'jquery-ui-dialog', 'leaflet-js'),
-                    TMGMT_VERSION,
+                    self::get_version('assets/js/admin-script.js'),
                     true
                 );
 

@@ -20,7 +20,7 @@ class TMGMT_Frontend_Manager {
                 'tmgmt-frontend-script',
                 TMGMT_PLUGIN_URL . 'assets/js/frontend-script.js',
                 array('jquery', 'leaflet-js'),
-                TMGMT_VERSION,
+                TMGMT_Assets::get_version('assets/js/frontend-script.js'),
                 true
             );
 

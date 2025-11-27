@@ -80,7 +80,13 @@ $dropoff_shuttle_name = $dropoff_shuttle_id ? get_the_title($dropoff_shuttle_id)
                         // Time Column
                         $time_col = '';
                         if (isset($item['arrival_time']) && isset($item['departure_time'])) {
-                            $time_col = $item['arrival_time'] . ' - ' . $item['departure_time'];
+                            if (strpos($type, 'travel') !== false) {
+                                // For travel items, departure is start, arrival is end
+                                $time_col = $item['departure_time'] . ' - ' . $item['arrival_time'];
+                            } else {
+                                // For stops/events, arrival is start, departure is end
+                                $time_col = $item['arrival_time'] . ' - ' . $item['departure_time'];
+                            }
                         } elseif (isset($item['arrival_time'])) {
                             $time_col = 'Ank: ' . $item['arrival_time'];
                         } elseif (isset($item['departure_time'])) {
@@ -181,8 +187,12 @@ $dropoff_shuttle_name = $dropoff_shuttle_id ? get_the_title($dropoff_shuttle_id)
                         <span class="value" id="tmgmt-next-stop">--</span>
                     </div>
                     <div class="info-row">
-                        <span class="label">Geplant:</span>
+                        <span class="label" id="tmgmt-label-planned">Geplant:</span>
                         <span class="value" id="tmgmt-planned-time">--:--</span>
+                    </div>
+                    <div class="info-row" id="tmgmt-row-showtime" style="display:none;">
+                        <span class="label">Showtime:</span>
+                        <span class="value" id="tmgmt-show-time">--:--</span>
                     </div>
                     <div class="info-row">
                         <span class="label">Erwartet (ETA):</span>

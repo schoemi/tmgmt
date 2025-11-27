@@ -22,7 +22,7 @@ class TMGMT_Frontend_Dashboard {
             'tmgmt-frontend-js',
             TMGMT_PLUGIN_URL . 'assets/js/frontend-dashboard.js',
             array('jquery', 'leaflet-js'), // jQuery is useful for AJAX but we can use fetch. Let's keep it simple.
-            TMGMT_VERSION,
+            TMGMT_Assets::get_version('assets/js/frontend-dashboard.js'),
             true
         );
 
@@ -30,7 +30,7 @@ class TMGMT_Frontend_Dashboard {
             'tmgmt-frontend-css',
             TMGMT_PLUGIN_URL . 'assets/css/frontend-dashboard.css',
             array('leaflet-css'),
-            TMGMT_VERSION
+            TMGMT_Assets::get_version('assets/css/frontend-dashboard.css')
         );
 
         wp_localize_script('tmgmt-frontend-js', 'tmgmtData', array(

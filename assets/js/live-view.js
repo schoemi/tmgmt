@@ -351,6 +351,20 @@ jQuery(document).ready(function($) {
             $('#tmgmt-next-stop').text(targetWp.name);
             $('#tmgmt-planned-time').text(targetWp.planned_arrival || '-');
 
+            // Update Label and Show Time
+            if (targetWp.type === 'event') {
+                $('#tmgmt-label-planned').text('Geplant (Ankunft):');
+                if (targetWp.show_start) {
+                    $('#tmgmt-show-time').text(targetWp.show_start + ' Uhr');
+                    $('#tmgmt-row-showtime').show();
+                } else {
+                    $('#tmgmt-row-showtime').hide();
+                }
+            } else {
+                $('#tmgmt-label-planned').text('Geplant:');
+                $('#tmgmt-row-showtime').hide();
+            }
+
             // Calculate ETA
             // Simple: Distance / Speed (60km/h)
             const distToTarget = getDistanceFromLatLonInKm(lat, lng, targetWp.lat, targetWp.lng);
