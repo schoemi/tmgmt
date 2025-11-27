@@ -45,10 +45,15 @@ Verwaltung von Standard-Routen für den Personentransport.
 *   **Typen:** Unterscheidung zwischen Abholung (Pickup) und Rückfahrt (Dropoff).
 *   **Integration:** Nahtlose Einbindung in die Tourenberechnung.
 
-### 4. Karten & Geodaten
-*   **Leaflet Integration:** Interaktive Karten im Backend und Frontend.
-*   **Geocoding:** Automatische Auflösung von Adressen in Koordinaten.
-*   **Visualisierung:** Anzeige von Event-Locations und kompletten Tour-Routen.
+### 5. Live Tracking & Kommunikation
+*   **Live View:** Echtzeit-Ansicht für laufende Touren.
+    *   **Interaktive Karte:** Zeigt aktuelle Position, Route und nächsten Halt.
+    *   **Timeline:** Dynamische Liste der Wegpunkte mit Status (Geplant, Verspätet, Erledigt).
+    *   **Test-Modus:** Simulation von Position und Zeit für Testszenarien.
+*   **E-Mail Aktionen:**
+    *   Versand von E-Mails direkt aus dem Event-Modal.
+    *   Unterstützung für Anhänge (Verträge, Rider).
+    *   Vorlagen-System für Standard-Mails.
 
 ---
 
@@ -66,6 +71,7 @@ Verwaltung von Standard-Routen für den Personentransport.
 
 ### API & Integration
 *   **REST API:** Das Frontend kommuniziert vollständig über eigene REST-Endpoints (`tmgmt/v1/`).
+*   **Live API:** Endpoints für Echtzeit-Positionsdaten und Test-Modus Steuerung.
 *   **Externe APIs:**
     *   HERE Maps API (Routing)
     *   OpenRouteService (Routing Fallback)
@@ -79,6 +85,7 @@ Verwaltung von Standard-Routen für den Personentransport.
 2.  **Status & Board:** Status-Definitionen und Kanban-Spalten konfigurieren.
 3.  **Shuttles:** Standard-Shuttle-Routen anlegen.
 4.  **Frontend:** Seiten erstellen und Shortcodes einfügen.
+5.  **Live Tracking:** Test-Modus in den Einstellungen aktivieren/deaktivieren.
 
 ---
-*Version: 1.0.0 | Stand: 25.11.2025*
+*Version: 0.4.0 | Stand: 27.11.2025*
