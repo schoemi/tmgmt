@@ -187,18 +187,8 @@
     font-style: italic;
 }
 
-/* Mobile adjustments */
-@media (max-width: 600px) {
-    #tmgmt-live-overlay {
-        top: auto;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        width: 100%;
-        border-radius: 15px 15px 0 0;
-        padding-bottom: 30px; /* Safe area */
-    }
-}
+/* Mobile adjustments removed to avoid conflict with the main responsive block below */
+
 
 /* Tabs & Layout */
 .tmgmt-tour-container {
@@ -336,13 +326,21 @@
         width: 100%;
         margin-top: 0;
         border-radius: 0;
-        box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+        box-shadow: none;
+        border-top: 1px solid #eee;
         z-index: 2;
+        box-sizing: border-box; /* Ensure padding doesn't add to width */
+        padding: 15px;
     }
     
     #tmgmt-live-map {
         height: 50vh;
         min-height: 300px;
         flex-shrink: 0;
+    }
+
+    .tmgmt-timeline {
+        max-height: none; /* Allow full height on mobile */
+        overflow-y: visible;
     }
 }
