@@ -451,12 +451,14 @@ class TMGMT_Action_Handler {
             // Handle Attachments
             $attachments = array();
 
-            // 0. Action Definition Attachment
-            $def_att_id = get_post_meta($action_id, '_tmgmt_action_attachment_id', true);
-            if ($def_att_id) {
-                $path = get_attached_file($def_att_id);
-                if ($path && file_exists($path)) {
-                    $attachments[] = $path;
+            // 0. Template Attachments
+            $tpl_attachments = get_post_meta($email_template_id, '_tmgmt_email_attachments', true);
+            if (is_array($tpl_attachments)) {
+                foreach ($tpl_attachments as $att_id) {
+                    $path = get_attached_file($att_id);
+                    if ($path && file_exists($path)) {
+                        $attachments[] = $path;
+                    }
                 }
             }
 

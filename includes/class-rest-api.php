@@ -809,7 +809,21 @@ class TMGMT_REST_API {
                 if (!empty($reply_to)) $headers[] = 'Reply-To: ' . $reply_to;
             }
 
-            $sent = wp_mail($recipient, $subject, nl2br($body), $headers);
+            // Handle Attachments
+            $attachments = array();
+            
+            // 0. Template Attachments
+            $tpl_attachments = get_post_meta($email_template_id, '_tmgmt_email_attachments', true);
+            if (is_array($tpl_attachments)) {
+                foreach ($tpl_attachments as $att_id) {
+                    $path = get_attached_file($att_id);
+                    if ($path && file_exists($path)) {
+                        $attachments[] = $path;
+                    }
+                }
+            }
+
+            $sent = wp_mail($recipient, $subject, nl2br($body), $headers, $attachments);
             if ($sent) {
                 $log_message .= " - E-Mail gesendet an: $recipient";
                 

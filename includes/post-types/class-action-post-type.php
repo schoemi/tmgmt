@@ -120,24 +120,6 @@ class TMGMT_Action_Post_Type {
                 </td>
             </tr>
             
-            <!-- Attachment Field (For Email & Confirmation) -->
-            <tr class="tmgmt-attachment-row" style="display:none;">
-                <th><label>Dateianhang (z.B. Rider)</label></th>
-                <td>
-                    <input type="hidden" name="tmgmt_action_attachment_id" id="tmgmt_action_attachment_id" value="<?php echo esc_attr($attachment_id); ?>">
-                    <div id="tmgmt-attachment-preview">
-                        <?php if ($attachment_id): 
-                            $file_url = wp_get_attachment_url($attachment_id);
-                            $file_name = basename($file_url);
-                        ?>
-                            <p>Aktuelle Datei: <a href="<?php echo esc_url($file_url); ?>" target="_blank"><?php echo esc_html($file_name); ?></a></p>
-                        <?php endif; ?>
-                    </div>
-                    <button type="button" class="button" id="tmgmt-upload-attachment">Datei wählen</button>
-                    <button type="button" class="button" id="tmgmt-remove-attachment" <?php echo $attachment_id ? '' : 'style="display:none;"'; ?>>Entfernen</button>
-                </td>
-            </tr>
-
             <!-- Confirmation Specific Fields -->
             <tr class="tmgmt-confirmation-row" style="display:none;">
                 <th><label for="tmgmt_action_confirm_page">Bestätigungs-Seite (Danke-Seite)</label></th>
@@ -246,7 +228,6 @@ class TMGMT_Action_Post_Type {
                 var type = $('#tmgmt_action_type').val();
                 $('.tmgmt-webhook-row').hide();
                 $('.tmgmt-email-row').hide();
-                $('.tmgmt-attachment-row').hide();
                 $('.tmgmt-confirmation-row').hide();
                 $('.tmgmt-receipt-row').hide();
                 
@@ -254,10 +235,8 @@ class TMGMT_Action_Post_Type {
                     $('.tmgmt-webhook-row').show();
                 } else if (type === 'email') {
                     $('.tmgmt-email-row').show();
-                    $('.tmgmt-attachment-row').show();
                 } else if (type === 'email_confirmation') {
                     $('.tmgmt-email-row').show();
-                    $('.tmgmt-attachment-row').show();
                     $('.tmgmt-confirmation-row').show();
                     if ($('#tmgmt_action_send_receipt').is(':checked')) {
                         $('.tmgmt-receipt-row').show();
@@ -268,37 +247,6 @@ class TMGMT_Action_Post_Type {
             $('#tmgmt_action_type').change(toggleFields);
             $('#tmgmt_action_send_receipt').change(toggleFields);
             toggleFields();
-
-            // Media Uploader
-            var file_frame;
-            $('#tmgmt-upload-attachment').on('click', function(event){
-                event.preventDefault();
-                if ( file_frame ) {
-                    file_frame.open();
-                    return;
-                }
-                file_frame = wp.media.frames.file_frame = wp.media({
-                    title: 'Datei auswählen',
-                    button: {
-                        text: 'Datei verwenden'
-                    },
-                    multiple: false
-                });
-                file_frame.on( 'select', function() {
-                    var attachment = file_frame.state().get('selection').first().toJSON();
-                    $('#tmgmt_action_attachment_id').val(attachment.id);
-                    $('#tmgmt-attachment-preview').html('<p>Aktuelle Datei: <a href="'+attachment.url+'" target="_blank">'+attachment.filename+'</a></p>');
-                    $('#tmgmt-remove-attachment').show();
-                });
-                file_frame.open();
-            });
-
-            $('#tmgmt-remove-attachment').on('click', function(event){
-                event.preventDefault();
-                $('#tmgmt_action_attachment_id').val('');
-                $('#tmgmt-attachment-preview').html('');
-                $(this).hide();
-            });
         });
         </script>
         <?php
