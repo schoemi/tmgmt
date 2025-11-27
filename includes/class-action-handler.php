@@ -28,11 +28,25 @@ class TMGMT_Action_Handler {
             'normal',
             'low'
         );
+
+        add_meta_box(
+            'tmgmt_event_confirmations',
+            'Angeforderte Bestätigungen',
+            array($this, 'render_confirmations_box'),
+            'event',
+            'normal',
+            'low'
+        );
     }
 
     public function render_communication_box($post) {
         $comm_manager = new TMGMT_Communication_Manager();
         $comm_manager->render_backend_table($post->ID);
+    }
+
+    public function render_confirmations_box($post) {
+        $conf_manager = new TMGMT_Confirmation_Manager();
+        $conf_manager->render_backend_table($post->ID);
     }
 
     public function render_actions_box($post) {
@@ -161,7 +175,7 @@ class TMGMT_Action_Handler {
                             }
                         }
                     });
-                } else if (type === 'email') {
+                } else if (type === 'email' || type === 'email_confirmation') {
                     // Fetch Preview
                     btn.prop('disabled', true).text('Lade Vorschau...');
                     
@@ -377,7 +391,7 @@ class TMGMT_Action_Handler {
                 wp_send_json_error(array('message' => "Webhook Server Fehler ($code)"));
             }
 
-        } elseif ($action_type === 'email') {
+        } elseif ($action_type === 'email' || $action_type === 'email_confirmation') {
             // Email Logic
             if (empty($email_template_id)) {
                 wp_send_json_error(array('message' => 'Keine E-Mail Vorlage ausgewählt.'));
@@ -396,6 +410,20 @@ class TMGMT_Action_Handler {
                 $recipient = TMGMT_Placeholder_Parser::parse($recipient_raw, $event_id);
                 $subject = TMGMT_Placeholder_Parser::parse($subject_raw, $event_id);
                 $body = TMGMT_Placeholder_Parser::parse($body_raw, $event_id);
+            }
+
+            // Handle Confirmation Link
+            if ($action_type === 'email_confirmation') {
+                $conf_manager = new TMGMT_Confirmation_Manager();
+                $request = $conf_manager->create_request($event_id, $action_id, $recipient);
+                
+                if ($request) {
+                    $body = str_replace('{{confirmation_link}}', $request['link'], $body);
+                    // Also support simple link if user didn't use HTML
+                    $body = str_replace('{{confirmation_url}}', $request['link'], $body);
+                } else {
+                    wp_send_json_error(array('message' => 'Fehler beim Erstellen des Bestätigungs-Links.'));
+                }
             }
 
             $cc_raw = get_post_meta($email_template_id, '_tmgmt_email_cc', true);
@@ -423,7 +451,16 @@ class TMGMT_Action_Handler {
             // Handle Attachments
             $attachments = array();
 
-            // 1. Existing Attachments
+            // 0. Action Definition Attachment
+            $def_att_id = get_post_meta($action_id, '_tmgmt_action_attachment_id', true);
+            if ($def_att_id) {
+                $path = get_attached_file($def_att_id);
+                if ($path && file_exists($path)) {
+                    $attachments[] = $path;
+                }
+            }
+
+            // 1. Existing Attachments (from Dialog)
             if (isset($_POST['email_existing_attachments']) && is_array($_POST['email_existing_attachments'])) {
                 foreach ($_POST['email_existing_attachments'] as $att_id) {
                     $path = get_attached_file($att_id);

@@ -703,7 +703,7 @@ class TMGMT_REST_API {
         }
 
         $type = get_post_meta($action_id, '_tmgmt_action_type', true);
-        if ($type !== 'email') {
+        if ($type !== 'email' && $type !== 'email_confirmation') {
             return new WP_Error('invalid_type', 'Vorschau nur für E-Mails verfügbar', array('status' => 400));
         }
 
@@ -751,7 +751,7 @@ class TMGMT_REST_API {
         $log_manager = new TMGMT_Log_Manager();
         $log_message = "Aktion ausgeführt: " . $action_post->post_title;
 
-        if ($type === 'email') {
+        if ($type === 'email' || $type === 'email_confirmation') {
             // Use provided subject/body or fallback to template
             $subject = isset($params['email_subject']) ? $params['email_subject'] : '';
             $body = isset($params['email_body']) ? $params['email_body'] : '';
@@ -774,6 +774,17 @@ class TMGMT_REST_API {
                         if (empty($raw)) $raw = '[contact_email_contract]'; // Fallback
                         $recipient = TMGMT_Placeholder_Parser::parse($raw, $event_id);
                     }
+                }
+            }
+
+            // Handle Confirmation Link
+            if ($type === 'email_confirmation') {
+                $conf_manager = new TMGMT_Confirmation_Manager();
+                $request = $conf_manager->create_request($event_id, $action_id, $recipient);
+                
+                if ($request) {
+                    $body = str_replace('{{confirmation_link}}', $request['link'], $body);
+                    $body = str_replace('{{confirmation_url}}', $request['link'], $body);
                 }
             }
 

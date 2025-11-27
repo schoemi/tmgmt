@@ -64,6 +64,12 @@ class TMGMT_Action_Post_Type {
         $webhook_id = get_post_meta($post->ID, '_tmgmt_action_webhook_id', true);
         $email_template_id = get_post_meta($post->ID, '_tmgmt_action_email_template_id', true);
         $target_status = get_post_meta($post->ID, '_tmgmt_action_target_status', true);
+        
+        // New Fields
+        $attachment_id = get_post_meta($post->ID, '_tmgmt_action_attachment_id', true);
+        $confirm_page_id = get_post_meta($post->ID, '_tmgmt_action_confirm_page', true);
+        $send_receipt = get_post_meta($post->ID, '_tmgmt_action_send_receipt', true);
+        $receipt_template_id = get_post_meta($post->ID, '_tmgmt_action_receipt_template', true);
 
         // Get Webhooks
         $webhooks = get_posts(array('post_type' => 'tmgmt_webhook', 'numberposts' => -1));
@@ -83,6 +89,7 @@ class TMGMT_Action_Post_Type {
                         <option value="note" <?php selected($type, 'note'); ?>>Notiz / Doku</option>
                         <option value="webhook" <?php selected($type, 'webhook'); ?>>Webhook</option>
                         <option value="email" <?php selected($type, 'email'); ?>>E-Mail</option>
+                        <option value="email_confirmation" <?php selected($type, 'email_confirmation'); ?>>E-Mail mit Bestätigung</option>
                     </select>
                 </td>
             </tr>
@@ -112,6 +119,61 @@ class TMGMT_Action_Post_Type {
                     </select>
                 </td>
             </tr>
+            
+            <!-- Attachment Field (For Email & Confirmation) -->
+            <tr class="tmgmt-attachment-row" style="display:none;">
+                <th><label>Dateianhang (z.B. Rider)</label></th>
+                <td>
+                    <input type="hidden" name="tmgmt_action_attachment_id" id="tmgmt_action_attachment_id" value="<?php echo esc_attr($attachment_id); ?>">
+                    <div id="tmgmt-attachment-preview">
+                        <?php if ($attachment_id): 
+                            $file_url = wp_get_attachment_url($attachment_id);
+                            $file_name = basename($file_url);
+                        ?>
+                            <p>Aktuelle Datei: <a href="<?php echo esc_url($file_url); ?>" target="_blank"><?php echo esc_html($file_name); ?></a></p>
+                        <?php endif; ?>
+                    </div>
+                    <button type="button" class="button" id="tmgmt-upload-attachment">Datei wählen</button>
+                    <button type="button" class="button" id="tmgmt-remove-attachment" <?php echo $attachment_id ? '' : 'style="display:none;"'; ?>>Entfernen</button>
+                </td>
+            </tr>
+
+            <!-- Confirmation Specific Fields -->
+            <tr class="tmgmt-confirmation-row" style="display:none;">
+                <th><label for="tmgmt_action_confirm_page">Bestätigungs-Seite (Danke-Seite)</label></th>
+                <td>
+                    <?php 
+                    wp_dropdown_pages(array(
+                        'name' => 'tmgmt_action_confirm_page',
+                        'id' => 'tmgmt_action_confirm_page',
+                        'selected' => $confirm_page_id,
+                        'show_option_none' => '-- Standard --'
+                    )); 
+                    ?>
+                    <p class="description">Seite, auf die der Nutzer nach Klick auf den Bestätigungslink geleitet wird.</p>
+                </td>
+            </tr>
+            <tr class="tmgmt-confirmation-row" style="display:none;">
+                <th><label for="tmgmt_action_send_receipt">Bestätigung der Bestätigung senden?</label></th>
+                <td>
+                    <input type="checkbox" name="tmgmt_action_send_receipt" id="tmgmt_action_send_receipt" value="1" <?php checked($send_receipt, 1); ?>>
+                    Ja, eine E-Mail senden, wenn der Link geklickt wurde.
+                </td>
+            </tr>
+            <tr class="tmgmt-receipt-row" style="display:none;">
+                <th><label for="tmgmt_action_receipt_template">Vorlage für Bestätigungs-Bestätigung</label></th>
+                <td>
+                    <select name="tmgmt_action_receipt_template" id="tmgmt_action_receipt_template">
+                        <option value="">-- Wählen --</option>
+                        <?php foreach ($email_templates as $et) : ?>
+                            <option value="<?php echo esc_attr($et->ID); ?>" <?php selected($receipt_template_id, $et->ID); ?>>
+                                <?php echo esc_html($et->post_title); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </td>
+            </tr>
+
             <tr>
                 <th><label for="tmgmt_action_target_status">Ziel-Status (Optional)</label></th>
                 <td>
@@ -149,12 +211,28 @@ class TMGMT_Action_Post_Type {
         if (isset($_POST['tmgmt_action_target_status'])) {
             update_post_meta($post_id, '_tmgmt_action_target_status', sanitize_text_field($_POST['tmgmt_action_target_status']));
         }
+        
+        // Save New Fields
+        if (isset($_POST['tmgmt_action_attachment_id'])) {
+            update_post_meta($post_id, '_tmgmt_action_attachment_id', sanitize_text_field($_POST['tmgmt_action_attachment_id']));
+        }
+        if (isset($_POST['tmgmt_action_confirm_page'])) {
+            update_post_meta($post_id, '_tmgmt_action_confirm_page', sanitize_text_field($_POST['tmgmt_action_confirm_page']));
+        }
+        
+        $send_receipt = isset($_POST['tmgmt_action_send_receipt']) ? 1 : 0;
+        update_post_meta($post_id, '_tmgmt_action_send_receipt', $send_receipt);
+
+        if (isset($_POST['tmgmt_action_receipt_template'])) {
+            update_post_meta($post_id, '_tmgmt_action_receipt_template', sanitize_text_field($_POST['tmgmt_action_receipt_template']));
+        }
     }
 
     public function enqueue_scripts($hook) {
         global $post_type;
         if ($hook == 'post-new.php' || $hook == 'post.php') {
             if ($post_type === self::POST_TYPE) {
+                wp_enqueue_media(); // Enqueue Media Uploader
                 add_action('admin_footer', array($this, 'print_admin_scripts'));
             }
         }
@@ -168,15 +246,59 @@ class TMGMT_Action_Post_Type {
                 var type = $('#tmgmt_action_type').val();
                 $('.tmgmt-webhook-row').hide();
                 $('.tmgmt-email-row').hide();
+                $('.tmgmt-attachment-row').hide();
+                $('.tmgmt-confirmation-row').hide();
+                $('.tmgmt-receipt-row').hide();
                 
                 if (type === 'webhook') {
                     $('.tmgmt-webhook-row').show();
                 } else if (type === 'email') {
                     $('.tmgmt-email-row').show();
+                    $('.tmgmt-attachment-row').show();
+                } else if (type === 'email_confirmation') {
+                    $('.tmgmt-email-row').show();
+                    $('.tmgmt-attachment-row').show();
+                    $('.tmgmt-confirmation-row').show();
+                    if ($('#tmgmt_action_send_receipt').is(':checked')) {
+                        $('.tmgmt-receipt-row').show();
+                    }
                 }
             }
+            
             $('#tmgmt_action_type').change(toggleFields);
+            $('#tmgmt_action_send_receipt').change(toggleFields);
             toggleFields();
+
+            // Media Uploader
+            var file_frame;
+            $('#tmgmt-upload-attachment').on('click', function(event){
+                event.preventDefault();
+                if ( file_frame ) {
+                    file_frame.open();
+                    return;
+                }
+                file_frame = wp.media.frames.file_frame = wp.media({
+                    title: 'Datei auswählen',
+                    button: {
+                        text: 'Datei verwenden'
+                    },
+                    multiple: false
+                });
+                file_frame.on( 'select', function() {
+                    var attachment = file_frame.state().get('selection').first().toJSON();
+                    $('#tmgmt_action_attachment_id').val(attachment.id);
+                    $('#tmgmt-attachment-preview').html('<p>Aktuelle Datei: <a href="'+attachment.url+'" target="_blank">'+attachment.filename+'</a></p>');
+                    $('#tmgmt-remove-attachment').show();
+                });
+                file_frame.open();
+            });
+
+            $('#tmgmt-remove-attachment').on('click', function(event){
+                event.preventDefault();
+                $('#tmgmt_action_attachment_id').val('');
+                $('#tmgmt-attachment-preview').html('');
+                $(this).hide();
+            });
         });
         </script>
         <?php
