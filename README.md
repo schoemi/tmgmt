@@ -1,7 +1,7 @@
 # TMGMT - Event & Tour Management Plugin
 
 ## Überblick
-Das **TMGMT Plugin** ist eine umfassende Lösung für WordPress zur Verwaltung von Band-Auftritten, Konzertanfragen und komplexer Tour-Logistik. Es kombiniert ein intuitives Frontend-Dashboard (Kanban-Board) mit einer leistungsstarken Tourenplanung, die automatisch Fahrzeiten, Puffer und Shuttle-Services berechnet.
+Das **TMGMT Plugin** ist eine umfassende Lösung für WordPress zur Verwaltung von Band-Auftritten, Konzertanfragen und komplexer Tour-Logistik. Es kombiniert ein intuitives Frontend-Dashboard (Kanban-Board) mit einer leistungsstarken Tourenplanung, die automatisch Fahrzeiten, Puffer und Shuttle-Services berechnet. Zusätzlich bietet es ein Kunden-Dashboard für Veranstalter zur Selbstverwaltung von Daten.
 
 ---
 
@@ -18,6 +18,7 @@ Das Herzstück der täglichen Arbeit ist das visuelle Board für den schnellen �
     *   **Dateimanagement:** Upload von Verträgen, Ridern, Setlisten direkt am Event.
     *   **Logbuch & Kommunikation:** Automatische Historie aller Änderungen und Notizen.
     *   **Touren-Info:** Anzeige zugehöriger Tourenpläne direkt im Event.
+*   **Frontend Layout:** Anpassbare Reihenfolge und Farben der Sektionen im Modal (Desktop & Mobile getrennt).
 *   **Validierung:** Definition von Pflichtfeldern für Statuswechsel (z.B. "Kein Vertrag ohne Gage").
 
 ### 2. Intelligente Tourenplanung
@@ -38,7 +39,18 @@ Das Plugin berechnet automatisch detaillierte Tagespläne für Touren mit mehrer
     *   Detaillierte Tagesansicht mit Karte und Zeitplan.
     *   **PDF-Export:** Druckoptimierte Ansicht für die Crew.
 
-### 3. Shuttle Management
+### 3. Kunden Dashboard & Kommunikation
+Binden Sie Veranstalter aktiv in den Prozess ein.
+
+*   **Kunden Dashboard:** Externe Ansicht für Veranstalter (ohne WordPress-Login).
+    *   Zugriff über sicheren Token-Link.
+    *   Einsicht in Vertragsdaten, Zeiten und Kontakte.
+    *   Bearbeitung fehlender Informationen (konfigurierbar).
+*   **Token Request:** "Passwort vergessen"-Funktion, mit der Veranstalter ihren Zugangslink per E-Mail anfordern können (Shortcode `[tmgmt_token_request]`).
+*   **Event ID:** Eindeutige, alphanumerische ID (z.B. `25AB12CD`) zur Identifikation.
+*   **E-Mail Vorlagen:** Konfigurierbare Templates für Benachrichtigungen.
+
+### 4. Shuttle Management
 Verwaltung von Standard-Routen für den Personentransport.
 
 *   **Routen-Definition:** Anlegen von Shuttle-Routen (z.B. "Niederrhein Einsammeln") mit definierten Haltepunkten.
@@ -64,10 +76,12 @@ Verwaltung von Standard-Routen für den Personentransport.
 *   `tmgmt_tour`: Ein Tagesplan, der mehrere Events verknüpft.
 *   `tmgmt_shuttle`: Definition von Shuttle-Routen.
 *   `tmgmt_kanban_col` / `tmgmt_status_def`: Konfiguration des Boards.
+*   `tmgmt_email_template`: Vorlagen für E-Mails.
 
 ### Shortcodes
 *   `[tmgmt_dashboard]`: Das Kanban-Board für das Event-Management.
 *   `[tmgmt_tour_overview]`: Liste und Detailansicht der Tourenpläne.
+*   `[tmgmt_token_request]`: Formular zur Anforderung des Kunden-Zugangslinks.
 
 ### API & Integration
 *   **REST API:** Das Frontend kommuniziert vollständig über eigene REST-Endpoints (`tmgmt/v1/`).
@@ -81,11 +95,13 @@ Verwaltung von Standard-Routen für den Personentransport.
 
 ## Einrichtung
 
+Eine detaillierte Anleitung finden Sie im Dokument [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
+
 1.  **Grundeinstellungen:** API-Keys für Kartendienste und Home-Base-Koordinaten hinterlegen.
 2.  **Status & Board:** Status-Definitionen und Kanban-Spalten konfigurieren.
 3.  **Shuttles:** Standard-Shuttle-Routen anlegen.
 4.  **Frontend:** Seiten erstellen und Shortcodes einfügen.
-5.  **Live Tracking:** Test-Modus in den Einstellungen aktivieren/deaktivieren.
+5.  **Kunden Dashboard:** Felder konfigurieren und E-Mail-Vorlagen zuweisen.
 
 ---
-*Version: 0.4.0 | Stand: 27.11.2025*
+*Version: 0.5.5 | Stand: 28.11.2025*
