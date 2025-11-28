@@ -61,6 +61,9 @@ class TMGMT_Placeholder_Parser {
             
             // Confirmation
             '[confirmation_link]' => 'Bestätigungs-Link',
+            
+            // Customer Dashboard
+            '[customer_dashboard_link]' => 'Kunden Dashboard Link',
         );
 
         return array_merge($core_placeholders, $meta_placeholders);
@@ -84,8 +87,11 @@ class TMGMT_Placeholder_Parser {
         }
 
         // 1. Core Fields
+        $event_id_display = get_post_meta($event_id, '_tmgmt_event_id', true);
+        if (empty($event_id_display)) $event_id_display = $event_id; // Fallback
+
         $replacements = array(
-            '[event_id]' => $event_id,
+            '[event_id]' => $event_id_display,
             '[event_title]' => $post->post_title,
             '[event_content]' => $post->post_content,
             '[event_link]' => get_permalink($event_id),
@@ -149,7 +155,21 @@ class TMGMT_Placeholder_Parser {
             $replacements[$placeholder] = $value;
         }
 
-        // 3. Perform Replacement
+        // 3. Customer Dashboard Link
+        if (strpos($text, '[customer_dashboard_link]') !== false) {
+            $access_manager = new TMGMT_Customer_Access_Manager();
+            $token_row = $access_manager->get_valid_token($event_id);
+            
+            if ($token_row) {
+                $link = home_url('/?tmgmt_token=' . $token_row->token);
+                $replacements['[customer_dashboard_link]'] = '<a href="' . esc_url($link) . '">' . esc_url($link) . '</a>';
+            } else {
+                // Return a special marker that the frontend can detect to prompt for creation
+                $replacements['[customer_dashboard_link]'] = '[[MISSING_TOKEN]]';
+            }
+        }
+
+        // 4. Perform Replacement
         return str_replace(array_keys($replacements), array_values($replacements), $text);
     }
 }

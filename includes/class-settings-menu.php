@@ -81,11 +81,25 @@ class TMGMT_Settings_Menu {
             'tmgmt-permissions-settings',
             array($this, 'render_permissions_settings_page')
         );
+
+        add_submenu_page(
+            'tmgmt-settings-hidden',
+            'Kunden Dashboard',
+            'Kunden Dashboard',
+            'tmgmt_manage_settings',
+            'tmgmt-customer-dashboard-settings',
+            array($this, 'render_customer_dashboard_settings_page')
+        );
     }
 
     public function register_settings() {
         // Permissions Settings
         register_setting('tmgmt_permissions_options', 'tmgmt_role_caps');
+
+        // Customer Dashboard Settings
+        register_setting('tmgmt_customer_dashboard_options', 'tmgmt_customer_dashboard_config');
+        register_setting('tmgmt_customer_dashboard_options', 'tmgmt_token_request_email_found');
+        register_setting('tmgmt_customer_dashboard_options', 'tmgmt_token_request_email_not_found');
 
         // Route Planning Settings
         register_setting('tmgmt_route_options', 'tmgmt_route_start_name');
@@ -215,6 +229,16 @@ class TMGMT_Settings_Menu {
                     <div style="padding: 15px;">
                         <p>Verwalten Sie Rollen und deren Zugriffsrechte.</p>
                         <a href="admin.php?page=tmgmt-permissions-settings" class="button button-primary">Verwalten</a>
+                    </div>
+                </div>
+
+                <div class="card" style="padding: 0; overflow: hidden;">
+                    <div style="padding: 15px; background: #f0f0f1; border-bottom: 1px solid #c3c4c7;">
+                        <h2 style="margin:0; font-size: 16px;">Kunden Dashboard</h2>
+                    </div>
+                    <div style="padding: 15px;">
+                        <p>Konfigurieren Sie die Ansicht für Veranstalter.</p>
+                        <a href="admin.php?page=tmgmt-customer-dashboard-settings" class="button button-primary">Verwalten</a>
                     </div>
                 </div>
 
@@ -1027,6 +1051,135 @@ class TMGMT_Settings_Menu {
                                     <?php endforeach; ?>
                                 </tr>
                             <?php endforeach; ?>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+
+                <?php submit_button(); ?>
+            </form>
+        </div>
+        <?php
+    }
+
+    public function render_customer_dashboard_settings_page() {
+        if (!current_user_can('tmgmt_manage_settings')) {
+            return;
+        }
+
+        $config = get_option('tmgmt_customer_dashboard_config', array());
+        
+        $email_templates = get_posts(array(
+            'post_type' => 'tmgmt_email_template',
+            'numberposts' => -1,
+            'orderby' => 'title',
+            'order' => 'ASC'
+        ));
+
+        // Define available fields
+        $fields = array(
+            'core_content' => 'Beschreibung (Content)',
+            '_tmgmt_event_date' => 'Datum',
+            '_tmgmt_event_start_time' => 'Startzeit',
+            '_tmgmt_event_arrival_time' => 'Ankunftszeit',
+            '_tmgmt_event_departure_time' => 'Abfahrtszeit',
+            '_tmgmt_arrival_notes' => 'Anreise Notizen',
+            '_tmgmt_venue_name' => 'Location Name',
+            '_tmgmt_venue_street' => 'Location Straße',
+            '_tmgmt_venue_city' => 'Location Stadt',
+            '_tmgmt_contact_firstname' => 'Kontakt Vorname',
+            '_tmgmt_contact_lastname' => 'Kontakt Nachname',
+            '_tmgmt_contact_email' => 'Kontakt E-Mail',
+            '_tmgmt_contact_phone' => 'Kontakt Telefon',
+            
+            // Contact Address (Contract)
+            '_tmgmt_contact_street' => 'Kontakt Straße',
+            '_tmgmt_contact_number' => 'Kontakt Hausnummer',
+            '_tmgmt_contact_zip' => 'Kontakt PLZ',
+            '_tmgmt_contact_city' => 'Kontakt Stadt',
+            '_tmgmt_contact_country' => 'Kontakt Land',
+
+            // Contact Program
+            '_tmgmt_contact_name_program' => 'Kontakt Name (Programm)',
+            '_tmgmt_contact_email_program' => 'Kontakt E-Mail (Programm)',
+            '_tmgmt_contact_phone_program' => 'Kontakt Telefon (Programm)',
+
+            // Contact Tech
+            '_tmgmt_contact_name_tech' => 'Kontakt Name (Technik)',
+            '_tmgmt_contact_email_tech' => 'Kontakt E-Mail (Technik)',
+            '_tmgmt_contact_phone_tech' => 'Kontakt Telefon (Technik)',
+
+            '_tmgmt_fee' => 'Gage',
+            '_tmgmt_deposit' => 'Anzahlung',
+        );
+
+        ?>
+        <div class="wrap">
+            <h1>Kunden Dashboard Konfiguration</h1>
+            
+            <form method="post" action="options.php">
+                <?php settings_fields('tmgmt_customer_dashboard_options'); ?>
+
+                <h2 class="title">Zugriffs-Token Anfrage</h2>
+                <p>Konfigurieren Sie die E-Mails, die versendet werden, wenn ein Kunde seinen Zugriffs-Token anfordert.</p>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row"><label for="tmgmt_token_request_email_found">E-Mail bei Erfolg (Token gefunden)</label></th>
+                        <td>
+                            <select name="tmgmt_token_request_email_found" id="tmgmt_token_request_email_found">
+                                <option value="">-- Keine Auswahl --</option>
+                                <?php foreach ($email_templates as $template): ?>
+                                    <option value="<?php echo esc_attr($template->ID); ?>" <?php selected(get_option('tmgmt_token_request_email_found'), $template->ID); ?>>
+                                        <?php echo esc_html($template->post_title); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <p class="description">Diese E-Mail wird gesendet, wenn die Kombination aus Event-ID und E-Mail-Adresse korrekt ist. Sie sollte den Platzhalter <code>[customer_dashboard_link]</code> enthalten.</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="tmgmt_token_request_email_not_found">E-Mail bei Misserfolg (Nicht gefunden)</label></th>
+                        <td>
+                            <select name="tmgmt_token_request_email_not_found" id="tmgmt_token_request_email_not_found">
+                                <option value="">-- Keine Auswahl --</option>
+                                <?php foreach ($email_templates as $template): ?>
+                                    <option value="<?php echo esc_attr($template->ID); ?>" <?php selected(get_option('tmgmt_token_request_email_not_found'), $template->ID); ?>>
+                                        <?php echo esc_html($template->post_title); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <p class="description">Diese E-Mail wird gesendet, wenn keine passende Veranstaltung gefunden wurde (Sicherheitsmaßnahme, um Enumeration zu verhindern).</p>
+                        </td>
+                    </tr>
+                </table>
+
+                <h2 class="title">Feld-Berechtigungen</h2>
+                <p>Wählen Sie aus, welche Felder für den Veranstalter sichtbar (Lesen) oder bearbeitbar (Schreiben) sein sollen.</p>
+                
+                <table class="widefat fixed striped">
+                    <thead>
+                        <tr>
+                            <th>Feld</th>
+                            <th style="width: 100px; text-align: center;">Lesen</th>
+                            <th style="width: 100px; text-align: center;">Schreiben</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($fields as $key => $label): ?>
+                            <tr>
+                                <td><strong><?php echo esc_html($label); ?></strong> <br><small><?php echo esc_html($key); ?></small></td>
+                                <td style="text-align: center;">
+                                    <input type="checkbox" 
+                                           name="tmgmt_customer_dashboard_config[<?php echo esc_attr($key); ?>][read]" 
+                                           value="1" 
+                                           <?php checked(isset($config[$key]['read']) && $config[$key]['read']); ?>>
+                                </td>
+                                <td style="text-align: center;">
+                                    <input type="checkbox" 
+                                           name="tmgmt_customer_dashboard_config[<?php echo esc_attr($key); ?>][write]" 
+                                           value="1" 
+                                           <?php checked(isset($config[$key]['write']) && $config[$key]['write']); ?>>
+                                </td>
+                            </tr>
                         <?php endforeach; ?>
                     </tbody>
                 </table>

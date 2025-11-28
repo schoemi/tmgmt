@@ -42,6 +42,7 @@ require_once TMGMT_PLUGIN_DIR . 'includes/class-assets.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-log-manager.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-communication-manager.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-confirmation-manager.php';
+require_once TMGMT_PLUGIN_DIR . 'includes/class-customer-access-manager.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-tour-manager.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-tour-overview.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-roles.php';
@@ -83,6 +84,7 @@ function tmgmt_init() {
     new TMGMT_PDF_Generator();
     new TMGMT_Live_Tracking();
     new TMGMT_Confirmation_Manager();
+    new TMGMT_Customer_Access_Manager();
 }
 add_action('plugins_loaded', 'tmgmt_init');
 
@@ -97,4 +99,7 @@ function tmgmt_activate() {
 
     $conf_manager = new TMGMT_Confirmation_Manager();
     $conf_manager->create_table();
+
+    $access_manager = new TMGMT_Customer_Access_Manager();
+    $access_manager->create_table();
 }

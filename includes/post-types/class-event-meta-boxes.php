@@ -220,6 +220,14 @@ class TMGMT_Event_Meta_Boxes {
     public function render_event_details_box($post) {
         wp_nonce_field('tmgmt_save_event_meta', 'tmgmt_event_meta_nonce');
         
+        // Get Event ID
+        $event_id = get_post_meta($post->ID, '_tmgmt_event_id', true);
+        if ($event_id) {
+            echo '<div style="background: #f0f0f1; padding: 10px; margin-bottom: 15px; border-left: 4px solid #2271b1;">';
+            echo '<strong>Event ID:</strong> <span style="font-family: monospace; font-size: 1.2em;">' . esc_html($event_id) . '</span>';
+            echo '</div>';
+        }
+        
         // Retrieve existing values
         $date = get_post_meta($post->ID, '_tmgmt_event_date', true);
         $start_time = get_post_meta($post->ID, '_tmgmt_event_start_time', true);

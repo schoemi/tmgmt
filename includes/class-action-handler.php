@@ -203,6 +203,35 @@ class TMGMT_Action_Handler {
                         success: function(data) {
                             btn.prop('disabled', false).text(label);
                             
+                            // Check for missing token
+                            if (data.body && data.body.indexOf('[[MISSING_TOKEN]]') !== -1) {
+                                Swal.fire({
+                                    title: 'Kein Zugangstoken',
+                                    text: 'Für dieses Event existiert noch kein aktiver Veranstalter-Zugang. Soll jetzt einer erstellt werden?',
+                                    icon: 'warning',
+                                    showCancelButton: true,
+                                    confirmButtonText: 'Ja, erstellen',
+                                    cancelButtonText: 'Nein, abbrechen'
+                                }).then((result) => {
+                                    if (result.isConfirmed) {
+                                        // Create Token
+                                        $.post(ajaxurl, {
+                                            action: 'tmgmt_create_access_token',
+                                            event_id: eventId,
+                                            nonce: '<?php echo wp_create_nonce('tmgmt_access_token_nonce'); ?>'
+                                        }, function(response) {
+                                            if (response.success) {
+                                                // Retry Preview
+                                                btn.click();
+                                            } else {
+                                                Swal.fire('Fehler', 'Token konnte nicht erstellt werden.', 'error');
+                                            }
+                                        });
+                                    }
+                                });
+                                return;
+                            }
+
                             $('#tmgmt-action-email-recipient').val(data.recipient);
                             $('#tmgmt-action-email-subject').val(data.subject);
                             $('#tmgmt-action-email-body').val(data.body);

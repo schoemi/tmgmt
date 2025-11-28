@@ -17,6 +17,52 @@ class TMGMT_Event_Post_Type {
         add_action('admin_head', array($this, 'simplify_publish_metabox'));
         add_filter('gettext', array($this, 'change_publish_button_text'), 10, 3);
         add_action('add_meta_boxes', array($this, 'remove_custom_fields_metabox'), 99);
+        add_action('save_post', array($this, 'generate_event_id'), 10, 3);
+        add_action('admin_notices', array($this, 'show_event_id_notice'));
+    }
+
+    public function generate_event_id($post_id, $post, $update) {
+        if ($post->post_type !== 'event') {
+            return;
+        }
+
+        if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
+            return;
+        }
+
+        // Check if ID already exists
+        $existing_id = get_post_meta($post_id, '_tmgmt_event_id', true);
+        if (!empty($existing_id)) {
+            return;
+        }
+
+        // Generate ID: YY + 6 random chars (A-Z, 0-9)
+        $year = date('y');
+        $random = strtoupper(substr(md5(uniqid(rand(), true)), 0, 6));
+        $event_id = $year . $random;
+
+        // Ensure uniqueness (simple check, collision unlikely but possible)
+        // In a high volume system, we would loop here.
+        
+        update_post_meta($post_id, '_tmgmt_event_id', $event_id);
+        
+        // Set transient to show notice
+        set_transient('tmgmt_new_event_id_' . $post_id, $event_id, 30);
+    }
+
+    public function show_event_id_notice() {
+        global $post;
+        if (!$post) return;
+        
+        $new_id = get_transient('tmgmt_new_event_id_' . $post->ID);
+        if ($new_id) {
+            ?>
+            <div class="notice notice-success is-dismissible">
+                <p><strong>Event ID generiert:</strong> <?php echo esc_html($new_id); ?></p>
+            </div>
+            <?php
+            delete_transient('tmgmt_new_event_id_' . $post->ID);
+        }
     }
 
     public function remove_custom_fields_metabox() {
