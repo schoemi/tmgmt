@@ -33,6 +33,7 @@ require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-shuttle-post-type.php
 require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-title-post-type.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-setlist-post-type.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-location-post-type.php';
+require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-contact-post-type.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-placeholder-parser.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-action-handler.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-dashboard.php';
@@ -70,6 +71,7 @@ function tmgmt_init() {
     new TMGMT_Title_Post_Type();
     new TMGMT_Setlist_Post_Type();
     new TMGMT_Location_Post_Type();
+    new TMGMT_Contact_Post_Type();
     new TMGMT_Action_Handler();
     new TMGMT_Dashboard();
     new TMGMT_Appointment_List();

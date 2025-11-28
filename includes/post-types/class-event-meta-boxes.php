@@ -482,6 +482,14 @@ class TMGMT_Event_Meta_Boxes {
         $phone_program = get_post_meta($post->ID, '_tmgmt_contact_phone_program', true);
         ?>
         
+        <div class="tmgmt-row" style="margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 15px;">
+            <div class="tmgmt-field" style="flex: 1; position: relative;">
+                <label for="tmgmt_contact_search">Kontakt suchen / laden</label>
+                <input type="text" id="tmgmt_contact_search" placeholder="Name oder Firma eingeben..." autocomplete="off">
+                <div id="tmgmt_contact_search_results" style="display:none; position:absolute; top:100%; left:0; right:0; background:#fff; border:1px solid #ccc; z-index:100; max-height:200px; overflow-y:auto; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
+            </div>
+        </div>
+
         <div class="tmgmt-row">
             <div class="tmgmt-field">
                 <label for="tmgmt_contact_salutation">Anrede</label>
@@ -540,6 +548,21 @@ class TMGMT_Event_Meta_Boxes {
                 <input type="tel" id="tmgmt_contact_phone_contract" name="tmgmt_contact_phone_contract" value="<?php echo esc_attr($phone_contract); ?>">
             </div>
         </div>
+        
+        <div class="tmgmt-row" style="margin-top: 10px;">
+            <div class="tmgmt-field">
+                <button type="button" id="tmgmt-save-contact-btn" class="button button-secondary">Als neuen Kontakt speichern</button>
+            </div>
+        </div>
+
+        <div class="tmgmt-section-title">Technik Kontakt</div>
+        <div class="tmgmt-row" style="margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 15px;">
+            <div class="tmgmt-field" style="flex: 1; position: relative;">
+                <label for="tmgmt_contact_tech_search">Kontakt suchen / laden</label>
+                <input type="text" id="tmgmt_contact_tech_search" placeholder="Name oder Firma eingeben..." autocomplete="off">
+                <div id="tmgmt_contact_tech_search_results" style="display:none; position:absolute; top:100%; left:0; right:0; background:#fff; border:1px solid #ccc; z-index:100; max-height:200px; overflow-y:auto; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
+            </div>
+        </div>
         <div class="tmgmt-row">
             <div class="tmgmt-field">
                 <label for="tmgmt_contact_name_tech">Name (Technik)</label>
@@ -552,6 +575,20 @@ class TMGMT_Event_Meta_Boxes {
             <div class="tmgmt-field">
                 <label for="tmgmt_contact_phone_tech">Telefon (Technik)</label>
                 <input type="tel" id="tmgmt_contact_phone_tech" name="tmgmt_contact_phone_tech" value="<?php echo esc_attr($phone_tech); ?>">
+            </div>
+        </div>
+        <div class="tmgmt-row" style="margin-top: 10px;">
+            <div class="tmgmt-field">
+                <button type="button" id="tmgmt-save-contact-tech-btn" class="button button-secondary">Als neuen Kontakt speichern</button>
+            </div>
+        </div>
+
+        <div class="tmgmt-section-title">Programm Kontakt</div>
+        <div class="tmgmt-row" style="margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 15px;">
+            <div class="tmgmt-field" style="flex: 1; position: relative;">
+                <label for="tmgmt_contact_program_search">Kontakt suchen / laden</label>
+                <input type="text" id="tmgmt_contact_program_search" placeholder="Name oder Firma eingeben..." autocomplete="off">
+                <div id="tmgmt_contact_program_search_results" style="display:none; position:absolute; top:100%; left:0; right:0; background:#fff; border:1px solid #ccc; z-index:100; max-height:200px; overflow-y:auto; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
             </div>
         </div>
         <div class="tmgmt-row">
@@ -568,6 +605,194 @@ class TMGMT_Event_Meta_Boxes {
                 <input type="tel" id="tmgmt_contact_phone_program" name="tmgmt_contact_phone_program" value="<?php echo esc_attr($phone_program); ?>">
             </div>
         </div>
+        <div class="tmgmt-row" style="margin-top: 10px;">
+            <div class="tmgmt-field">
+                <button type="button" id="tmgmt-save-contact-program-btn" class="button button-secondary">Als neuen Kontakt speichern</button>
+            </div>
+        </div>
+
+        <script>
+        jQuery(document).ready(function($) {
+            // Generic Search Function
+            function setupContactSearch(inputId, resultsId, onSelect) {
+                let searchTimeout;
+                $(inputId).on('input', function() {
+                    clearTimeout(searchTimeout);
+                    const term = $(this).val();
+                    if (term.length < 2) {
+                        $(resultsId).hide();
+                        return;
+                    }
+                    
+                    searchTimeout = setTimeout(function() {
+                        $.ajax({
+                            url: ajaxurl,
+                            data: {
+                                action: 'tmgmt_search_contacts',
+                                term: term
+                            },
+                            success: function(res) {
+                                if (res.success && res.data.length > 0) {
+                                    let html = '';
+                                    res.data.forEach(item => {
+                                        // Store data in a way we can retrieve it easily
+                                        // We use a data-json attribute to store the full object
+                                        const json = JSON.stringify(item).replace(/"/g, '&quot;');
+                                        html += `<div class="tmgmt-contact-result-item" style="padding: 8px; cursor: pointer; border-bottom: 1px solid #eee;" data-json="${json}">
+                                            <strong>${item.title}</strong><br><small>${item.company ? item.company + ' | ' : ''}${item.firstname} ${item.lastname}</small>
+                                        </div>`;
+                                    });
+                                    $(resultsId).html(html).show();
+                                } else {
+                                    $(resultsId).hide();
+                                }
+                            }
+                        });
+                    }, 300);
+                });
+
+                $(document).on('click', resultsId + ' .tmgmt-contact-result-item', function() {
+                    const data = $(this).data('json');
+                    onSelect(data);
+                    $(resultsId).hide();
+                    $(inputId).val('');
+                });
+            }
+
+            // 1. Main Contact Search
+            setupContactSearch('#tmgmt_contact_search', '#tmgmt_contact_search_results', function(data) {
+                $('#tmgmt_contact_salutation').val(data.salutation);
+                $('#tmgmt_contact_firstname').val(data.firstname);
+                $('#tmgmt_contact_lastname').val(data.lastname);
+                $('#tmgmt_contact_company').val(data.company);
+                $('#tmgmt_contact_street').val(data.street);
+                $('#tmgmt_contact_number').val(data.number);
+                $('#tmgmt_contact_zip').val(data.zip);
+                $('#tmgmt_contact_city').val(data.city);
+                $('#tmgmt_contact_country').val(data.country);
+                $('#tmgmt_contact_email_contract').val(data.email);
+                $('#tmgmt_contact_phone_contract').val(data.phone);
+            });
+
+            // 2. Tech Contact Search
+            setupContactSearch('#tmgmt_contact_tech_search', '#tmgmt_contact_tech_search_results', function(data) {
+                // Combine names for single field
+                let name = data.company;
+                if (data.firstname || data.lastname) {
+                    const fullName = (data.firstname + ' ' + data.lastname).trim();
+                    if (name) name += ' (' + fullName + ')';
+                    else name = fullName;
+                }
+                $('#tmgmt_contact_name_tech').val(name);
+                $('#tmgmt_contact_email_tech').val(data.email);
+                $('#tmgmt_contact_phone_tech').val(data.phone);
+            });
+
+            // 3. Program Contact Search
+            setupContactSearch('#tmgmt_contact_program_search', '#tmgmt_contact_program_search_results', function(data) {
+                // Combine names for single field
+                let name = data.company;
+                if (data.firstname || data.lastname) {
+                    const fullName = (data.firstname + ' ' + data.lastname).trim();
+                    if (name) name += ' (' + fullName + ')';
+                    else name = fullName;
+                }
+                $('#tmgmt_contact_name_program').val(name);
+                $('#tmgmt_contact_email_program').val(data.email);
+                $('#tmgmt_contact_phone_program').val(data.phone);
+            });
+
+            // Generic Save Function
+            function saveContact(btnId, getData) {
+                $(btnId).on('click', function() {
+                    const data = getData();
+                    
+                    if (!data.title) {
+                        Swal.fire('Fehlende Angabe', 'Bitte geben Sie mindestens einen Namen oder eine Firma ein.', 'warning');
+                        return;
+                    }
+                    
+                    const btn = $(this);
+                    btn.prop('disabled', true).text('Speichere...');
+                    
+                    $.ajax({
+                        url: ajaxurl,
+                        method: 'POST',
+                        data: Object.assign({ action: 'tmgmt_save_contact_from_event' }, data),
+                        success: function(res) {
+                            btn.prop('disabled', false).text('Als neuen Kontakt speichern');
+                            if (res.success) {
+                                Swal.fire('Gespeichert', 'Kontakt erfolgreich gespeichert!', 'success');
+                            } else {
+                                Swal.fire('Fehler', 'Fehler: ' + res.data, 'error');
+                            }
+                        },
+                        error: function() {
+                            btn.prop('disabled', false).text('Als neuen Kontakt speichern');
+                            Swal.fire('Fehler', 'Ein Fehler ist aufgetreten.', 'error');
+                        }
+                    });
+                });
+            }
+
+            // 1. Save Main Contact
+            saveContact('#tmgmt-save-contact-btn', function() {
+                const firstname = $('#tmgmt_contact_firstname').val();
+                const lastname = $('#tmgmt_contact_lastname').val();
+                const company = $('#tmgmt_contact_company').val();
+                
+                let title = company;
+                if (firstname || lastname) {
+                    title = (firstname + ' ' + lastname).trim();
+                    if (company) title += ' (' + company + ')';
+                }
+
+                return {
+                    title: title,
+                    salutation: $('#tmgmt_contact_salutation').val(),
+                    firstname: firstname,
+                    lastname: lastname,
+                    company: company,
+                    street: $('#tmgmt_contact_street').val(),
+                    number: $('#tmgmt_contact_number').val(),
+                    zip: $('#tmgmt_contact_zip').val(),
+                    city: $('#tmgmt_contact_city').val(),
+                    country: $('#tmgmt_contact_country').val(),
+                    email: $('#tmgmt_contact_email_contract').val(),
+                    phone: $('#tmgmt_contact_phone_contract').val()
+                };
+            });
+
+            // 2. Save Tech Contact
+            saveContact('#tmgmt-save-contact-tech-btn', function() {
+                const name = $('#tmgmt_contact_name_tech').val();
+                return {
+                    title: name,
+                    company: name, // We map the single name field to company/title for simplicity
+                    email: $('#tmgmt_contact_email_tech').val(),
+                    phone: $('#tmgmt_contact_phone_tech').val()
+                };
+            });
+
+            // 3. Save Program Contact
+            saveContact('#tmgmt-save-contact-program-btn', function() {
+                const name = $('#tmgmt_contact_name_program').val();
+                return {
+                    title: name,
+                    company: name,
+                    email: $('#tmgmt_contact_email_program').val(),
+                    phone: $('#tmgmt_contact_phone_program').val()
+                };
+            });
+            
+            // Close search on click outside
+            $(document).on('click', function(e) {
+                if (!$(e.target).closest('.tmgmt-field input[type="text"], [id$="_search_results"]').length) {
+                    $('[id$="_search_results"]').hide();
+                }
+            });
+        });
+        </script>
         <?php
     }
 
