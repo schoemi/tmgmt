@@ -100,6 +100,7 @@ class TMGMT_Settings_Menu {
         register_setting('tmgmt_customer_dashboard_options', 'tmgmt_customer_dashboard_config');
         register_setting('tmgmt_customer_dashboard_options', 'tmgmt_token_request_email_found');
         register_setting('tmgmt_customer_dashboard_options', 'tmgmt_token_request_email_not_found');
+        register_setting('tmgmt_customer_dashboard_options', 'tmgmt_token_request_redirect_page');
 
         // Route Planning Settings
         register_setting('tmgmt_route_options', 'tmgmt_route_start_name');
@@ -1148,6 +1149,20 @@ class TMGMT_Settings_Menu {
                                 <?php endforeach; ?>
                             </select>
                             <p class="description">Diese E-Mail wird gesendet, wenn keine passende Veranstaltung gefunden wurde (Sicherheitsmaßnahme, um Enumeration zu verhindern).</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="tmgmt_token_request_redirect_page">Weiterleitung nach Anfrage</label></th>
+                        <td>
+                            <?php
+                            wp_dropdown_pages(array(
+                                'name' => 'tmgmt_token_request_redirect_page',
+                                'selected' => get_option('tmgmt_token_request_redirect_page'),
+                                'show_option_none' => '-- Keine Weiterleitung (Nachricht anzeigen) --',
+                                'option_none_value' => ''
+                            ));
+                            ?>
+                            <p class="description">Wählen Sie eine Seite, auf die der Nutzer nach dem Absenden des Formulars weitergeleitet wird (z.B. eine "Danke"-Seite).</p>
                         </td>
                     </tr>
                 </table>

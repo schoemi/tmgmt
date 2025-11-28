@@ -373,6 +373,8 @@ class TMGMT_Customer_Access_Manager {
 
     public function render_token_request_form($atts) {
         ob_start();
+        $redirect_page_id = get_option('tmgmt_token_request_redirect_page');
+        $redirect_url = $redirect_page_id ? get_permalink($redirect_page_id) : '';
         ?>
         <div id="tmgmt-token-request-form-wrapper">
             <form id="tmgmt-token-request-form" class="tmgmt-form">
@@ -397,6 +399,8 @@ class TMGMT_Customer_Access_Manager {
 
         <script>
         jQuery(document).ready(function($) {
+            var redirectUrl = '<?php echo esc_js($redirect_url); ?>';
+
             $('#tmgmt-token-request-form').on('submit', function(e) {
                 e.preventDefault();
                 var form = $(this);
@@ -413,10 +417,14 @@ class TMGMT_Customer_Access_Manager {
                     date: $('#tmgmt_req_date').val(),
                     nonce: '<?php echo wp_create_nonce('tmgmt_token_request_nonce'); ?>'
                 }, function(response) {
-                    // Always show success message to prevent enumeration
-                    msg.addClass('success').css('background', '#d4edda').css('color', '#155724').text('Wenn die Daten korrekt sind, erhalten Sie in Kürze eine E-Mail mit dem Zugangslink.').show();
-                    form[0].reset();
-                    btn.prop('disabled', false).text('Zugang anfordern');
+                    if (redirectUrl) {
+                        window.location.href = redirectUrl;
+                    } else {
+                        // Always show success message to prevent enumeration
+                        msg.addClass('success').css('background', '#d4edda').css('color', '#155724').text('Wenn die Daten korrekt sind, erhalten Sie in Kürze eine E-Mail mit dem Zugangslink.').show();
+                        form[0].reset();
+                        btn.prop('disabled', false).text('Zugang anfordern');
+                    }
                 });
             });
         });
