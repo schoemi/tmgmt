@@ -1,0 +1,59 @@
+{
+    "name": "EasyBill Integration",
+    "description": "Integration für EasyBill Rechnungsstellung",
+    "base_url": "https://api.easybill.de/rest/v1",
+    "authentication": {
+        "type": "bearer",
+        "token": "YOUR_API_TOKEN_HERE"
+    },
+    "actions": [
+        {
+            "id": "create_customer",
+            "name": "Kunde erstellen",
+            "method": "POST",
+            "endpoint": "/customers",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "body": {
+                "last_name": "{{ contact.lastname }}",
+                "first_name": "{{ contact.firstname }}",
+                "company_name": "{{ contact.company }}",
+                "street": "{{ contact.street }} {{ contact.number }}",
+                "zip_code": "{{ contact.zip }}",
+                "city": "{{ contact.city }}",
+                "emails": ["{{ contact.email }}"]
+            },
+            "response_mapping": {
+                "accounting_id": "id"
+            }
+        },
+        {
+            "id": "create_invoice",
+            "name": "Rechnung erstellen",
+            "method": "POST",
+            "endpoint": "/invoices",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "body": {
+                "customer_id": "{{ invoice.accounting_id }}",
+                "items": [
+                    {
+                        "description": "{{ service.name }}",
+                        "unit_price": "{{ service.price }}",
+                        "quantity": 1,
+                        "vat_percent": "{{ service.vat_rate }}"
+                    }
+                ],
+                "text": "{{ invoice.intro_text }}",
+                "ref_id": "{{ invoice.ref_number }}"
+            },
+            "response_mapping": {
+                "invoice_number": "number",
+                "invoice_id": "id",
+                "pdf_url": "document_url"
+            }
+        }
+    ]
+}

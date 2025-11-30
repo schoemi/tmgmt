@@ -34,6 +34,10 @@ require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-title-post-type.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-setlist-post-type.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-location-post-type.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-contact-post-type.php';
+require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-service-post-type.php';
+require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-invoice-post-type.php';
+require_once TMGMT_PLUGIN_DIR . 'includes/class-integration-manager.php';
+require_once TMGMT_PLUGIN_DIR . 'includes/class-integration-settings.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-placeholder-parser.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-action-handler.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-dashboard.php';
@@ -72,6 +76,9 @@ function tmgmt_init() {
     new TMGMT_Setlist_Post_Type();
     new TMGMT_Location_Post_Type();
     new TMGMT_Contact_Post_Type();
+    new TMGMT_Service_Post_Type();
+    new TMGMT_Invoice_Post_Type();
+    new TMGMT_Integration_Manager();
     new TMGMT_Action_Handler();
     new TMGMT_Dashboard();
     new TMGMT_Appointment_List();
@@ -82,7 +89,7 @@ function tmgmt_init() {
     new TMGMT_Frontend_Manager();
     new TMGMT_Tour_Manager();
     new TMGMT_Tour_Overview();
-    new TMGMT_Admin_Menu();
+    new TMGMT_Admin_Menu(); // Re-enabled: Restore default menu
     new TMGMT_PDF_Generator();
     new TMGMT_Live_Tracking();
     new TMGMT_Confirmation_Manager();

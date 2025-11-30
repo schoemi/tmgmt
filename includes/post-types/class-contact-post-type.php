@@ -10,11 +10,35 @@ if (!defined('ABSPATH')) {
 }
 
 class TMGMT_Contact_Post_Type {
+    public function add_easyverein_id_meta_box() {
+        add_meta_box(
+            'tmgmt_contact_easyverein_id',
+            'easyVerein ID',
+            array($this, 'render_easyverein_id_meta_box'),
+            'tmgmt_contact',
+            'side',
+            'default'
+        );
+    }
+
+    public function render_easyverein_id_meta_box($post) {
+        $easyverein_id = get_post_meta($post->ID, '_tmgmt_contact_easyverein_id', true);
+        echo '<label for="tmgmt_contact_easyverein_id">easyVerein Kontakt-ID:</label>';
+        echo '<input type="text" name="tmgmt_contact_easyverein_id" id="tmgmt_contact_easyverein_id" value="' . esc_attr($easyverein_id) . '" class="regular-text">';
+    }
+
+    public function save_easyverein_id_meta_box($post_id) {
+        if (isset($_POST['tmgmt_contact_easyverein_id'])) {
+            update_post_meta($post_id, '_tmgmt_contact_easyverein_id', sanitize_text_field($_POST['tmgmt_contact_easyverein_id']));
+        }
+    }
 
     public function __construct() {
         add_action('init', array($this, 'register_post_type'));
         add_action('add_meta_boxes', array($this, 'add_meta_boxes'));
+        add_action('add_meta_boxes', array($this, 'add_easyverein_id_meta_box'));
         add_action('save_post', array($this, 'save_meta_boxes'));
+        add_action('save_post', array($this, 'save_easyverein_id_meta_box'));
         add_action('wp_ajax_tmgmt_search_contacts', array($this, 'ajax_search_contacts'));
         add_action('wp_ajax_tmgmt_save_contact_from_event', array($this, 'ajax_save_contact_from_event'));
     }

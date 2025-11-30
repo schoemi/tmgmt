@@ -459,33 +459,56 @@ class TMGMT_Event_Meta_Boxes {
     }
 
     public function render_contact_details_box($post) {
+        $contact_cpt_id = get_post_meta($post->ID, '_tmgmt_contact_cpt_id', true);
+
+        // Standard: Daten aus Event-Meta
         $salutation = get_post_meta($post->ID, '_tmgmt_contact_salutation', true);
         $firstname = get_post_meta($post->ID, '_tmgmt_contact_firstname', true);
         $lastname = get_post_meta($post->ID, '_tmgmt_contact_lastname', true);
         $company = get_post_meta($post->ID, '_tmgmt_contact_company', true);
-        
         $contact_street = get_post_meta($post->ID, '_tmgmt_contact_street', true);
         $contact_number = get_post_meta($post->ID, '_tmgmt_contact_number', true);
         $contact_zip = get_post_meta($post->ID, '_tmgmt_contact_zip', true);
         $contact_city = get_post_meta($post->ID, '_tmgmt_contact_city', true);
         $contact_country = get_post_meta($post->ID, '_tmgmt_contact_country', true);
-
         $email_contract = get_post_meta($post->ID, '_tmgmt_contact_email_contract', true);
         $phone_contract = get_post_meta($post->ID, '_tmgmt_contact_phone_contract', true);
-        
         $name_tech = get_post_meta($post->ID, '_tmgmt_contact_name_tech', true);
         $email_tech = get_post_meta($post->ID, '_tmgmt_contact_email_tech', true);
         $phone_tech = get_post_meta($post->ID, '_tmgmt_contact_phone_tech', true);
-        
         $name_program = get_post_meta($post->ID, '_tmgmt_contact_name_program', true);
         $email_program = get_post_meta($post->ID, '_tmgmt_contact_email_program', true);
         $phone_program = get_post_meta($post->ID, '_tmgmt_contact_phone_program', true);
+
+        // Wenn Kontakt-CPT-ID gesetzt, Daten aus Kontakte CPT laden
+        if (!empty($contact_cpt_id)) {
+            $contact_post = get_post($contact_cpt_id);
+            if ($contact_post && $contact_post->post_type === 'tmgmt_contact') {
+                $salutation = get_post_meta($contact_cpt_id, '_tmgmt_contact_salutation', true);
+                $firstname = get_post_meta($contact_cpt_id, '_tmgmt_contact_firstname', true);
+                $lastname = get_post_meta($contact_cpt_id, '_tmgmt_contact_lastname', true);
+                $company = get_post_meta($contact_cpt_id, '_tmgmt_contact_company', true);
+                $contact_street = get_post_meta($contact_cpt_id, '_tmgmt_contact_street', true);
+                $contact_number = get_post_meta($contact_cpt_id, '_tmgmt_contact_number', true);
+                $contact_zip = get_post_meta($contact_cpt_id, '_tmgmt_contact_zip', true);
+                $contact_city = get_post_meta($contact_cpt_id, '_tmgmt_contact_city', true);
+                $contact_country = get_post_meta($contact_cpt_id, '_tmgmt_contact_country', true);
+                // Optionale Felder, falls im CPT vorhanden
+                $email_contract = get_post_meta($contact_cpt_id, '_tmgmt_contact_email', true);
+                $phone_contract = get_post_meta($contact_cpt_id, '_tmgmt_contact_phone', true);
+            }
+        }
+        
         ?>
         
         <div class="tmgmt-row" style="margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 15px;">
             <div class="tmgmt-field" style="flex: 1; position: relative;">
                 <label for="tmgmt_contact_search">Kontakt suchen / laden</label>
                 <input type="text" id="tmgmt_contact_search" placeholder="Name oder Firma eingeben..." autocomplete="off">
+                <div class="tmgmt-field" style="flex: 1;">
+    <label for="tmgmt_contact_cpt_id">Kontakt CPT ID</label>
+    <input type="text" id="tmgmt_contact_cpt_id" name="tmgmt_contact_cpt_id" value="<?php echo esc_attr($contact_cpt_id); ?>">
+</div>
                 <div id="tmgmt_contact_search_results" style="display:none; position:absolute; top:100%; left:0; right:0; background:#fff; border:1px solid #ccc; z-index:100; max-height:200px; overflow-y:auto; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
             </div>
         </div>
@@ -1267,6 +1290,7 @@ class TMGMT_Event_Meta_Boxes {
         }
 
         $fields = array(
+            'tmgmt_contact_cpt_id',
             // Event Details
             'tmgmt_event_date', 'tmgmt_event_start_time', 'tmgmt_event_arrival_time', 'tmgmt_event_departure_time',
             'tmgmt_venue_name', 'tmgmt_venue_street', 'tmgmt_venue_number', 'tmgmt_venue_zip', 'tmgmt_venue_city', 'tmgmt_venue_country',

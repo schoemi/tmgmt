@@ -89,9 +89,9 @@ class TMGMT_Event_Post_Type {
 
         $args = array(
             'labels'             => $labels,
-            'public'             => false, // Not public on frontend for now
+            'public'             => false,
             'show_ui'            => true,
-            'show_in_menu'       => true,
+            'show_in_menu'       => true, // Hide default menu
             'query_var'          => true,
             'rewrite'            => array('slug' => 'event'),
             'capability_type'    => 'post',
@@ -100,7 +100,7 @@ class TMGMT_Event_Post_Type {
             'menu_position'      => 5,
             'menu_icon'          => 'dashicons-admin-settings',
             'supports'           => array('title', 'editor', 'custom-fields'),
-            'show_in_rest'       => false, // Disables Gutenberg Editor
+            'show_in_rest'       => false,
             'capability_type'    => 'event',
             'map_meta_cap'       => true,
         );

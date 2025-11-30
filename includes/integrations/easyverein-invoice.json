@@ -1,0 +1,62 @@
+{
+  "name": "easyVerein Invoice Integration",
+  "description": "Erstellt eine Rechnung in easyVerein über die API (zweistufiger Ablauf).",
+  "base_url": "https://easyverein.com/api/v1.7",
+  "actions": [
+    {
+      "id": "create_invoice_full",
+      "name": "Rechnung komplett erstellen",
+      "sequence": [
+        {
+          "method": "POST",
+          "endpoint": "/invoice",
+          "headers": {
+            "Authorization": "Bearer {{api_token}}",
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "receiver": "{{contact_firstname}} {{contact_lastname}} \n{{contact_street}} {{contact_number}} \n{{contact_zip}} {{contact_city}",
+            "invNumber": "M1{{event_id}}-{{invoice_id}}",
+            "refNumber": "{{invoice_ref_number}}",
+            "date": "{{invoice_date}}",
+            "closingDescription": "{{invoice_closing_description}}",
+
+            "description": "Rechnung für {{title}}",
+            "customPaymentMethod": "{{payment_method}}",
+            "isReceipt": false,
+            "isDraft": true,
+            "kind": "revenue",
+            "totalPrice": "{{invoice_total}}"
+          },
+          "response_mapping": {
+            "invoice_id": "id"
+          }
+        },
+        {
+          "method": "POST",
+          "endpoint": "/invoice-items",
+          "headers": {
+            "Authorization": "Bearer {{api_token}}",
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "invoice_id": "{{step.0.invoice_id}}",
+            "items": [
+              {
+                "title": "{{item.title}}",
+                "amount": "{{item.amount}}",
+                "unitPrice": "{{item.unit_price}}"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "mapping": {
+    "item.title": "Rechnungsposition Titel",
+    "item.amount": "Menge",
+    "item.unit_price": "Einzelpreis",
+    "item.easyverein_article_id": "Artikelnummer (optional)"
+  }
+}

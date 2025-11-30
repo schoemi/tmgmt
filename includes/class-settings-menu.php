@@ -195,6 +195,16 @@ class TMGMT_Settings_Menu {
 
                 <div class="card" style="padding: 0; overflow: hidden;">
                     <div style="padding: 15px; background: #f0f0f1; border-bottom: 1px solid #c3c4c7;">
+                        <h2 style="margin:0; font-size: 16px;">Integrationen</h2>
+                    </div>
+                    <div style="padding: 15px;">
+                        <p>Hinterlegen Sie API Keys für externe Integrationen wie easyVerein.</p>
+                        <a href="admin.php?page=tmgmt-integration-settings" class="button button-primary">Konfigurieren</a>
+                    </div>
+                </div>
+
+                <div class="card" style="padding: 0; overflow: hidden;">
+                    <div style="padding: 15px; background: #f0f0f1; border-bottom: 1px solid #c3c4c7;">
                         <h2 style="margin:0; font-size: 16px;">Status Definitionen</h2>
                     </div>
                     <div style="padding: 15px;">
