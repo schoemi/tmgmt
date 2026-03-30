@@ -68,7 +68,7 @@ class TMGMT_Contact_Post_Type {
             'has_archive'        => false,
             'hierarchical'       => false,
             'menu_position'      => 23,
-            'supports'           => array('title'),
+            'supports'           => array(''),
             'show_in_rest'       => false,
         );
 
@@ -177,15 +177,51 @@ class TMGMT_Contact_Post_Type {
                 update_post_meta($post_id, $field, sanitize_text_field($_POST[$input_name]));
             }
         }
+
+        // Auto-generate post title from firstname + lastname
+        $firstname = isset($_POST['tmgmt_contact_firstname']) ? sanitize_text_field($_POST['tmgmt_contact_firstname']) : '';
+        $lastname = isset($_POST['tmgmt_contact_lastname']) ? sanitize_text_field($_POST['tmgmt_contact_lastname']) : '';
+        $auto_title = trim($firstname . ' ' . $lastname);
+        if (!empty($auto_title)) {
+            remove_action('save_post', array($this, 'save_meta_boxes'));
+            wp_update_post(array(
+                'ID' => $post_id,
+                'post_title' => $auto_title,
+            ));
+            add_action('save_post', array($this, 'save_meta_boxes'));
+        }
     }
 
     public function ajax_search_contacts() {
         $term = sanitize_text_field($_GET['term']);
         
         $args = array(
-            'post_type' => 'tmgmt_contact',
-            's' => $term,
-            'posts_per_page' => 10
+            'post_type'      => 'tmgmt_contact',
+            'post_status'    => 'publish',
+            'posts_per_page' => 10,
+            'meta_query'     => array(
+                'relation' => 'OR',
+                array(
+                    'key'     => '_tmgmt_contact_firstname',
+                    'value'   => $term,
+                    'compare' => 'LIKE',
+                ),
+                array(
+                    'key'     => '_tmgmt_contact_lastname',
+                    'value'   => $term,
+                    'compare' => 'LIKE',
+                ),
+                array(
+                    'key'     => '_tmgmt_contact_company',
+                    'value'   => $term,
+                    'compare' => 'LIKE',
+                ),
+                array(
+                    'key'     => '_tmgmt_contact_email',
+                    'value'   => $term,
+                    'compare' => 'LIKE',
+                ),
+            ),
         );
         
         $query = new WP_Query($args);
@@ -221,10 +257,12 @@ class TMGMT_Contact_Post_Type {
             wp_send_json_error('Keine Berechtigung');
         }
 
-        $title = sanitize_text_field($_POST['title']);
+        $firstname = isset($_POST['firstname']) ? sanitize_text_field($_POST['firstname']) : '';
+        $lastname = isset($_POST['lastname']) ? sanitize_text_field($_POST['lastname']) : '';
+        $auto_title = trim($firstname . ' ' . $lastname);
         
         $post_data = array(
-            'post_title'    => $title,
+            'post_title'    => !empty($auto_title) ? $auto_title : __('Kontakt', 'toens-mgmt'),
             'post_type'     => 'tmgmt_contact',
             'post_status'   => 'publish'
         );

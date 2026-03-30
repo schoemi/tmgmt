@@ -34,6 +34,7 @@ require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-title-post-type.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-setlist-post-type.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-location-post-type.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-contact-post-type.php';
+require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-veranstalter-post-type.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-service-post-type.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-invoice-post-type.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-integration-manager.php';
@@ -76,6 +77,7 @@ function tmgmt_init() {
     new TMGMT_Setlist_Post_Type();
     new TMGMT_Location_Post_Type();
     new TMGMT_Contact_Post_Type();
+    new TMGMT_Veranstalter_Post_Type();
     new TMGMT_Service_Post_Type();
     new TMGMT_Invoice_Post_Type();
     new TMGMT_Integration_Manager();
