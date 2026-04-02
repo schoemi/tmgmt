@@ -596,6 +596,13 @@ class TMGMT_Action_Handler {
                 wp_send_json_error(array('message' => 'E-Mail konnte nicht gesendet werden.'));
             }
 
+        } elseif ($action_type === 'contract_generation') {
+            $generator = new TMGMT_Contract_Generator();
+            $result = $generator->generate_and_send($event_id, $action_id);
+            if (is_wp_error($result)) {
+                wp_send_json_error(array('message' => $result->get_error_message()));
+            }
+
         } else {
             // Note Type
             if (!empty($note)) {
@@ -684,14 +691,26 @@ class TMGMT_Action_Handler {
         $fields['arrival_time'] = $get_meta('_tmgmt_event_arrival_time');
         $fields['departure_time'] = $get_meta('_tmgmt_event_departure_time');
         
-        // Venue
-        $fields['venue_name'] = $get_meta('_tmgmt_venue_name');
-        $fields['venue_street'] = $get_meta('_tmgmt_venue_street');
-        $fields['venue_number'] = $get_meta('_tmgmt_venue_number');
-        $fields['venue_zip'] = $get_meta('_tmgmt_venue_zip');
-        $fields['venue_city'] = $get_meta('_tmgmt_venue_city');
-        $fields['venue_country'] = $get_meta('_tmgmt_venue_country');
-        $fields['arrival_notes'] = $get_meta('_tmgmt_arrival_notes');
+        // Venue - get from linked location
+        $location_id = $get_meta('_tmgmt_event_location_id');
+        if (!empty($location_id)) {
+            $location_post = get_post($location_id);
+            $fields['venue_name'] = $location_post ? $location_post->post_title : '';
+            $fields['venue_street'] = get_post_meta($location_id, '_tmgmt_location_street', true);
+            $fields['venue_number'] = get_post_meta($location_id, '_tmgmt_location_number', true);
+            $fields['venue_zip'] = get_post_meta($location_id, '_tmgmt_location_zip', true);
+            $fields['venue_city'] = get_post_meta($location_id, '_tmgmt_location_city', true);
+            $fields['venue_country'] = get_post_meta($location_id, '_tmgmt_location_country', true);
+            $fields['arrival_notes'] = get_post_meta($location_id, '_tmgmt_location_notes', true);
+        } else {
+            $fields['venue_name'] = '';
+            $fields['venue_street'] = '';
+            $fields['venue_number'] = '';
+            $fields['venue_zip'] = '';
+            $fields['venue_city'] = '';
+            $fields['venue_country'] = '';
+            $fields['arrival_notes'] = '';
+        }
 
         // Contacts
         $contacts = array();

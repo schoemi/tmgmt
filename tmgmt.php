@@ -58,7 +58,17 @@ require_once TMGMT_PLUGIN_DIR . 'includes/class-settings-menu.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-admin-menu.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-general-settings.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-pdf-generator.php';
+require_once TMGMT_PLUGIN_DIR . 'includes/class-contract-generator.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-live-tracking.php';
+
+// IMAP Ticket System
+require_once TMGMT_PLUGIN_DIR . 'includes/class-mail-queue.php';
+require_once TMGMT_PLUGIN_DIR . 'includes/class-mail-queue-admin.php';
+require_once TMGMT_PLUGIN_DIR . 'includes/class-connection-settings.php';
+require_once TMGMT_PLUGIN_DIR . 'includes/class-imap-connector.php';
+require_once TMGMT_PLUGIN_DIR . 'includes/class-smtp-sender.php';
+require_once TMGMT_PLUGIN_DIR . 'includes/class-mail-assigner.php';
+require_once TMGMT_PLUGIN_DIR . 'includes/class-reply-handler.php';
 
 // Initialize Plugin
 function tmgmt_init() {
@@ -96,8 +106,26 @@ function tmgmt_init() {
     new TMGMT_Live_Tracking();
     new TMGMT_Confirmation_Manager();
     new TMGMT_Customer_Access_Manager();
+    
+    // IMAP Ticket System
+    new TMGMT_Mail_Queue();
+    new TMGMT_Mail_Queue_Admin();
+    new TMGMT_Connection_Settings();
+    new TMGMT_IMAP_Connector();
 }
 add_action('plugins_loaded', 'tmgmt_init');
+
+// Ensure DB tables exist (runs on every load, dbDelta is safe to call multiple times)
+add_action('plugins_loaded', 'tmgmt_ensure_tables', 20);
+function tmgmt_ensure_tables() {
+    // Check if mail queue table exists, create if not
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'tmgmt_mail_queue';
+    if ($wpdb->get_var("SHOW TABLES LIKE '$table_name'") !== $table_name) {
+        $mail_queue = new TMGMT_Mail_Queue();
+        $mail_queue->create_table();
+    }
+}
 
 // Activation Hook for DB Table
 register_activation_hook(__FILE__, 'tmgmt_activate');
@@ -113,4 +141,8 @@ function tmgmt_activate() {
 
     $access_manager = new TMGMT_Customer_Access_Manager();
     $access_manager->create_table();
+
+    // IMAP Ticket System - Mail Queue Table
+    $mail_queue = new TMGMT_Mail_Queue();
+    $mail_queue->create_table();
 }

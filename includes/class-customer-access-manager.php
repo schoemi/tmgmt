@@ -17,6 +17,10 @@ class TMGMT_Customer_Access_Manager {
         add_shortcode('tmgmt_token_request', array($this, 'render_token_request_form'));
         add_action('wp_ajax_tmgmt_request_token', array($this, 'handle_token_request'));
         add_action('wp_ajax_nopriv_tmgmt_request_token', array($this, 'handle_token_request'));
+
+        // Signed Contract Upload
+        add_action('wp_ajax_tmgmt_upload_signed_contract', array($this, 'handle_signed_contract_upload'));
+        add_action('wp_ajax_nopriv_tmgmt_upload_signed_contract', array($this, 'handle_signed_contract_upload'));
     }
 
     public function create_table() {
@@ -259,10 +263,7 @@ class TMGMT_Customer_Access_Manager {
             '_tmgmt_event_start_time' => 'Startzeit',
             '_tmgmt_event_arrival_time' => 'Ankunftszeit',
             '_tmgmt_event_departure_time' => 'Abfahrtszeit',
-            '_tmgmt_arrival_notes' => 'Anreise Notizen',
-            '_tmgmt_venue_name' => 'Location Name',
-            '_tmgmt_venue_street' => 'Location Straße',
-            '_tmgmt_venue_city' => 'Location Stadt',
+            '_tmgmt_event_location_id' => 'Veranstaltungsort',
             '_tmgmt_contact_firstname' => 'Kontakt Vorname',
             '_tmgmt_contact_lastname' => 'Kontakt Nachname',
             '_tmgmt_contact_email' => 'Kontakt E-Mail',
@@ -362,6 +363,13 @@ class TMGMT_Customer_Access_Manager {
                     ?>
                 </form>
 
+                <?php
+                $status = get_post_meta($event_id, '_tmgmt_status', true);
+                if ($status === TMGMT_Event_Status::CONTRACT_SENT) {
+                    $this->render_contract_upload_section($event_id);
+                }
+                ?>
+
                 <div class="footer">
                     Powered by Töns Management
                 </div>
@@ -369,6 +377,176 @@ class TMGMT_Customer_Access_Manager {
         </body>
         </html>
         <?php
+    }
+
+    private function render_contract_upload_section($event_id) {
+        $token = isset($_GET['tmgmt_token']) ? sanitize_text_field($_GET['tmgmt_token']) : '';
+        ?>
+        <div class="tmgmt-contract-upload-section" style="margin-top: 40px; padding: 20px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9;">
+            <h2 style="margin-top: 0;">Unterschriebenen Vertrag hochladen</h2>
+            <p>Bitte laden Sie den unterschriebenen Vertrag als PDF, JPG oder PNG hoch.</p>
+            <div id="tmgmt-upload-message" style="display:none; padding: 10px; border-radius: 4px; margin-bottom: 15px;"></div>
+            <form id="tmgmt-contract-upload-form" enctype="multipart/form-data">
+                <input type="hidden" name="action" value="tmgmt_upload_signed_contract">
+                <input type="hidden" name="tmgmt_token" value="<?php echo esc_attr($token); ?>">
+                <input type="hidden" name="event_id" value="<?php echo esc_attr($event_id); ?>">
+                <input type="hidden" name="nonce" value="<?php echo wp_create_nonce('tmgmt_upload_signed_contract_nonce'); ?>">
+                <div style="margin-bottom: 15px;">
+                    <label for="tmgmt-signed-contract-file" style="display: block; font-weight: bold; margin-bottom: 5px;">Datei auswählen</label>
+                    <input type="file" id="tmgmt-signed-contract-file" name="signed_contract" accept=".pdf,.jpg,.jpeg,.png" required>
+                </div>
+                <button type="submit" class="button" style="background: #2271b1; border-color: #2271b1; color: #fff; padding: 8px 16px; cursor: pointer; border-radius: 3px; border-style: solid;">Vertrag hochladen</button>
+            </form>
+            <script>
+            (function() {
+                var form = document.getElementById('tmgmt-contract-upload-form');
+                if (!form) return;
+                form.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    var msg = document.getElementById('tmgmt-upload-message');
+                    var btn = form.querySelector('button[type="submit"]');
+                    btn.disabled = true;
+                    btn.textContent = 'Wird hochgeladen...';
+                    msg.style.display = 'none';
+
+                    var formData = new FormData(form);
+                    var xhr = new XMLHttpRequest();
+                    xhr.open('POST', '<?php echo esc_js(admin_url('admin-ajax.php')); ?>');
+                    xhr.onload = function() {
+                        btn.disabled = false;
+                        btn.textContent = 'Vertrag hochladen';
+                        try {
+                            var resp = JSON.parse(xhr.responseText);
+                            if (resp.success) {
+                                msg.style.background = '#d4edda';
+                                msg.style.color = '#155724';
+                                msg.style.border = '1px solid #c3e6cb';
+                                msg.textContent = resp.data && resp.data.message ? resp.data.message : 'Vertrag erfolgreich hochgeladen.';
+                                form.style.display = 'none';
+                            } else {
+                                msg.style.background = '#f8d7da';
+                                msg.style.color = '#721c24';
+                                msg.style.border = '1px solid #f5c6cb';
+                                msg.textContent = resp.data && resp.data.message ? resp.data.message : 'Fehler beim Hochladen.';
+                            }
+                        } catch (err) {
+                            msg.style.background = '#f8d7da';
+                            msg.style.color = '#721c24';
+                            msg.textContent = 'Unbekannter Fehler.';
+                        }
+                        msg.style.display = 'block';
+                    };
+                    xhr.onerror = function() {
+                        btn.disabled = false;
+                        btn.textContent = 'Vertrag hochladen';
+                        msg.style.background = '#f8d7da';
+                        msg.style.color = '#721c24';
+                        msg.textContent = 'Netzwerkfehler beim Hochladen.';
+                        msg.style.display = 'block';
+                    };
+                    xhr.send(formData);
+                });
+            })();
+            </script>
+        </div>
+        <?php
+    }
+
+    public function handle_signed_contract_upload() {
+        check_ajax_referer('tmgmt_upload_signed_contract_nonce', 'nonce');
+
+        // Validate token
+        $token = isset($_POST['tmgmt_token']) ? sanitize_text_field($_POST['tmgmt_token']) : '';
+        if (empty($token)) {
+            wp_send_json_error(array('message' => 'Ungültiger Token.'));
+        }
+
+        global $wpdb;
+        $record = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM $this->table_name WHERE token = %s AND status = 'active'",
+            $token
+        ));
+
+        if (!$record) {
+            wp_send_json_error(array('message' => 'Ungültiger Token.'));
+        }
+
+        $event_id = intval($record->event_id);
+
+        // Check file was uploaded
+        if (empty($_FILES['signed_contract']) || $_FILES['signed_contract']['error'] !== UPLOAD_ERR_OK) {
+            wp_send_json_error(array('message' => 'Keine Datei hochgeladen oder Fehler beim Upload.'));
+        }
+
+        // Validate MIME type
+        $allowed_mime_types = array('application/pdf', 'image/jpeg', 'image/png');
+        $file_tmp = $_FILES['signed_contract']['tmp_name'];
+        $detected_mime = $this->detect_mime_type($file_tmp, $_FILES['signed_contract']['type']);
+
+        if (!in_array($detected_mime, $allowed_mime_types, true)) {
+            wp_send_json_error(array('message' => 'Ungültiger Dateityp. Erlaubt: PDF, JPG, PNG.'));
+            return;
+        }
+
+        // Load WP media handling
+        require_once ABSPATH . 'wp-admin/includes/image.php';
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+        require_once ABSPATH . 'wp-admin/includes/media.php';
+
+        // Save as WP Attachment
+        $attachment_id = media_handle_upload('signed_contract', $event_id);
+
+        if (is_wp_error($attachment_id)) {
+            wp_send_json_error(array('message' => $attachment_id->get_error_message()));
+        }
+
+        // Save attachment ID as post meta (Req. 6.3)
+        update_post_meta($event_id, '_tmgmt_signed_contract_attachment_id', $attachment_id);
+
+        // Set event status to contract_signed (Req. 6.4)
+        update_post_meta($event_id, '_tmgmt_status', 'contract_signed');
+
+        // Send notification email (Req. 6.5, 6.6)
+        $notification_user_id = get_option('tmgmt_contract_notification_user_id');
+        $notify_email = '';
+
+        if ($notification_user_id) {
+            $user_data = get_userdata(intval($notification_user_id));
+            if ($user_data && !empty($user_data->user_email)) {
+                $notify_email = $user_data->user_email;
+            }
+        }
+
+        if (empty($notify_email)) {
+            $notify_email = get_option('admin_email');
+        }
+
+        $event = get_post($event_id);
+        $event_title = $event ? $event->post_title : 'Event #' . $event_id;
+
+        $subject = sprintf('Unterschriebener Vertrag hochgeladen: %s', $event_title);
+        $body    = sprintf(
+            "Ein Kunde hat den unterschriebenen Vertrag für das Event \"%s\" (ID: %d) hochgeladen.\n\nAttachment-ID: %d",
+            $event_title,
+            $event_id,
+            $attachment_id
+        );
+
+        wp_mail($notify_email, $subject, $body);
+
+        wp_send_json_success(array('message' => 'Vertrag erfolgreich hochgeladen.'));
+    }
+
+    /**
+     * Detect the MIME type of an uploaded file.
+     * Extracted as a protected method to allow test subclasses to override it.
+     *
+     * @param string $tmp_path  Path to the temporary uploaded file.
+     * @param string $fallback  Browser-reported MIME type as fallback.
+     * @return string
+     */
+    protected function detect_mime_type(string $tmp_path, string $fallback): string {
+        return function_exists('mime_content_type') ? mime_content_type($tmp_path) : $fallback;
     }
 
     public function render_token_request_form($atts) {

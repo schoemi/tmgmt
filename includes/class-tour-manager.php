@@ -104,20 +104,23 @@ class TMGMT_Tour_Manager {
             $time = get_post_meta($event->ID, '_tmgmt_event_start_time', true);
             if (!$time) $time = get_post_meta($event->ID, 'tmgmt_event_start_time', true);
 
-            $lat = get_post_meta($event->ID, '_tmgmt_geo_lat', true);
-            if (!$lat) $lat = get_post_meta($event->ID, 'tmgmt_geo_lat', true);
-
-            $lng = get_post_meta($event->ID, '_tmgmt_geo_lng', true);
-            if (!$lng) $lng = get_post_meta($event->ID, 'tmgmt_geo_lng', true);
-
-            $city = get_post_meta($event->ID, '_tmgmt_venue_city', true);
-            if (!$city) $city = get_post_meta($event->ID, 'tmgmt_venue_city', true);
-
-            $street = get_post_meta($event->ID, '_tmgmt_venue_street', true);
-            if (!$street) $street = get_post_meta($event->ID, 'tmgmt_venue_street', true);
-
-            $zip = get_post_meta($event->ID, '_tmgmt_venue_zip', true);
-            if (!$zip) $zip = get_post_meta($event->ID, 'tmgmt_venue_zip', true);
+            // Get location data from linked location
+            $location_id = get_post_meta($event->ID, '_tmgmt_event_location_id', true);
+            $lat = '';
+            $lng = '';
+            $city = '';
+            $street = '';
+            $zip = '';
+            
+            if (!empty($location_id)) {
+                $lat = get_post_meta($location_id, '_tmgmt_location_lat', true);
+                $lng = get_post_meta($location_id, '_tmgmt_location_lng', true);
+                $city = get_post_meta($location_id, '_tmgmt_location_city', true);
+                $street = get_post_meta($location_id, '_tmgmt_location_street', true);
+                $number = get_post_meta($location_id, '_tmgmt_location_number', true);
+                $zip = get_post_meta($location_id, '_tmgmt_location_zip', true);
+                if ($number) $street = trim($street . ' ' . $number);
+            }
 
             $address = trim($street . ', ' . $zip . ' ' . $city);
             if ($address === ',') $address = '';

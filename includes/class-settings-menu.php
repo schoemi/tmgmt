@@ -90,6 +90,15 @@ class TMGMT_Settings_Menu {
             'tmgmt-customer-dashboard-settings',
             array($this, 'render_customer_dashboard_settings_page')
         );
+
+        add_submenu_page(
+            'tmgmt-settings-hidden',
+            'Vertrag',
+            'Vertrag',
+            'tmgmt_manage_settings',
+            'tmgmt-contract-settings',
+            array($this, 'render_contract_settings_page')
+        );
     }
 
     public function register_settings() {
@@ -154,6 +163,10 @@ class TMGMT_Settings_Menu {
 
         // PDF Settings
         register_setting('tmgmt_pdf_options', 'tmgmt_pdf_setlist_template');
+
+        // Contract Settings
+        register_setting('tmgmt_contract_options', 'tmgmt_contract_signature_id', array('type' => 'integer', 'default' => 0));
+        register_setting('tmgmt_contract_options', 'tmgmt_contract_notification_user_id', array('type' => 'integer', 'default' => 0));
     }
 
     public function highlight_settings_menu($parent_file) {
@@ -320,6 +333,26 @@ class TMGMT_Settings_Menu {
                     <div style="padding: 15px;">
                         <p>Konfigurieren Sie den Testmodus und Simulationseinstellungen für das Live Tracking.</p>
                         <a href="admin.php?page=tmgmt-live-tracking-settings" class="button button-primary">Konfigurieren</a>
+                    </div>
+                </div>
+
+                <div class="card" style="padding: 0; overflow: hidden;">
+                    <div style="padding: 15px; background: #f0f0f1; border-bottom: 1px solid #c3c4c7;">
+                        <h2 style="margin:0; font-size: 16px;">E-Mail Verbindung</h2>
+                    </div>
+                    <div style="padding: 15px;">
+                        <p>Konfigurieren Sie IMAP- und SMTP-Zugangsdaten für das E-Mail Ticket-System.</p>
+                        <a href="admin.php?page=tmgmt-connection-settings" class="button button-primary">Konfigurieren</a>
+                    </div>
+                </div>
+
+                <div class="card" style="padding: 0; overflow: hidden;">
+                    <div style="padding: 15px; background: #f0f0f1; border-bottom: 1px solid #c3c4c7;">
+                        <h2 style="margin:0; font-size: 16px;">Vertrag</h2>
+                    </div>
+                    <div style="padding: 15px;">
+                        <p>Konfigurieren Sie die Organisations-Unterschrift und den Benachrichtigungs-Empfänger für die Vertragsgenerierung.</p>
+                        <a href="admin.php?page=tmgmt-contract-settings" class="button button-primary">Konfigurieren</a>
                     </div>
                 </div>
             </div>
@@ -1093,10 +1126,7 @@ class TMGMT_Settings_Menu {
             '_tmgmt_event_start_time' => 'Startzeit',
             '_tmgmt_event_arrival_time' => 'Ankunftszeit',
             '_tmgmt_event_departure_time' => 'Abfahrtszeit',
-            '_tmgmt_arrival_notes' => 'Anreise Notizen',
-            '_tmgmt_venue_name' => 'Location Name',
-            '_tmgmt_venue_street' => 'Location Straße',
-            '_tmgmt_venue_city' => 'Location Stadt',
+            '_tmgmt_event_location_id' => 'Veranstaltungsort',
             '_tmgmt_contact_firstname' => 'Kontakt Vorname',
             '_tmgmt_contact_lastname' => 'Kontakt Nachname',
             '_tmgmt_contact_email' => 'Kontakt E-Mail',
@@ -1210,6 +1240,91 @@ class TMGMT_Settings_Menu {
                 </table>
 
                 <?php submit_button(); ?>
+            </form>
+        </div>
+        <?php
+    }
+
+    public function render_contract_settings_page() {
+        if (!current_user_can('tmgmt_manage_settings')) {
+            return;
+        }
+
+        if (isset($_GET['settings-updated'])) {
+            add_settings_error('tmgmt_messages', 'tmgmt_message', __('Einstellungen gespeichert.', 'toens-mgmt'), 'updated');
+        }
+        settings_errors('tmgmt_messages');
+
+        // Enqueue Media Uploader
+        wp_enqueue_media();
+
+        $signature_id = (int) get_option('tmgmt_contract_signature_id', 0);
+        $signature_url = $signature_id ? wp_get_attachment_url($signature_id) : '';
+
+        $notification_user_id = (int) get_option('tmgmt_contract_notification_user_id', 0);
+        ?>
+        <div class="wrap">
+            <h1>Vertrag Einstellungen</h1>
+            <form action="options.php" method="post">
+                <?php settings_fields('tmgmt_contract_options'); ?>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row"><label for="tmgmt_contract_signature_id">Organisations-Unterschrift</label></th>
+                        <td>
+                            <div id="tmgmt-signature-preview" style="margin-bottom: 10px;">
+                                <?php if ($signature_url) : ?>
+                                    <img src="<?php echo esc_url($signature_url); ?>" style="max-width: 200px; height: auto;">
+                                <?php endif; ?>
+                            </div>
+                            <input type="hidden" name="tmgmt_contract_signature_id" id="tmgmt_contract_signature_id" value="<?php echo esc_attr($signature_id); ?>">
+                            <button type="button" class="button" id="tmgmt-upload-signature">Unterschrift auswählen</button>
+                            <button type="button" class="button" id="tmgmt-remove-signature" <?php echo $signature_id ? '' : 'style="display:none;"'; ?>>Entfernen</button>
+                            <p class="description">Wählen Sie ein Bild aus der Mediathek, das als Organisations-Unterschrift im Vertrag eingebunden wird.</p>
+
+                            <script>
+                            jQuery(document).ready(function($) {
+                                $('#tmgmt-upload-signature').click(function(e) {
+                                    e.preventDefault();
+                                    var frame = wp.media({
+                                        title: 'Unterschrift auswählen',
+                                        multiple: false,
+                                        library: { type: 'image' }
+                                    }).open()
+                                    .on('select', function() {
+                                        var attachment = frame.state().get('selection').first().toJSON();
+                                        $('#tmgmt_contract_signature_id').val(attachment.id);
+                                        $('#tmgmt-signature-preview').html('<img src="' + attachment.url + '" style="max-width: 200px; height: auto;">');
+                                        $('#tmgmt-remove-signature').show();
+                                    });
+                                });
+                                $('#tmgmt-remove-signature').click(function(e) {
+                                    e.preventDefault();
+                                    $('#tmgmt_contract_signature_id').val('');
+                                    $('#tmgmt-signature-preview').empty();
+                                    $(this).hide();
+                                });
+                            });
+                            </script>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="tmgmt_contract_notification_user_id">Benachrichtigungs-Empfänger</label></th>
+                        <td>
+                            <?php
+                            wp_dropdown_users(array(
+                                'name'             => 'tmgmt_contract_notification_user_id',
+                                'id'               => 'tmgmt_contract_notification_user_id',
+                                'selected'         => $notification_user_id,
+                                'show_option_none' => '-- Fallback: Administrator-E-Mail --',
+                                'option_none_value' => '0',
+                            ));
+                            ?>
+                            <p class="description">Dieser Benutzer erhält eine E-Mail-Benachrichtigung, wenn ein Kunde einen unterschriebenen Vertrag hochlädt. Ohne Auswahl wird die Administrator-E-Mail verwendet.</p>
+                        </td>
+                    </tr>
+                </table>
+                <?php submit_button(); ?>
+                <a href="admin.php?page=tmgmt-settings" class="button button-secondary">Zurück zur Übersicht</a>
             </form>
         </div>
         <?php

@@ -101,8 +101,33 @@ class TMGMT_Assets {
                     'validation_rules' => $rules,
                     'nonce' => wp_create_nonce('wp_rest')
                 ));
+
+                // Veranstalter integration script
+                wp_enqueue_script('jquery-ui-autocomplete');
+
+                wp_enqueue_script(
+                    'tmgmt-gig-veranstalter',
+                    TMGMT_PLUGIN_URL . 'assets/js/gig-veranstalter.js',
+                    array('jquery', 'jquery-ui-autocomplete'),
+                    self::get_version('assets/js/gig-veranstalter.js'),
+                    true
+                );
             }
             
+            // Enqueue for Veranstalter Post Type
+            if ('tmgmt_veranstalter' === $post->post_type) {
+                wp_enqueue_script('jquery-ui-autocomplete');
+                wp_enqueue_style('wp-jquery-ui-dialog');
+
+                wp_enqueue_script(
+                    'tmgmt-veranstalter-admin',
+                    TMGMT_PLUGIN_URL . 'assets/js/veranstalter-admin.js',
+                    array('jquery', 'jquery-ui-autocomplete'),
+                    self::get_version('assets/js/veranstalter-admin.js'),
+                    true
+                );
+            }
+
             // Enqueue for Tour Post Type
             if ('tmgmt_tour' === $post->post_type) {
                 // Leaflet

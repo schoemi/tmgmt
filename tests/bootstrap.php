@@ -49,6 +49,14 @@ if (!function_exists('current_user_can')) {
 
 if (!function_exists('get_post_type')) {
     function get_post_type($post = null) {
+        global $test_current_post_type, $test_post_store;
+        // If a post ID is given, look up its type from the post store
+        if ($post !== null && is_numeric($post) && isset($test_post_store) && is_array($test_post_store) && isset($test_post_store[$post])) {
+            return $test_post_store[$post]->post_type;
+        }
+        if (isset($test_current_post_type)) {
+            return $test_current_post_type;
+        }
         return 'tmgmt_veranstalter';
     }
 }
@@ -102,6 +110,10 @@ if (!defined('DOING_AUTOSAVE')) {
 
 if (!function_exists('get_post')) {
     function get_post($post_id = null) {
+        global $test_post_store;
+        if (isset($test_post_store) && is_array($test_post_store) && isset($test_post_store[$post_id])) {
+            return $test_post_store[$post_id];
+        }
         return null;
     }
 }
@@ -161,14 +173,192 @@ if (!function_exists('delete_transient')) {
 
 if (!function_exists('wp_send_json_success')) {
     function wp_send_json_success($data = null) {
-        // No-op in tests
+        global $test_json_response;
+        $test_json_response = array('success' => true, 'data' => $data);
     }
 }
 
 if (!function_exists('wp_send_json_error')) {
     function wp_send_json_error($data = null) {
-        // No-op in tests
+        global $test_json_response;
+        $test_json_response = array('success' => false, 'data' => $data);
+    }
+}
+
+if (!function_exists('get_edit_post_link')) {
+    function get_edit_post_link($post_id = 0, $context = 'display') {
+        return 'http://example.com/wp-admin/post.php?post=' . intval($post_id) . '&action=edit';
+    }
+}
+
+if (!function_exists('delete_post_meta')) {
+    function delete_post_meta($post_id, $meta_key, $meta_value = '') {
+        global $test_post_meta_store;
+        if (isset($test_post_meta_store[$post_id][$meta_key])) {
+            unset($test_post_meta_store[$post_id][$meta_key]);
+            return true;
+        }
+        return false;
+    }
+}
+
+// In-memory options store for testing
+global $test_options_store;
+$test_options_store = array();
+
+if (!function_exists('update_option')) {
+    function update_option($option, $value, $autoload = null) {
+        global $test_options_store;
+        $test_options_store[$option] = $value;
+        return true;
+    }
+}
+
+if (!function_exists('get_option')) {
+    function get_option($option, $default = false) {
+        global $test_options_store;
+        if (array_key_exists($option, $test_options_store)) {
+            return $test_options_store[$option];
+        }
+        return $default;
     }
 }
 
 require_once dirname(__DIR__) . '/includes/post-types/class-veranstalter-post-type.php';
+
+// Stubs for TMGMT_Event_Meta_Boxes dependencies
+
+if (!function_exists('get_posts')) {
+    function get_posts($args = array()) {
+        return array();
+    }
+}
+
+if (!function_exists('esc_textarea')) {
+    function esc_textarea($text) {
+        return htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
+    }
+}
+
+if (!function_exists('esc_url')) {
+    function esc_url($url) {
+        return filter_var($url, FILTER_SANITIZE_URL);
+    }
+}
+
+if (!function_exists('current_time')) {
+    function current_time($type, $gmt = 0) {
+        return date($type);
+    }
+}
+
+if (!function_exists('selected')) {
+    function selected($selected, $current = true, $echo = true) {
+        $result = ($selected == $current) ? ' selected="selected"' : '';
+        if ($echo) echo $result;
+        return $result;
+    }
+}
+
+if (!function_exists('get_permalink')) {
+    function get_permalink($post_id = 0) {
+        return 'http://example.com/?p=' . intval($post_id);
+    }
+}
+
+if (!function_exists('admin_url')) {
+    function admin_url($path = '') {
+        return 'http://example.com/wp-admin/' . ltrim($path, '/');
+    }
+}
+
+if (!function_exists('wp_create_nonce')) {
+    function wp_create_nonce($action = -1) {
+        return 'test_nonce';
+    }
+}
+
+if (!function_exists('wp_get_attachment_url')) {
+    function wp_get_attachment_url($attachment_id = 0) {
+        return 'http://example.com/wp-content/uploads/test-file.pdf';
+    }
+}
+
+if (!function_exists('get_the_date')) {
+    function get_the_date($format = '', $post_id = null) {
+        return date($format ?: 'Y-m-d');
+    }
+}
+
+if (!function_exists('get_post_mime_type')) {
+    function get_post_mime_type($post_id = null) {
+        return 'application/pdf';
+    }
+}
+
+// Stub classes required by TMGMT_Event_Meta_Boxes
+if (!class_exists('TMGMT_Log_Manager')) {
+    class TMGMT_Log_Manager {
+        public function render_log_table($post_id) {}
+        public function log($post_id, $type, $message) {}
+    }
+}
+
+if (!class_exists('TMGMT_Event_Status')) {
+    class TMGMT_Event_Status {
+        public static function get_all_statuses() {
+            return array();
+        }
+        public static function get_label($status) {
+            return $status;
+        }
+    }
+}
+
+require_once dirname(__DIR__) . '/includes/post-types/class-event-meta-boxes.php';
+
+if (!function_exists('wp_upload_dir')) {
+    function wp_upload_dir() {
+        $upload_dir = sys_get_temp_dir() . '/tmgmt-test-uploads';
+        return array(
+            'basedir' => $upload_dir,
+            'baseurl' => 'http://example.com/wp-content/uploads',
+            'error'   => false,
+        );
+    }
+}
+
+if (!function_exists('wp_mkdir_p')) {
+    function wp_mkdir_p($target) {
+        if (file_exists($target)) {
+            return @is_dir($target);
+        }
+        return @mkdir($target, 0777, true);
+    }
+}
+
+if (!function_exists('trailingslashit')) {
+    function trailingslashit($string) {
+        return rtrim($string, '/\\') . '/';
+    }
+}
+
+if (!function_exists('get_current_user_id')) {
+    function get_current_user_id(): int {
+        return 0;
+    }
+}
+
+// Stub $wpdb global so database-dependent classes don't crash in unit tests
+if (!isset($GLOBALS['wpdb'])) {
+    $GLOBALS['wpdb'] = new class {
+        public string $prefix = 'wp_';
+        public function insert($table, $data, $format = null) { return false; }
+        public function update($table, $data, $where, $format = null, $where_format = null) { return false; }
+        public function get_results($query, $output = OBJECT) { return []; }
+        public function get_row($query, $output = OBJECT, $y = 0) { return null; }
+        public function prepare($query, ...$args) { return $query; }
+        public function get_charset_collate() { return ''; }
+        public function get_var($query) { return null; }
+    };
+}

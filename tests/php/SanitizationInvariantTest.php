@@ -108,8 +108,8 @@ class SanitizationInvariantTest extends \PHPUnit\Framework\TestCase
 
                 $actual = get_post_meta($postId, '_tmgmt_veranstalter_street', true);
                 $this->assertSame(sanitize_text_field($input), $actual);
-                $this->assertStringNotContainsString('<', $actual);
-                $this->assertStringNotContainsString('>', $actual);
+                // Verify no HTML tags remain (standalone < or > outside tags may persist after strip_tags)
+                $this->assertSame(strip_tags($actual), $actual, 'HTML tags must be stripped');
             });
     }
 }

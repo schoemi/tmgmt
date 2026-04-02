@@ -90,6 +90,7 @@ class TMGMT_Action_Post_Type {
                         <option value="webhook" <?php selected($type, 'webhook'); ?>>Webhook</option>
                         <option value="email" <?php selected($type, 'email'); ?>>E-Mail</option>
                         <option value="email_confirmation" <?php selected($type, 'email_confirmation'); ?>>E-Mail mit Bestätigung</option>
+                        <option value="contract_generation" <?php selected($type, 'contract_generation'); ?>>Vertragsgenerierung</option>
                     </select>
                 </td>
             </tr>
@@ -120,6 +121,21 @@ class TMGMT_Action_Post_Type {
                 </td>
             </tr>
             
+            <!-- Contract Specific Fields -->
+            <tr class="tmgmt-contract-row" style="display:none;">
+                <th><label for="tmgmt_action_contract_email_template_id">E-Mail Vorlage (Vertragsversand)</label></th>
+                <td>
+                    <select name="tmgmt_action_email_template_id" id="tmgmt_action_contract_email_template_id">
+                        <option value="">-- Wählen --</option>
+                        <?php foreach ($email_templates as $et) : ?>
+                            <option value="<?php echo esc_attr($et->ID); ?>" <?php selected($email_template_id, $et->ID); ?>>
+                                <?php echo esc_html($et->post_title); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </td>
+            </tr>
+
             <!-- Confirmation Specific Fields -->
             <tr class="tmgmt-confirmation-row" style="display:none;">
                 <th><label for="tmgmt_action_confirm_page">Bestätigungs-Seite (Danke-Seite)</label></th>
@@ -228,6 +244,7 @@ class TMGMT_Action_Post_Type {
                 var type = $('#tmgmt_action_type').val();
                 $('.tmgmt-webhook-row').hide();
                 $('.tmgmt-email-row').hide();
+                $('.tmgmt-contract-row').hide();
                 $('.tmgmt-confirmation-row').hide();
                 $('.tmgmt-receipt-row').hide();
                 
@@ -241,6 +258,9 @@ class TMGMT_Action_Post_Type {
                     if ($('#tmgmt_action_send_receipt').is(':checked')) {
                         $('.tmgmt-receipt-row').show();
                     }
+                } else if (type === 'contract_generation') {
+                    $('.tmgmt-email-row').show();
+                    $('.tmgmt-contract-row').show();
                 }
             }
             

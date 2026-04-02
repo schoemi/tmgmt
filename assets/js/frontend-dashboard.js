@@ -832,7 +832,8 @@ document.addEventListener('DOMContentLoaded', function() {
             { key: 'notes', title: 'Notizen', content: contentHtml, defaultOrder: 8, defaultCollapsed: false },
             { key: 'files', title: 'Dateien / Anhänge', content: attachmentsHtml, defaultOrder: 9, defaultCollapsed: false },
             { key: 'map', title: 'Karte', content: mapHtml, defaultOrder: 10, defaultCollapsed: false },
-            { key: 'logs', title: 'Verlauf', content: bottomTabs + `<div class="tmgmt-tab-content active" id="tab-log">${logHtml}</div><div class="tmgmt-tab-content" id="tab-communication">${commHtml}</div>`, defaultOrder: 11, defaultCollapsed: false }
+            { key: 'logs', title: 'Verlauf', content: bottomTabs + `<div class="tmgmt-tab-content active" id="tab-log">${logHtml}</div><div class="tmgmt-tab-content" id="tab-communication">${commHtml}</div>`, defaultOrder: 11, defaultCollapsed: false },
+            { key: 'email_tickets', title: 'E-Mail Tickets <span class="tmgmt-ticket-badge" id="tmgmt-ticket-badge" style="display:none;">0</span>', content: '<div id="tmgmt-tickets-container"><div style="padding:10px; color:#888;">Lade Tickets…</div></div>', defaultOrder: 12, defaultCollapsed: false }
         ];
 
         // Generate HTML for sections with order styles
@@ -1023,6 +1024,220 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             document.getElementById('tmgmt-map-container').innerHTML = '<div style="padding:20px; text-align:center; color:#888;">Keine Geodaten vorhanden.</div>';
         }
+
+        // Load Email Tickets
+        loadEmailTickets(data.id);
+    }
+
+    /**
+     * Load and render email tickets for an event.
+     */
+    function loadEmailTickets(eventId) {
+        const container = document.getElementById('tmgmt-tickets-container');
+        const badge = document.getElementById('tmgmt-ticket-badge');
+        if (!container) return;
+
+        fetch(`${tmgmtData.restUrl}events/${eventId}/tickets`, {
+            headers: { 'X-WP-Nonce': tmgmtData.nonce }
+        })
+        .then(r => r.json())
+        .then(data => {
+            const tickets = data.tickets || [];
+            
+            // Update badge
+            if (badge) {
+                badge.textContent = tickets.length;
+                badge.style.display = tickets.length > 0 ? 'inline-block' : 'none';
+            }
+
+            if (tickets.length === 0) {
+                container.innerHTML = '<div style="padding:10px; color:#888;">Keine E-Mail Tickets vorhanden.</div>';
+                return;
+            }
+
+            let html = '<div class="tmgmt-tickets-list">';
+            tickets.forEach(ticket => {
+                const isIncoming = ticket.type === 'imap_email';
+                const typeClass = isIncoming ? 'tmgmt-ticket-incoming' : 'tmgmt-ticket-outgoing';
+                const typeIcon = isIncoming ? '📥' : '📤';
+                const typeLabel = isIncoming ? 'Eingehend' : 'Ausgehend';
+
+                html += `
+                    <div class="tmgmt-ticket-item ${typeClass}" data-queue-id="${ticket.queue_id || ''}" data-ticket-id="${ticket.id}">
+                        <div class="tmgmt-ticket-header">
+                            <span class="tmgmt-ticket-icon">${typeIcon}</span>
+                            <span class="tmgmt-ticket-from">${ticket.from_name || ticket.from_email}</span>
+                            <span class="tmgmt-ticket-date">${ticket.date}</span>
+                        </div>
+                        <div class="tmgmt-ticket-subject">${ticket.subject}</div>
+                        <div class="tmgmt-ticket-preview">${ticket.preview}</div>
+                        <div class="tmgmt-ticket-actions">
+                            <button class="tmgmt-btn tmgmt-btn-small tmgmt-ticket-view-btn">Anzeigen</button>
+                            ${ticket.queue_id ? '<button class="tmgmt-btn tmgmt-btn-small tmgmt-btn-secondary tmgmt-ticket-reply-btn">Antworten</button>' : ''}
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+
+            // Bind ticket view/reply events
+            bindTicketEvents(eventId, tickets);
+        })
+        .catch(err => {
+            container.innerHTML = '<div style="padding:10px; color:#c00;">Fehler beim Laden der Tickets.</div>';
+            console.error('Ticket load error:', err);
+        });
+    }
+
+    /**
+     * Bind click events for ticket view and reply buttons.
+     */
+    function bindTicketEvents(eventId, tickets) {
+        const container = document.getElementById('tmgmt-tickets-container');
+        if (!container) return;
+
+        // View buttons
+        container.querySelectorAll('.tmgmt-ticket-view-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const item = this.closest('.tmgmt-ticket-item');
+                const ticketId = item.getAttribute('data-ticket-id');
+                const ticket = tickets.find(t => t.id == ticketId);
+                if (ticket) {
+                    showTicketDetail(ticket);
+                }
+            });
+        });
+
+        // Reply buttons
+        container.querySelectorAll('.tmgmt-ticket-reply-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const item = this.closest('.tmgmt-ticket-item');
+                const queueId = item.getAttribute('data-queue-id');
+                const ticketId = item.getAttribute('data-ticket-id');
+                const ticket = tickets.find(t => t.id == ticketId);
+                if (ticket && queueId) {
+                    showReplyForm(eventId, queueId, ticket);
+                }
+            });
+        });
+    }
+
+    /**
+     * Show ticket detail in the side drawer.
+     */
+    function showTicketDetail(ticket) {
+        const drawer = document.getElementById('tmgmt-side-drawer');
+        const drawerContent = document.getElementById('tmgmt-drawer-content');
+        const drawerTitle = document.getElementById('tmgmt-drawer-title');
+
+        if (!drawer || !drawerContent) return;
+
+        const isIncoming = ticket.type === 'imap_email';
+        const typeLabel = isIncoming ? '📥 Eingehend' : '📤 Ausgehend';
+
+        drawerTitle.textContent = 'E-Mail Details';
+        drawerContent.innerHTML = `
+            <div style="margin-bottom:15px;">
+                <div style="font-size:0.85em; color:#666;">Typ</div>
+                <div>${typeLabel}</div>
+            </div>
+            <div style="margin-bottom:15px;">
+                <div style="font-size:0.85em; color:#666;">Von</div>
+                <div>${ticket.from_name ? ticket.from_name + ' &lt;' + ticket.from_email + '&gt;' : ticket.from_email}</div>
+            </div>
+            <div style="margin-bottom:15px;">
+                <div style="font-size:0.85em; color:#666;">Datum</div>
+                <div>${ticket.date}</div>
+            </div>
+            <div style="margin-bottom:15px;">
+                <div style="font-size:0.85em; color:#666;">Betreff</div>
+                <div><strong>${ticket.subject}</strong></div>
+            </div>
+            <div style="margin-top:20px; border-top:1px solid #eee; padding-top:15px;">
+                <div style="font-size:0.85em; color:#666; margin-bottom:5px;">Inhalt</div>
+                <div class="tmgmt-ticket-body">${ticket.body_html}</div>
+            </div>
+        `;
+        drawer.style.display = 'flex';
+    }
+
+    /**
+     * Show reply form in the side drawer.
+     */
+    function showReplyForm(eventId, queueId, ticket) {
+        const drawer = document.getElementById('tmgmt-side-drawer');
+        const drawerContent = document.getElementById('tmgmt-drawer-content');
+        const drawerTitle = document.getElementById('tmgmt-drawer-title');
+
+        if (!drawer || !drawerContent) return;
+
+        drawerTitle.textContent = 'Antwort verfassen';
+        drawerContent.innerHTML = `
+            <div style="margin-bottom:15px;">
+                <div style="font-size:0.85em; color:#666;">An</div>
+                <div>${ticket.from_email}</div>
+            </div>
+            <div style="margin-bottom:15px;">
+                <div style="font-size:0.85em; color:#666;">Betreff</div>
+                <div>Re: ${ticket.subject}</div>
+            </div>
+            <div style="margin-bottom:15px;">
+                <label style="font-size:0.85em; color:#666; display:block; margin-bottom:5px;">Nachricht</label>
+                <textarea id="tmgmt-reply-body" rows="10" style="width:100%; border:1px solid #dfe1e6; border-radius:4px; padding:8px;"></textarea>
+            </div>
+            <div style="display:flex; gap:10px;">
+                <button class="tmgmt-btn tmgmt-btn-primary" id="tmgmt-send-reply-btn">Senden</button>
+                <button class="tmgmt-btn tmgmt-btn-secondary" id="tmgmt-cancel-reply-btn">Abbrechen</button>
+            </div>
+            <div id="tmgmt-reply-status" style="margin-top:10px;"></div>
+        `;
+        drawer.style.display = 'flex';
+
+        // Bind send button
+        document.getElementById('tmgmt-send-reply-btn').addEventListener('click', function() {
+            const body = document.getElementById('tmgmt-reply-body').value.trim();
+            const status = document.getElementById('tmgmt-reply-status');
+
+            if (!body) {
+                status.innerHTML = '<span style="color:#c00;">Bitte Nachricht eingeben.</span>';
+                return;
+            }
+
+            this.disabled = true;
+            status.innerHTML = '<span style="color:#666;">Wird gesendet…</span>';
+
+            fetch(`${tmgmtData.restUrl}mail-queue/${queueId}/reply`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-WP-Nonce': tmgmtData.nonce
+                },
+                body: JSON.stringify({ body: body })
+            })
+            .then(r => r.json().then(d => ({ ok: r.ok, data: d })))
+            .then(res => {
+                if (res.ok && res.data.success) {
+                    status.innerHTML = '<span style="color:#00a32a;">✓ ' + res.data.message + '</span>';
+                    setTimeout(() => {
+                        drawer.style.display = 'none';
+                        loadEmailTickets(eventId); // Refresh tickets
+                    }, 1500);
+                } else {
+                    status.innerHTML = '<span style="color:#c00;">' + (res.data.message || 'Fehler beim Senden.') + '</span>';
+                    document.getElementById('tmgmt-send-reply-btn').disabled = false;
+                }
+            })
+            .catch(err => {
+                status.innerHTML = '<span style="color:#c00;">Netzwerkfehler.</span>';
+                document.getElementById('tmgmt-send-reply-btn').disabled = false;
+            });
+        });
+
+        // Bind cancel button
+        document.getElementById('tmgmt-cancel-reply-btn').addEventListener('click', function() {
+            drawer.style.display = 'none';
+        });
     }
 
     function initMap(lat, lng) {

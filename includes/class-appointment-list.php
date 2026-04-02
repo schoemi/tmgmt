@@ -210,7 +210,12 @@ class TMGMT_Appointment_List {
 
     private function render_event_item($event) {
         $start_time = get_post_meta($event->ID, '_tmgmt_event_start_time', true);
-        $city = get_post_meta($event->ID, '_tmgmt_venue_city', true);
+        // Get city from linked location
+        $location_id = get_post_meta($event->ID, '_tmgmt_event_location_id', true);
+        $city = '';
+        if (!empty($location_id)) {
+            $city = get_post_meta($location_id, '_tmgmt_location_city', true);
+        }
         $status_slug = get_post_meta($event->ID, '_tmgmt_status', true);
         $status_label = TMGMT_Event_Status::get_label($status_slug);
         $edit_link = get_edit_post_link($event->ID);

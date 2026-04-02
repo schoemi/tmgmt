@@ -133,6 +133,147 @@ class TMGMT_REST_API {
                 'attach_pdf' => array('required' => false, 'type' => 'boolean'),
             ),
         ));
+
+        // --- IMAP Ticket-System Endpoints ---
+
+        // Mail Queue: List (with optional ?status= filter)
+        register_rest_route(self::NAMESPACE, '/mail-queue', array(
+            'methods'             => 'GET',
+            'callback'            => array($this, 'get_mail_queue'),
+            'permission_callback' => array($this, 'check_permission'),
+            'args'                => array(
+                'status' => array(
+                    'required' => false,
+                    'type'     => 'string',
+                    'default'  => 'neu',
+                ),
+            ),
+        ));
+
+        // Mail Queue: Single entry
+        register_rest_route(self::NAMESPACE, '/mail-queue/(?P<id>\d+)', array(
+            'methods'             => 'GET',
+            'callback'            => array($this, 'get_mail_queue_entry'),
+            'permission_callback' => array($this, 'check_permission'),
+            'args'                => array(
+                'id' => array(
+                    'validate_callback' => function($param, $request, $key) {
+                        return is_numeric($param);
+                    }
+                ),
+            ),
+        ));
+
+        // Mail Queue: Assign to event
+        register_rest_route(self::NAMESPACE, '/mail-queue/(?P<id>\d+)/assign', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'assign_mail_queue_entry'),
+            'permission_callback' => array($this, 'check_permission'),
+            'args'                => array(
+                'id' => array(
+                    'validate_callback' => function($param, $request, $key) {
+                        return is_numeric($param);
+                    }
+                ),
+                'event_id' => array(
+                    'required' => true,
+                    'type'     => 'integer',
+                ),
+            ),
+        ));
+
+        // Mail Queue: Create event from email
+        register_rest_route(self::NAMESPACE, '/mail-queue/(?P<id>\d+)/create-event', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'create_event_from_email'),
+            'permission_callback' => array($this, 'check_permission'),
+            'args'                => array(
+                'id' => array(
+                    'validate_callback' => function($param, $request, $key) {
+                        return is_numeric($param);
+                    }
+                ),
+            ),
+        ));
+
+        // Veranstalter: Create new
+        register_rest_route(self::NAMESPACE, '/veranstalter', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'create_veranstalter'),
+            'permission_callback' => array($this, 'check_permission'),
+            'args'                => array(
+                'name' => array(
+                    'required' => true,
+                    'type'     => 'string',
+                ),
+            ),
+        ));
+
+        // Location: Create new
+        register_rest_route(self::NAMESPACE, '/locations', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'create_location'),
+            'permission_callback' => array($this, 'check_permission'),
+            'args'                => array(
+                'name' => array(
+                    'required' => true,
+                    'type'     => 'string',
+                ),
+            ),
+        ));
+
+        // Mail Queue: Reply to email
+        register_rest_route(self::NAMESPACE, '/mail-queue/(?P<id>\d+)/reply', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'reply_mail_queue_entry'),
+            'permission_callback' => array($this, 'check_permission'),
+            'args'                => array(
+                'id' => array(
+                    'validate_callback' => function($param, $request, $key) {
+                        return is_numeric($param);
+                    }
+                ),
+                'body' => array(
+                    'required' => true,
+                    'type'     => 'string',
+                ),
+            ),
+        ));
+
+        // Event Tickets: IMAP emails for an event
+        register_rest_route(self::NAMESPACE, '/events/(?P<id>\d+)/tickets', array(
+            'methods'             => 'GET',
+            'callback'            => array($this, 'get_event_tickets'),
+            'permission_callback' => array($this, 'check_permission'),
+            'args'                => array(
+                'id' => array(
+                    'validate_callback' => function($param, $request, $key) {
+                        return is_numeric($param);
+                    }
+                ),
+            ),
+        ));
+
+        // IMAP: Test connection (admin only)
+        register_rest_route(self::NAMESPACE, '/imap/test', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'test_imap_connection'),
+            'permission_callback' => array($this, 'check_admin_permission'),
+        ));
+
+        // SMTP: Test connection (admin only)
+        register_rest_route(self::NAMESPACE, '/smtp/test', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'test_smtp_connection'),
+            'permission_callback' => array($this, 'check_admin_permission'),
+        ));
+
+        // IMAP: Manual fetch trigger (admin only)
+        register_rest_route(self::NAMESPACE, '/imap/fetch-now', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'imap_fetch_now'),
+            'permission_callback' => array($this, 'check_admin_permission'),
+        ));
     }
 
     public function check_permission($request) {
@@ -217,15 +358,7 @@ class TMGMT_REST_API {
             'start_time' => 'Startzeit',
             'arrival_time' => 'Ankunftszeit',
             'departure_time' => 'Abfahrtszeit',
-            'venue_name' => 'Location / Venue',
-            'venue_street' => 'Straße',
-            'venue_number' => 'Hausnummer',
-            'venue_zip' => 'PLZ',
-            'venue_city' => 'Stadt',
-            'venue_country' => 'Land',
-            'geo_lat' => 'Breitengrad',
-            'geo_lng' => 'Längengrad',
-            'arrival_notes' => 'Anreise Notizen',
+            'location_id' => 'Veranstaltungsort',
             'status' => 'Status',
             'contact_salutation' => 'Anrede',
             'contact_firstname' => 'Vorname',
@@ -292,15 +425,7 @@ class TMGMT_REST_API {
             'start_time'     => '_tmgmt_event_start_time',
             'arrival_time'   => '_tmgmt_event_arrival_time',
             'departure_time' => '_tmgmt_event_departure_time',
-            'venue_name'     => '_tmgmt_venue_name',
-            'venue_street'   => '_tmgmt_venue_street',
-            'venue_number'   => '_tmgmt_venue_number',
-            'venue_zip'      => '_tmgmt_venue_zip',
-            'venue_city'     => '_tmgmt_venue_city',
-            'venue_country'  => '_tmgmt_venue_country',
-            'geo_lat'        => '_tmgmt_geo_lat',
-            'geo_lng'        => '_tmgmt_geo_lng',
-            'arrival_notes'  => '_tmgmt_arrival_notes',
+            'location_id'    => '_tmgmt_event_location_id',
             'status'         => '_tmgmt_status',
             // Contact
             'contact_salutation' => '_tmgmt_contact_salutation',
@@ -468,7 +593,13 @@ class TMGMT_REST_API {
             $status = get_post_meta($event->ID, '_tmgmt_status', true);
             $date_raw = get_post_meta($event->ID, '_tmgmt_event_date', true);
             $time_raw = get_post_meta($event->ID, '_tmgmt_event_start_time', true);
-            $city = get_post_meta($event->ID, '_tmgmt_venue_city', true);
+            
+            // Get city from linked location
+            $location_id = get_post_meta($event->ID, '_tmgmt_event_location_id', true);
+            $city = '';
+            if (!empty($location_id)) {
+                $city = get_post_meta($location_id, '_tmgmt_location_city', true);
+            }
             
             $formatted_date = '';
             if ($date_raw) {
@@ -1204,5 +1335,546 @@ class TMGMT_REST_API {
         // Convert to PDF (using a library like TCPDF, FPDF, etc.)
         // For this example, we'll just return the HTML content as a string.
         return $pdf_content;
+    }
+
+    // --- IMAP Ticket-System Callback Methods ---
+
+    /**
+     * Permission check for admin-only endpoints.
+     */
+    public function check_admin_permission($request) {
+        return current_user_can('manage_options');
+    }
+
+    /**
+     * GET /mail-queue — List mail queue entries filtered by status.
+     */
+    public function get_mail_queue($request) {
+        $status = sanitize_text_field($request->get_param('status'));
+        $queue = new TMGMT_Mail_Queue();
+
+        if (!empty($status)) {
+            $entries = $queue->get_by_status($status);
+        } else {
+            $entries = $queue->get_by_status('neu');
+        }
+
+        return rest_ensure_response(array(
+            'entries' => $entries,
+            'total'   => count($entries),
+        ));
+    }
+
+    /**
+     * GET /mail-queue/{id} — Single mail queue entry.
+     */
+    public function get_mail_queue_entry($request) {
+        $id = (int) $request['id'];
+        $queue = new TMGMT_Mail_Queue();
+        $entry = $queue->get_by_id($id);
+
+        if (!$entry) {
+            return new WP_Error('not_found', 'E-Mail nicht gefunden.', array('status' => 404));
+        }
+
+        return rest_ensure_response($entry);
+    }
+
+    /**
+     * POST /mail-queue/{id}/assign — Manual assignment to an event.
+     */
+    public function assign_mail_queue_entry($request) {
+        $id = (int) $request['id'];
+        $params = $request->get_json_params();
+        $event_id = isset($params['event_id']) ? (int) $params['event_id'] : 0;
+
+        if ($event_id <= 0) {
+            return new WP_Error('invalid_event', 'Ungültige Event-ID.', array('status' => 400));
+        }
+
+        $assigner = new TMGMT_Mail_Assigner();
+        $result = $assigner->assign_single($id, $event_id);
+
+        if ($result) {
+            return rest_ensure_response(array('success' => true, 'message' => 'E-Mail erfolgreich zugeordnet.'));
+        }
+
+        return new WP_Error('assign_failed', 'Zuordnung fehlgeschlagen.', array('status' => 500));
+    }
+
+    /**
+     * POST /mail-queue/{id}/create-event — Create a new event from an email.
+     */
+    public function create_event_from_email($request) {
+        $id = (int) $request['id'];
+
+        $queue = new TMGMT_Mail_Queue();
+        $email = $queue->get_by_id($id);
+
+        if (!$email) {
+            return new WP_Error('not_found', 'E-Mail nicht gefunden.', array('status' => 404));
+        }
+
+        if ($email->event_id > 0) {
+            return new WP_Error('already_assigned', 'E-Mail ist bereits einem Event zugeordnet.', array('status' => 400));
+        }
+
+        // Create the event with email subject as title
+        $title = !empty($email->subject) ? $email->subject : 'Neues Event (aus E-Mail)';
+        
+        $post_id = wp_insert_post(array(
+            'post_title'  => sanitize_text_field($title),
+            'post_type'   => 'event',
+            'post_status' => 'publish',
+        ));
+
+        if (is_wp_error($post_id)) {
+            return new WP_Error('create_failed', 'Event konnte nicht erstellt werden.', array('status' => 500));
+        }
+
+        // Set default status (first status of first column)
+        $col_posts = get_posts(array(
+            'post_type' => 'tmgmt_kanban_col',
+            'posts_per_page' => 1,
+            'meta_key' => '_tmgmt_kanban_order',
+            'orderby' => 'meta_value_num',
+            'order' => 'ASC'
+        ));
+
+        if (!empty($col_posts)) {
+            $status_ids = get_post_meta($col_posts[0]->ID, '_tmgmt_kanban_statuses', true);
+            if (is_array($status_ids) && !empty($status_ids)) {
+                $first_status_post = get_post($status_ids[0]);
+                if ($first_status_post) {
+                    update_post_meta($post_id, '_tmgmt_status', $first_status_post->post_name);
+                }
+            }
+        }
+
+        // Set inquiry date to email date
+        if (!empty($email->email_date)) {
+            update_post_meta($post_id, '_tmgmt_inquiry_date', date('Y-m-d\TH:i', strtotime($email->email_date)));
+        } else {
+            update_post_meta($post_id, '_tmgmt_inquiry_date', current_time('Y-m-d\TH:i'));
+        }
+
+        // Try to find existing Veranstalter/Contact by email, or create new one
+        $veranstalter_id = $this->find_or_create_veranstalter_from_email($email);
+        if ($veranstalter_id) {
+            update_post_meta($post_id, '_tmgmt_event_veranstalter_id', $veranstalter_id);
+        }
+
+        // Store email body as event notes/description
+        $content = !empty($email->body_text) ? $email->body_text : wp_strip_all_tags($email->body_html);
+        if (!empty($content)) {
+            wp_update_post(array(
+                'ID' => $post_id,
+                'post_content' => wp_kses_post($content),
+            ));
+        }
+
+        // Log creation
+        $log_manager = new TMGMT_Log_Manager();
+        $log_manager->log($post_id, 'api_create', 'Event aus E-Mail erstellt');
+
+        // Assign the email to the new event
+        $assigner = new TMGMT_Mail_Assigner();
+        $assigner->assign_single($id, $post_id, 'email_to_event');
+
+        return rest_ensure_response(array(
+            'success'  => true,
+            'event_id' => $post_id,
+            'message'  => 'Event erfolgreich erstellt und E-Mail zugeordnet.',
+            'edit_url' => get_edit_post_link($post_id, 'raw'),
+        ));
+    }
+
+    /**
+     * Find existing Veranstalter by contact email, or create a new one.
+     *
+     * @param object $email The mail queue entry.
+     * @return int|null The Veranstalter ID or null.
+     */
+    private function find_or_create_veranstalter_from_email($email): ?int {
+        if (empty($email->from_email)) {
+            return null;
+        }
+
+        // 1. Try to find existing contact with this email
+        $contacts = get_posts(array(
+            'post_type'      => 'tmgmt_contact',
+            'post_status'    => 'publish',
+            'posts_per_page' => 1,
+            'meta_query'     => array(
+                array(
+                    'key'     => '_tmgmt_contact_email',
+                    'value'   => $email->from_email,
+                    'compare' => '=',
+                ),
+            ),
+            'fields' => 'ids',
+        ));
+
+        $existing_contact_id = null;
+
+        if (!empty($contacts)) {
+            $existing_contact_id = (int) $contacts[0];
+            
+            // Find Veranstalter that has this contact assigned
+            $veranstalter_posts = get_posts(array(
+                'post_type'      => 'tmgmt_veranstalter',
+                'post_status'    => 'publish',
+                'posts_per_page' => -1,
+                'fields'         => 'ids',
+            ));
+
+            foreach ($veranstalter_posts as $v_id) {
+                $assignments = get_post_meta($v_id, '_tmgmt_veranstalter_contacts', true);
+                if (!is_array($assignments)) {
+                    continue;
+                }
+                foreach ($assignments as $assignment) {
+                    $cid = isset($assignment['contact_id']) ? intval($assignment['contact_id']) : 0;
+                    if ($cid === $existing_contact_id) {
+                        return (int) $v_id; // Found existing Veranstalter
+                    }
+                }
+            }
+        }
+
+        // 2. No existing Veranstalter found - use existing contact or create new one
+        $contact_id = $existing_contact_id;
+        
+        if (!$contact_id) {
+            // Create new Contact
+            $contact_name = !empty($email->from_name) ? $email->from_name : $email->from_email;
+            $contact_id = wp_insert_post(array(
+                'post_title'  => sanitize_text_field($contact_name),
+                'post_type'   => 'tmgmt_contact',
+                'post_status' => 'publish',
+            ));
+
+            if (is_wp_error($contact_id) || !$contact_id) {
+                return null;
+            }
+
+            // Set contact meta
+            update_post_meta($contact_id, '_tmgmt_contact_email', sanitize_email($email->from_email));
+            
+            if (!empty($email->from_name)) {
+                $name_parts = explode(' ', $email->from_name, 2);
+                if (count($name_parts) >= 2) {
+                    update_post_meta($contact_id, '_tmgmt_contact_firstname', sanitize_text_field($name_parts[0]));
+                    update_post_meta($contact_id, '_tmgmt_contact_lastname', sanitize_text_field($name_parts[1]));
+                } else {
+                    update_post_meta($contact_id, '_tmgmt_contact_lastname', sanitize_text_field($email->from_name));
+                }
+            }
+        }
+
+        // Create Veranstalter
+        $veranstalter_name = !empty($email->from_name) ? $email->from_name : $email->from_email;
+        $veranstalter_id = wp_insert_post(array(
+            'post_title'  => sanitize_text_field($veranstalter_name),
+            'post_type'   => 'tmgmt_veranstalter',
+            'post_status' => 'publish',
+        ));
+
+        if (is_wp_error($veranstalter_id) || !$veranstalter_id) {
+            return null;
+        }
+
+        // Assign contact to Veranstalter with role "vertrag"
+        $contacts_assignment = array(
+            array(
+                'contact_id' => $contact_id,
+                'role'       => 'vertrag',
+            ),
+        );
+        update_post_meta($veranstalter_id, '_tmgmt_veranstalter_contacts', $contacts_assignment);
+
+        return (int) $veranstalter_id;
+    }
+
+    /**
+     * POST /veranstalter — Create a new Veranstalter.
+     */
+    public function create_veranstalter($request) {
+        $params = $request->get_json_params();
+        $name = isset($params['name']) ? sanitize_text_field($params['name']) : '';
+
+        if (empty($name)) {
+            return new WP_Error('invalid_name', 'Name ist erforderlich.', array('status' => 400));
+        }
+
+        $veranstalter_id = wp_insert_post(array(
+            'post_title'  => $name,
+            'post_type'   => 'tmgmt_veranstalter',
+            'post_status' => 'publish',
+        ));
+
+        if (is_wp_error($veranstalter_id)) {
+            return new WP_Error('create_failed', 'Veranstalter konnte nicht erstellt werden.', array('status' => 500));
+        }
+
+        // Set optional address fields
+        $address_fields = array(
+            'street'  => '_tmgmt_veranstalter_street',
+            'number'  => '_tmgmt_veranstalter_number',
+            'zip'     => '_tmgmt_veranstalter_zip',
+            'city'    => '_tmgmt_veranstalter_city',
+            'country' => '_tmgmt_veranstalter_country',
+        );
+
+        foreach ($address_fields as $param => $meta_key) {
+            if (isset($params[$param])) {
+                update_post_meta($veranstalter_id, $meta_key, sanitize_text_field($params[$param]));
+            }
+        }
+
+        return rest_ensure_response(array(
+            'success' => true,
+            'id'      => $veranstalter_id,
+            'title'   => $name,
+            'message' => 'Veranstalter erfolgreich erstellt.',
+        ));
+    }
+
+    /**
+     * POST /locations — Create a new Location.
+     */
+    public function create_location($request) {
+        $params = $request->get_json_params();
+        $name = isset($params['name']) ? sanitize_text_field($params['name']) : '';
+
+        if (empty($name)) {
+            return new WP_Error('invalid_name', 'Name ist erforderlich.', array('status' => 400));
+        }
+
+        $location_id = wp_insert_post(array(
+            'post_title'  => $name,
+            'post_type'   => 'tmgmt_location',
+            'post_status' => 'publish',
+        ));
+
+        if (is_wp_error($location_id)) {
+            return new WP_Error('create_failed', 'Ort konnte nicht erstellt werden.', array('status' => 500));
+        }
+
+        // Set optional address fields
+        $address_fields = array(
+            'street'  => '_tmgmt_location_street',
+            'number'  => '_tmgmt_location_number',
+            'zip'     => '_tmgmt_location_zip',
+            'city'    => '_tmgmt_location_city',
+            'country' => '_tmgmt_location_country',
+            'lat'     => '_tmgmt_location_lat',
+            'lng'     => '_tmgmt_location_lng',
+            'notes'   => '_tmgmt_location_notes',
+        );
+
+        foreach ($address_fields as $param => $meta_key) {
+            if (isset($params[$param])) {
+                update_post_meta($location_id, $meta_key, sanitize_text_field($params[$param]));
+            }
+        }
+
+        return rest_ensure_response(array(
+            'success'  => true,
+            'id'       => $location_id,
+            'title'    => $name,
+            'street'   => isset($params['street']) ? $params['street'] : '',
+            'number'   => isset($params['number']) ? $params['number'] : '',
+            'zip'      => isset($params['zip']) ? $params['zip'] : '',
+            'city'     => isset($params['city']) ? $params['city'] : '',
+            'country'  => isset($params['country']) ? $params['country'] : '',
+            'lat'      => isset($params['lat']) ? $params['lat'] : '',
+            'lng'      => isset($params['lng']) ? $params['lng'] : '',
+            'message'  => 'Ort erfolgreich erstellt.',
+        ));
+    }
+
+    /**
+     * POST /mail-queue/{id}/reply — Send reply to an email.
+     */
+    public function reply_mail_queue_entry($request) {
+        $id = (int) $request['id'];
+        $params = $request->get_json_params();
+        $body = isset($params['body']) ? wp_kses_post($params['body']) : '';
+
+        if (empty($body)) {
+            return new WP_Error('empty_body', 'Antworttext darf nicht leer sein.', array('status' => 400));
+        }
+
+        // Get the event_id from the mail queue entry
+        $queue = new TMGMT_Mail_Queue();
+        $entry = $queue->get_by_id($id);
+
+        if (!$entry) {
+            return new WP_Error('not_found', 'E-Mail nicht gefunden.', array('status' => 404));
+        }
+
+        $event_id = (int) $entry->event_id;
+        if ($event_id <= 0) {
+            return new WP_Error('not_assigned', 'E-Mail ist keinem Event zugeordnet.', array('status' => 400));
+        }
+
+        $handler = new TMGMT_Reply_Handler();
+        $result = $handler->send_reply($id, $event_id, $body);
+
+        if ($result['success']) {
+            return rest_ensure_response($result);
+        }
+
+        return new WP_Error('reply_failed', $result['message'], array('status' => 500));
+    }
+
+    /**
+     * GET /events/{id}/tickets — IMAP emails for an event.
+     */
+    public function get_event_tickets($request) {
+        $event_id = (int) $request['id'];
+        global $wpdb;
+
+        $comm_table = $wpdb->prefix . 'tmgmt_communication';
+        $queue_table = $wpdb->prefix . 'tmgmt_mail_queue';
+
+        // Get communication entries of type imap_email or imap_reply for this event
+        $entries = $wpdb->get_results($wpdb->prepare(
+            "SELECT c.id, c.type, c.recipient, c.subject, c.content, c.created_at
+             FROM $comm_table c
+             WHERE c.event_id = %d AND c.type IN ('imap_email', 'imap_reply')
+             ORDER BY c.created_at ASC",
+            $event_id
+        ));
+
+        $tickets = array();
+        foreach ($entries as $entry) {
+            $preview = wp_trim_words(wp_strip_all_tags($entry->content), 30, '...');
+
+            // Try to find matching mail queue entry for additional data
+            $queue_entry = $wpdb->get_row($wpdb->prepare(
+                "SELECT id, from_email, from_name, message_id
+                 FROM $queue_table
+                 WHERE event_id = %d AND subject = %s
+                 LIMIT 1",
+                $event_id,
+                $entry->subject
+            ));
+
+            $tickets[] = array(
+                'id'         => (int) $entry->id,
+                'queue_id'   => $queue_entry ? (int) $queue_entry->id : null,
+                'type'       => $entry->type,
+                'from_email' => $queue_entry ? $queue_entry->from_email : $entry->recipient,
+                'from_name'  => $queue_entry ? $queue_entry->from_name : '',
+                'subject'    => $entry->subject,
+                'date'       => $entry->created_at,
+                'preview'    => $preview,
+                'body_html'  => $entry->content,
+            );
+        }
+
+        return rest_ensure_response(array(
+            'tickets' => $tickets,
+            'total'   => count($tickets),
+        ));
+    }
+
+    /**
+     * POST /imap/test — Test IMAP connection.
+     */
+    public function test_imap_connection($request) {
+        $connector = new TMGMT_IMAP_Connector();
+        $result = $connector->test_connection();
+        return rest_ensure_response($result);
+    }
+
+    /**
+     * POST /smtp/test — Test SMTP connection.
+     */
+    public function test_smtp_connection($request) {
+        $sender = new TMGMT_SMTP_Sender();
+        $result = $sender->test_connection();
+        return rest_ensure_response($result);
+    }
+
+    /**
+     * POST /imap/fetch-now — Manual immediate IMAP fetch.
+     */
+    public function imap_fetch_now($request) {
+        $debug = array();
+        
+        try {
+            $debug[] = 'Starting fetch';
+            $connector = new TMGMT_IMAP_Connector();
+
+            $debug[] = 'Connecting...';
+            if (!$connector->connect()) {
+                return new WP_Error('imap_error', 'IMAP-Verbindung fehlgeschlagen.', array('status' => 500));
+            }
+            $debug[] = 'Connected';
+
+            $debug[] = 'Fetching emails...';
+            $emails = $connector->fetch_unread_emails();
+            $debug[] = 'Fetched ' . count($emails) . ' emails';
+            
+            $queue = new TMGMT_Mail_Queue();
+            $inserted = 0;
+            $errors = array();
+
+            foreach ($emails as $index => $email_data) {
+                try {
+                    $debug[] = 'Processing email ' . ($index + 1);
+                    $uid = $email_data['uid'] ?? null;
+                    $message = $email_data['_message'] ?? null;
+                    unset($email_data['uid']);
+                    unset($email_data['_message']);
+
+                    $result = $queue->insert($email_data);
+                    if ($result) {
+                        $inserted++;
+                        // Mark as read using the message object if available
+                        if ($message) {
+                            try {
+                                $connector->mark_message_as_read($message);
+                            } catch (\Exception $e) {
+                                // Ignore mark as read errors
+                            }
+                        }
+                    }
+                    $debug[] = 'Email ' . ($index + 1) . ' processed, result: ' . ($result ? 'inserted' : 'skipped');
+                } catch (\Exception $e) {
+                    $errors[] = 'Email ' . ($index + 1) . ': ' . $e->getMessage();
+                }
+            }
+
+            $debug[] = 'Disconnecting...';
+            $connector->disconnect();
+            $debug[] = 'Disconnected';
+
+            // Trigger assignment
+            $debug[] = 'Running assigner...';
+            if (class_exists('TMGMT_Mail_Assigner')) {
+                try {
+                    $assigner = new TMGMT_Mail_Assigner();
+                    $assigner->assign_new_emails();
+                    $debug[] = 'Assigner completed';
+                } catch (\Exception $e) {
+                    $errors[] = 'Assigner: ' . $e->getMessage();
+                }
+            }
+
+            return rest_ensure_response(array(
+                'success'  => true,
+                'fetched'  => count($emails),
+                'inserted' => $inserted,
+                'message'  => sprintf('%d E-Mails abgerufen, %d neu eingefügt.', count($emails), $inserted),
+                'debug'    => $debug,
+                'errors'   => $errors,
+            ));
+        } catch (\Exception $e) {
+            return new WP_Error('imap_error', 'Fehler: ' . $e->getMessage() . ' | Debug: ' . implode(' -> ', $debug), array('status' => 500));
+        }
     }
 }

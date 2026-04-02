@@ -550,7 +550,12 @@ class TMGMT_Tour_Overview {
                         <?php foreach ($events as $event): 
                             $date = get_post_meta($event->ID, '_tmgmt_event_date', true);
                             $time = get_post_meta($event->ID, '_tmgmt_event_start_time', true);
-                            $city = get_post_meta($event->ID, '_tmgmt_venue_city', true);
+                            // Get city from linked location
+                            $location_id = get_post_meta($event->ID, '_tmgmt_event_location_id', true);
+                            $city = '';
+                            if (!empty($location_id)) {
+                                $city = get_post_meta($location_id, '_tmgmt_location_city', true);
+                            }
                             $status_slug = get_post_meta($event->ID, '_tmgmt_status', true);
                             $arrival = get_post_meta($event->ID, '_tmgmt_event_arrival_time', true);
                             

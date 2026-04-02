@@ -35,6 +35,13 @@
 | Notizen | `event_notes` | `textarea` | Interne Notizen |
 | Status | `event_status` | `text` | Aktueller Status (ID aus Status-Verwaltung) |
 
+#### Vertragsgenerierung (Post-Meta)
+| Feld | Meta Key | Typ | Beschreibung |
+|------|----------|-----|--------------|
+| Vertrag PDF Pfad | `_tmgmt_contract_pdf_path` | `string` | Absoluter Dateipfad des generierten Vertrags-PDFs |
+| Vertrag PDF URL | `_tmgmt_contract_pdf_url` | `string` | Öffentliche URL des generierten Vertrags-PDFs |
+| Unterschriebener Vertrag | `_tmgmt_signed_contract_attachment_id` | `int` | WP Attachment-ID des vom Kunden hochgeladenen, unterschriebenen Vertrags |
+
 ---
 
 ## Status-Verwaltung
@@ -134,3 +141,16 @@
 - Admin-Seite zur Konfiguration von Webhook-URLs
 - Auswahl welche Events getriggert werden sollen
 - Test-Funktion für Webhooks
+
+---
+
+## WordPress-Optionen (Plugin-Einstellungen)
+
+### Vertragsgenerierung
+
+| Option | Typ | Beschreibung |
+|--------|-----|--------------|
+| `tmgmt_contract_signature_id` | `int` | Attachment-ID des Unterschrift-Bildes (aus der Mediathek) |
+| `tmgmt_contract_notification_user_id` | `int` | WP-User-ID des Empfängers der Upload-Benachrichtigung; Fallback: `admin_email` |
+
+Diese Optionen werden in der Einstellungsgruppe `tmgmt_contract_options` gespeichert und sind unter **Einstellungen > Vertrag** konfigurierbar.

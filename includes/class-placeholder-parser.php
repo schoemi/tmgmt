@@ -105,15 +105,6 @@ class TMGMT_Placeholder_Parser {
             '[event_start_time]' => '_tmgmt_event_start_time',
             '[event_arrival_time]' => '_tmgmt_event_arrival_time',
             '[event_departure_time]' => '_tmgmt_event_departure_time',
-            '[arrival_notes]' => '_tmgmt_arrival_notes',
-            
-            // Venue
-            '[venue_name]' => '_tmgmt_venue_name',
-            '[venue_street]' => '_tmgmt_venue_street',
-            '[venue_number]' => '_tmgmt_venue_number',
-            '[venue_zip]' => '_tmgmt_venue_zip',
-            '[venue_city]' => '_tmgmt_venue_city',
-            '[venue_country]' => '_tmgmt_venue_country',
             
             // Contact
             '[contact_salutation]' => '_tmgmt_contact_salutation',
@@ -153,6 +144,27 @@ class TMGMT_Placeholder_Parser {
             }
             
             $replacements[$placeholder] = $value;
+        }
+        
+        // 2b. Venue Fields - get from linked location
+        $location_id = get_post_meta($event_id, '_tmgmt_event_location_id', true);
+        if (!empty($location_id)) {
+            $location_post = get_post($location_id);
+            $replacements['[venue_name]'] = $location_post ? $location_post->post_title : '';
+            $replacements['[venue_street]'] = get_post_meta($location_id, '_tmgmt_location_street', true);
+            $replacements['[venue_number]'] = get_post_meta($location_id, '_tmgmt_location_number', true);
+            $replacements['[venue_zip]'] = get_post_meta($location_id, '_tmgmt_location_zip', true);
+            $replacements['[venue_city]'] = get_post_meta($location_id, '_tmgmt_location_city', true);
+            $replacements['[venue_country]'] = get_post_meta($location_id, '_tmgmt_location_country', true);
+            $replacements['[arrival_notes]'] = get_post_meta($location_id, '_tmgmt_location_notes', true);
+        } else {
+            $replacements['[venue_name]'] = '';
+            $replacements['[venue_street]'] = '';
+            $replacements['[venue_number]'] = '';
+            $replacements['[venue_zip]'] = '';
+            $replacements['[venue_city]'] = '';
+            $replacements['[venue_country]'] = '';
+            $replacements['[arrival_notes]'] = '';
         }
 
         // 3. Customer Dashboard Link

@@ -26,6 +26,7 @@ class TMGMT_Admin_Menu {
             'edit.php?post_type=event', // Alle Gigs
             'post-new.php?post_type=event', // Neuen Gig hinzufügen (keep it near Gigs)
             'edit.php?post_type=tmgmt_tour', // Alle Tourenpläne
+            'tmgmt-mail-queue',         // E-Mail Posteingang
             'tmgmt-settings'            // Einstellungen
         );
 

@@ -515,3 +515,104 @@
         margin: auto;
     }
 }
+
+/* ===== IMAP Ticket System Styles ===== */
+
+.tmgmt-ticket-badge {
+    background: #0079bf;
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.75em;
+    margin-left: 8px;
+    vertical-align: middle;
+}
+
+.tmgmt-tickets-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.tmgmt-ticket-item {
+    border: 1px solid #dfe1e6;
+    border-radius: 6px;
+    padding: 12px;
+    background: #fff;
+    transition: box-shadow 0.2s;
+}
+
+.tmgmt-ticket-item:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+/* Incoming emails - left border accent */
+.tmgmt-ticket-incoming {
+    border-left: 4px solid #0079bf;
+}
+
+/* Outgoing emails - right border accent */
+.tmgmt-ticket-outgoing {
+    border-left: 4px solid #00a32a;
+    background: #f9fff9;
+}
+
+.tmgmt-ticket-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-size: 0.9em;
+}
+
+.tmgmt-ticket-icon {
+    font-size: 1.1em;
+}
+
+.tmgmt-ticket-from {
+    font-weight: 500;
+    flex: 1;
+}
+
+.tmgmt-ticket-date {
+    color: #666;
+    font-size: 0.85em;
+}
+
+.tmgmt-ticket-subject {
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.tmgmt-ticket-preview {
+    color: #666;
+    font-size: 0.9em;
+    margin-bottom: 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tmgmt-ticket-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.tmgmt-btn-small {
+    padding: 4px 10px !important;
+    font-size: 0.85em !important;
+}
+
+.tmgmt-ticket-body {
+    background: #f9f9f9;
+    padding: 12px;
+    border-radius: 4px;
+    font-size: 0.95em;
+    line-height: 1.5;
+    overflow-x: auto;
+}
+
+.tmgmt-ticket-body img {
+    max-width: 100%;
+    height: auto;
+}

@@ -5,6 +5,120 @@ class TMGMT_Event_Meta_Boxes {
     public function __construct() {
         add_action('add_meta_boxes', array($this, 'add_meta_boxes'));
         add_action('save_post', array($this, 'save_meta_boxes'));
+        add_action('wp_ajax_tmgmt_get_veranstalter_details', array($this, 'ajax_get_veranstalter_details'));
+    }
+
+    /**
+     * AJAX handler: Returns Veranstalter details (address, contacts with roles, locations with addresses).
+     */
+    public function ajax_get_veranstalter_details() {
+        if (!current_user_can('edit_posts')) {
+            wp_send_json_error('Keine Berechtigung');
+            return;
+        }
+
+        $veranstalter_id = isset($_GET['id']) ? intval($_GET['id']) : 0;
+
+        if (!$veranstalter_id) {
+            wp_send_json_error('Veranstalter nicht gefunden');
+            return;
+        }
+
+        $veranstalter = get_post($veranstalter_id);
+
+        if (!$veranstalter || get_post_type($veranstalter_id) !== 'tmgmt_veranstalter') {
+            wp_send_json_error('Veranstalter nicht gefunden');
+            return;
+        }
+
+        // Load address
+        $address = array(
+            'street'  => get_post_meta($veranstalter_id, '_tmgmt_veranstalter_street', true),
+            'number'  => get_post_meta($veranstalter_id, '_tmgmt_veranstalter_number', true),
+            'zip'     => get_post_meta($veranstalter_id, '_tmgmt_veranstalter_zip', true),
+            'city'    => get_post_meta($veranstalter_id, '_tmgmt_veranstalter_city', true),
+            'country' => get_post_meta($veranstalter_id, '_tmgmt_veranstalter_country', true),
+        );
+
+        // Load contacts with roles
+        $contact_assignments = get_post_meta($veranstalter_id, '_tmgmt_veranstalter_contacts', true);
+        $contacts = array();
+
+        $role_labels = array(
+            'vertrag'  => 'Vertrag',
+            'technik'  => 'Technik',
+            'programm' => 'Programm',
+        );
+
+        if (is_array($contact_assignments)) {
+            foreach ($contact_assignments as $assignment) {
+                $contact_id = isset($assignment['contact_id']) ? intval($assignment['contact_id']) : 0;
+                $role       = isset($assignment['role']) ? $assignment['role'] : '';
+
+                $contact_post = get_post($contact_id);
+
+                if (!$contact_post || get_post_type($contact_id) !== 'tmgmt_contact') {
+                    $contacts[] = array(
+                        'role'       => $role,
+                        'role_label' => isset($role_labels[$role]) ? $role_labels[$role] : $role,
+                        'contact_id' => $contact_id,
+                        'name'       => 'Kontakt nicht gefunden (ID: ' . $contact_id . ')',
+                        'email'      => '',
+                        'phone'      => '',
+                    );
+                    continue;
+                }
+
+                $firstname = get_post_meta($contact_id, '_tmgmt_contact_firstname', true);
+                $lastname  = get_post_meta($contact_id, '_tmgmt_contact_lastname', true);
+                $name      = trim($firstname . ' ' . $lastname);
+
+                $contacts[] = array(
+                    'role'       => $role,
+                    'role_label' => isset($role_labels[$role]) ? $role_labels[$role] : $role,
+                    'contact_id' => $contact_id,
+                    'name'       => $name,
+                    'email'      => get_post_meta($contact_id, '_tmgmt_contact_email', true),
+                    'phone'      => get_post_meta($contact_id, '_tmgmt_contact_phone', true),
+                );
+            }
+        }
+
+        // Load locations
+        $location_ids = get_post_meta($veranstalter_id, '_tmgmt_veranstalter_locations', true);
+        $locations = array();
+
+        if (is_array($location_ids)) {
+            foreach ($location_ids as $location_id) {
+                $location_id   = intval($location_id);
+                $location_post = get_post($location_id);
+
+                if (!$location_post) {
+                    continue;
+                }
+
+                $locations[] = array(
+                    'id'      => $location_id,
+                    'title'   => $location_post->post_title,
+                    'street'  => get_post_meta($location_id, '_tmgmt_location_street', true),
+                    'number'  => get_post_meta($location_id, '_tmgmt_location_number', true),
+                    'zip'     => get_post_meta($location_id, '_tmgmt_location_zip', true),
+                    'city'    => get_post_meta($location_id, '_tmgmt_location_city', true),
+                    'country' => get_post_meta($location_id, '_tmgmt_location_country', true),
+                    'lat'     => get_post_meta($location_id, '_tmgmt_location_lat', true),
+                    'lng'     => get_post_meta($location_id, '_tmgmt_location_lng', true),
+                );
+            }
+        }
+
+        wp_send_json_success(array(
+            'id'        => $veranstalter_id,
+            'title'     => $veranstalter->post_title,
+            'address'   => $address,
+            'contacts'  => $contacts,
+            'locations' => $locations,
+            'edit_url'  => get_edit_post_link($veranstalter_id, 'raw'),
+        ));
     }
 
     /**
@@ -19,30 +133,8 @@ class TMGMT_Event_Meta_Boxes {
             'tmgmt_event_start_time' => 'Geplante Auftrittszeit',
             'tmgmt_event_arrival_time' => 'Geplante Anreisezeit',
             'tmgmt_event_departure_time' => 'Geplante Abreisezeit',
-            'tmgmt_venue_name' => 'Veranstaltungsort: Name',
-            'tmgmt_venue_street' => 'Veranstaltungsort: Straße',
-            'tmgmt_venue_number' => 'Veranstaltungsort: Nr.',
-            'tmgmt_venue_zip' => 'Veranstaltungsort: PLZ',
-            'tmgmt_venue_city' => 'Veranstaltungsort: Ort',
-            'tmgmt_venue_country' => 'Veranstaltungsort: Land',
-            'tmgmt_geo_lat' => 'Geodaten: Latitude',
-            'tmgmt_geo_lng' => 'Geodaten: Longitude',
-            'tmgmt_arrival_notes' => 'Hinweise Anreise / Bus',
-            'tmgmt_contact_salutation' => 'Kontakt: Anrede',
-            'tmgmt_contact_firstname' => 'Kontakt: Vorname',
-            'tmgmt_contact_lastname' => 'Kontakt: Nachname',
-            'tmgmt_contact_company' => 'Kontakt: Firma / Verein',
-            'tmgmt_contact_street' => 'Kontakt: Straße',
-            'tmgmt_contact_number' => 'Kontakt: Nr.',
-            'tmgmt_contact_zip' => 'Kontakt: PLZ',
-            'tmgmt_contact_city' => 'Kontakt: Ort',
-            'tmgmt_contact_country' => 'Kontakt: Land',
-            'tmgmt_contact_email_contract' => 'Kontakt: E-Mail (Vertrag)',
-            'tmgmt_contact_phone_contract' => 'Kontakt: Telefon (Vertrag)',
-            'tmgmt_contact_email_tech' => 'Kontakt: E-Mail (Technik)',
-            'tmgmt_contact_phone_tech' => 'Kontakt: Telefon (Technik)',
-            'tmgmt_contact_email_program' => 'Kontakt: E-Mail (Programm)',
-            'tmgmt_contact_phone_program' => 'Kontakt: Telefon (Programm)',
+            'tmgmt_event_location_id' => 'Veranstaltungsort',
+            'tmgmt_event_veranstalter_id' => 'Veranstalter',
             'tmgmt_inquiry_date' => 'Anfrage vom',
             'tmgmt_fee' => 'Vereinbarte Gage',
             'tmgmt_deposit' => 'Anzahlung',
@@ -60,9 +152,9 @@ class TMGMT_Event_Meta_Boxes {
         );
 
         add_meta_box(
-            'tmgmt_contact_details',
-            'Kontaktdaten',
-            array($this, 'render_contact_details_box'),
+            'tmgmt_veranstalter_details',
+            'Veranstalter',
+            array($this, 'render_veranstalter_box'),
             'event',
             'normal',
             'high'
@@ -234,17 +326,35 @@ class TMGMT_Event_Meta_Boxes {
         $arrival_time = get_post_meta($post->ID, '_tmgmt_event_arrival_time', true);
         $departure_time = get_post_meta($post->ID, '_tmgmt_event_departure_time', true);
         
-        $venue_name = get_post_meta($post->ID, '_tmgmt_venue_name', true);
-        $venue_street = get_post_meta($post->ID, '_tmgmt_venue_street', true);
-        $venue_number = get_post_meta($post->ID, '_tmgmt_venue_number', true);
-        $venue_zip = get_post_meta($post->ID, '_tmgmt_venue_zip', true);
-        $venue_city = get_post_meta($post->ID, '_tmgmt_venue_city', true);
-        $venue_country = get_post_meta($post->ID, '_tmgmt_venue_country', true);
+        // Location reference (new approach - link instead of duplicate)
+        $location_id = get_post_meta($post->ID, '_tmgmt_event_location_id', true);
+        $location = null;
+        $location_data = array();
         
-        $geo_lat = get_post_meta($post->ID, '_tmgmt_geo_lat', true);
-        $geo_lng = get_post_meta($post->ID, '_tmgmt_geo_lng', true);
+        if (!empty($location_id)) {
+            $location = get_post($location_id);
+            if ($location && get_post_type($location_id) === 'tmgmt_location') {
+                $location_data = array(
+                    'id'      => $location_id,
+                    'title'   => $location->post_title,
+                    'street'  => get_post_meta($location_id, '_tmgmt_location_street', true),
+                    'number'  => get_post_meta($location_id, '_tmgmt_location_number', true),
+                    'zip'     => get_post_meta($location_id, '_tmgmt_location_zip', true),
+                    'city'    => get_post_meta($location_id, '_tmgmt_location_city', true),
+                    'country' => get_post_meta($location_id, '_tmgmt_location_country', true),
+                    'lat'     => get_post_meta($location_id, '_tmgmt_location_lat', true),
+                    'lng'     => get_post_meta($location_id, '_tmgmt_location_lng', true),
+                    'notes'   => get_post_meta($location_id, '_tmgmt_location_notes', true),
+                    'edit_url' => get_edit_post_link($location_id, 'raw'),
+                );
+            } else {
+                // Invalid location reference - reset
+                $location = null;
+                $location_id = '';
+            }
+        }
         
-        $arrival_notes = get_post_meta($post->ID, '_tmgmt_arrival_notes', true);
+        $has_location = ($location !== null);
 
         ?>
         <style>
@@ -253,7 +363,11 @@ class TMGMT_Event_Meta_Boxes {
             .tmgmt-field label { display: block; font-weight: 600; margin-bottom: 5px; }
             .tmgmt-field input, .tmgmt-field textarea { width: 100%; }
             .tmgmt-section-title { font-weight: bold; border-bottom: 1px solid #ccc; margin: 15px 0 10px; padding-bottom: 5px; }
-            #tmgmt-map { height: 300px; width: 100%; margin-top: 10px; border: 1px solid #ccc; display: none; }
+            .tmgmt-location-info { background: #f9f9f9; padding: 15px; border-left: 4px solid #2271b1; margin-bottom: 15px; }
+            .tmgmt-location-info .location-name { font-size: 1.1em; font-weight: 600; margin-bottom: 10px; }
+            .tmgmt-location-info .location-address { color: #555; margin-bottom: 8px; }
+            .tmgmt-location-info .location-geo { font-size: 0.9em; color: #777; }
+            .tmgmt-location-info .location-notes { margin-top: 10px; padding-top: 10px; border-top: 1px solid #ddd; font-style: italic; color: #666; }
         </style>
 
         <div class="tmgmt-row">
@@ -270,72 +384,76 @@ class TMGMT_Event_Meta_Boxes {
             <div class="tmgmt-field">
                 <label for="tmgmt_event_arrival_time">Geplante Anreisezeit</label>
                 <input type="time" id="tmgmt_event_arrival_time" name="tmgmt_event_arrival_time" value="<?php echo esc_attr($arrival_time); ?>">
-        <div class="tmgmt-row">
+            </div>
             <div class="tmgmt-field">
                 <label for="tmgmt_event_departure_time">Geplante Abreisezeit</label>
                 <input type="time" id="tmgmt_event_departure_time" name="tmgmt_event_departure_time" value="<?php echo esc_attr($departure_time); ?>">
             </div>
         </div>
 
-        <div class="tmgmt-section-title">Ort aus Datenbank laden</div>
-        <div class="tmgmt-row" style="position: relative;">
-            <div class="tmgmt-field">
-                <input type="text" id="tmgmt_location_search" placeholder="Ort suchen..." autocomplete="off" style="width: 100%;">
+        <div class="tmgmt-section-title">Veranstaltungsort</div>
+        
+        <!-- Hidden field for Location ID -->
+        <input type="hidden" id="tmgmt_event_location_id" name="tmgmt_event_location_id" value="<?php echo esc_attr($location_id); ?>">
+        
+        <!-- Search field (shown when no location linked) -->
+        <div id="tmgmt-location-search-wrap" style="margin-bottom: 15px;<?php echo $has_location ? ' display:none;' : ''; ?>">
+            <div style="position: relative;">
+                <input type="text" id="tmgmt_location_search" placeholder="Ort suchen (min. 2 Zeichen)..." autocomplete="off" style="width: 100%;">
                 <div id="tmgmt_location_search_results" style="position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #ccc; z-index: 100; max-height: 200px; overflow-y: auto; display: none; box-shadow: 0 2px 5px rgba(0,0,0,0.1);"></div>
             </div>
-        </div>
-
-        <div class="tmgmt-section-title">Adresse Veranstaltungsort</div>
-        <div class="tmgmt-row">
-            <div class="tmgmt-field">
-                <label for="tmgmt_venue_name">Name des Veranstaltungsorts</label>
-                <input type="text" id="tmgmt_venue_name" name="tmgmt_venue_name" value="<?php echo esc_attr($venue_name); ?>" placeholder="z.B. Stadthalle oder Grundschule">
+            <div style="margin-top: 10px;">
+                <button type="button" id="tmgmt-create-location-btn" class="button button-secondary">
+                    <span class="dashicons dashicons-plus-alt" style="vertical-align: text-bottom;"></span> Neuer Ort
+                </button>
             </div>
         </div>
-        <div class="tmgmt-row">
-            <div class="tmgmt-field" style="flex: 3;">
-                <label for="tmgmt_venue_street">Straße</label>
-                <input type="text" id="tmgmt_venue_street" name="tmgmt_venue_street" value="<?php echo esc_attr($venue_street); ?>">
-            </div>
-            <div class="tmgmt-field" style="flex: 1;">
-                <label for="tmgmt_venue_number">Nr.</label>
-                <input type="text" id="tmgmt_venue_number" name="tmgmt_venue_number" value="<?php echo esc_attr($venue_number); ?>">
-            </div>
-        </div>
-        <div class="tmgmt-row">
-            <div class="tmgmt-field" style="flex: 1;">
-                <label for="tmgmt_venue_zip">PLZ</label>
-                <input type="text" id="tmgmt_venue_zip" name="tmgmt_venue_zip" value="<?php echo esc_attr($venue_zip); ?>">
-            </div>
-            <div class="tmgmt-field" style="flex: 2;">
-                <label for="tmgmt_venue_city">Ort</label>
-                <input type="text" id="tmgmt_venue_city" name="tmgmt_venue_city" value="<?php echo esc_attr($venue_city); ?>">
-            </div>
-            <div class="tmgmt-field" style="flex: 2;">
-                <label for="tmgmt_venue_country">Land</label>
-                <input type="text" id="tmgmt_venue_country" name="tmgmt_venue_country" value="<?php echo esc_attr($venue_country); ?>">
-            </div>
-        </div>
-
-        <div class="tmgmt-section-title">Geodaten</div>
-        <div class="tmgmt-row">
-            <div class="tmgmt-field">
-                <label for="tmgmt_geo_lat">Latitude</label>
-                <input type="text" id="tmgmt_geo_lat" name="tmgmt_geo_lat" value="<?php echo esc_attr($geo_lat); ?>" readonly>
-            </div>
-            <div class="tmgmt-field">
-                <label for="tmgmt_geo_lng">Longitude</label>
-                <input type="text" id="tmgmt_geo_lng" name="tmgmt_geo_lng" value="<?php echo esc_attr($geo_lng); ?>" readonly>
-            </div>
-            <div class="tmgmt-field" style="display: flex; align-items: flex-end; gap: 10px;">
-                <button type="button" id="tmgmt-geocode-btn" class="button button-secondary">Adresse auflösen</button>
-                <button type="button" id="tmgmt-save-location-btn" class="button button-secondary">Als neuen Ort speichern</button>
+        
+        <!-- Location info (shown when linked) -->
+        <div id="tmgmt-location-info" style="<?php echo $has_location ? '' : 'display:none;'; ?>">
+            <div class="tmgmt-location-info">
+                <div class="location-name">
+                    <span id="tmgmt-location-name"><?php
+                        if ($has_location) {
+                            if (!empty($location_data['edit_url'])) {
+                                echo '<a href="' . esc_url($location_data['edit_url']) . '" target="_blank">' . esc_html($location_data['title']) . '</a>';
+                            } else {
+                                echo esc_html($location_data['title']);
+                            }
+                        }
+                    ?></span>
+                    <button type="button" id="tmgmt-location-remove" class="button button-link-delete" style="margin-left: 10px;">Verknüpfung entfernen</button>
+                </div>
+                <div class="location-address" id="tmgmt-location-address"><?php
+                    if ($has_location) {
+                        $addr_parts = array();
+                        $street_line = trim(($location_data['street'] ?? '') . ' ' . ($location_data['number'] ?? ''));
+                        if ($street_line) $addr_parts[] = esc_html($street_line);
+                        $city_line = trim(($location_data['zip'] ?? '') . ' ' . ($location_data['city'] ?? ''));
+                        if ($city_line) $addr_parts[] = esc_html($city_line);
+                        if (!empty($location_data['country'])) $addr_parts[] = esc_html($location_data['country']);
+                        echo implode('<br>', $addr_parts);
+                        if (empty($addr_parts)) echo '<em>Keine Adresse hinterlegt</em>';
+                    }
+                ?></div>
+                <div class="location-geo" id="tmgmt-location-geo"><?php
+                    if ($has_location && (!empty($location_data['lat']) || !empty($location_data['lng']))) {
+                        echo '<span class="dashicons dashicons-location" style="font-size: 14px; width: 14px; height: 14px; vertical-align: text-bottom;"></span> ';
+                        echo esc_html($location_data['lat']) . ', ' . esc_html($location_data['lng']);
+                    }
+                ?></div>
+                <?php if ($has_location && !empty($location_data['notes'])): ?>
+                <div class="location-notes" id="tmgmt-location-notes">
+                    <strong>Hinweise Anreise / Bus:</strong><br>
+                    <?php echo nl2br(esc_html($location_data['notes'])); ?>
+                </div>
+                <?php endif; ?>
             </div>
         </div>
         
         <script>
         jQuery(document).ready(function($) {
-            // Search
+            // Search locations
             let searchTimeout;
             $('#tmgmt_location_search').on('input', function() {
                 clearTimeout(searchTimeout);
@@ -357,16 +475,17 @@ class TMGMT_Event_Meta_Boxes {
                                 let html = '';
                                 res.data.forEach(item => {
                                     html += `<div class="tmgmt-location-result" style="padding: 8px; cursor: pointer; border-bottom: 1px solid #eee;"
-                                        data-street="${item.street}"
-                                        data-number="${item.number}"
-                                        data-zip="${item.zip}"
-                                        data-city="${item.city}"
-                                        data-country="${item.country}"
-                                        data-lat="${item.lat}"
-                                        data-lng="${item.lng}"
-                                        data-notes="${item.notes}"
-                                        data-name="${item.title}"
-                                    ><strong>${item.title}</strong><br><small>${item.street} ${item.number}, ${item.zip} ${item.city}</small></div>`;
+                                        data-id="${item.id}"
+                                        data-title="${item.title}"
+                                        data-street="${item.street || ''}"
+                                        data-number="${item.number || ''}"
+                                        data-zip="${item.zip || ''}"
+                                        data-city="${item.city || ''}"
+                                        data-country="${item.country || ''}"
+                                        data-lat="${item.lat || ''}"
+                                        data-lng="${item.lng || ''}"
+                                        data-notes="${item.notes || ''}"
+                                    ><strong>${item.title}</strong><br><small>${item.street || ''} ${item.number || ''}, ${item.zip || ''} ${item.city || ''}</small></div>`;
                                 });
                                 $('#tmgmt_location_search_results').html(html).show();
                             } else {
@@ -377,62 +496,56 @@ class TMGMT_Event_Meta_Boxes {
                 }, 300);
             });
 
-            // Select
+            // Select location from search results
             $(document).on('click', '.tmgmt-location-result', function() {
                 const data = $(this).data();
-                $('#tmgmt_venue_name').val(data.name);
-                $('#tmgmt_venue_street').val(data.street);
-                $('#tmgmt_venue_number').val(data.number);
-                $('#tmgmt_venue_zip').val(data.zip);
-                $('#tmgmt_venue_city').val(data.city);
-                $('#tmgmt_venue_country').val(data.country);
-                $('#tmgmt_geo_lat').val(data.lat);
-                $('#tmgmt_geo_lng').val(data.lng);
-                $('#tmgmt_arrival_notes').val(data.notes);
-                
+                selectLocation(data);
                 $('#tmgmt_location_search_results').hide();
                 $('#tmgmt_location_search').val('');
             });
-
-            // Save
-            $('#tmgmt-save-location-btn').on('click', function() {
-                const name = $('#tmgmt_venue_name').val();
-                if (!name) {
-                    Swal.fire('Fehlende Angabe', 'Bitte geben Sie einen Namen für den Veranstaltungsort ein.', 'warning');
-                    return;
+            
+            function selectLocation(data) {
+                // Set hidden field
+                $('#tmgmt_event_location_id').val(data.id);
+                
+                // Build address display
+                let addrParts = [];
+                let streetLine = ((data.street || '') + ' ' + (data.number || '')).trim();
+                if (streetLine) addrParts.push(streetLine);
+                let cityLine = ((data.zip || '') + ' ' + (data.city || '')).trim();
+                if (cityLine) addrParts.push(cityLine);
+                if (data.country) addrParts.push(data.country);
+                
+                // Update display
+                $('#tmgmt-location-name').html('<a href="/wp-admin/post.php?post=' + data.id + '&action=edit" target="_blank">' + data.title + '</a>');
+                $('#tmgmt-location-address').html(addrParts.length > 0 ? addrParts.join('<br>') : '<em>Keine Adresse hinterlegt</em>');
+                
+                if (data.lat || data.lng) {
+                    $('#tmgmt-location-geo').html('<span class="dashicons dashicons-location" style="font-size: 14px; width: 14px; height: 14px; vertical-align: text-bottom;"></span> ' + (data.lat || '') + ', ' + (data.lng || ''));
+                } else {
+                    $('#tmgmt-location-geo').html('');
                 }
                 
-                const btn = $(this);
-                btn.prop('disabled', true).text('Speichere...');
-                
-                $.ajax({
-                    url: ajaxurl,
-                    method: 'POST',
-                    data: {
-                        action: 'tmgmt_save_location_from_event',
-                        name: name,
-                        street: $('#tmgmt_venue_street').val(),
-                        number: $('#tmgmt_venue_number').val(),
-                        zip: $('#tmgmt_venue_zip').val(),
-                        city: $('#tmgmt_venue_city').val(),
-                        country: $('#tmgmt_venue_country').val(),
-                        lat: $('#tmgmt_geo_lat').val(),
-                        lng: $('#tmgmt_geo_lng').val(),
-                        notes: $('#tmgmt_arrival_notes').val()
-                    },
-                    success: function(res) {
-                        btn.prop('disabled', false).text('Als neuen Ort speichern');
-                        if (res.success) {
-                            Swal.fire('Gespeichert', 'Ort erfolgreich gespeichert!', 'success');
-                        } else {
-                            Swal.fire('Fehler', 'Fehler: ' + res.data, 'error');
-                        }
-                    },
-                    error: function() {
-                        btn.prop('disabled', false).text('Als neuen Ort speichern');
-                        Swal.fire('Fehler', 'Ein Fehler ist aufgetreten.', 'error');
+                if (data.notes) {
+                    if ($('#tmgmt-location-notes').length === 0) {
+                        $('.tmgmt-location-info').append('<div class="location-notes" id="tmgmt-location-notes"><strong>Hinweise Anreise / Bus:</strong><br>' + data.notes.replace(/\n/g, '<br>') + '</div>');
+                    } else {
+                        $('#tmgmt-location-notes').html('<strong>Hinweise Anreise / Bus:</strong><br>' + data.notes.replace(/\n/g, '<br>')).show();
                     }
-                });
+                } else {
+                    $('#tmgmt-location-notes').hide();
+                }
+                
+                // Show info, hide search
+                $('#tmgmt-location-search-wrap').hide();
+                $('#tmgmt-location-info').show();
+            }
+            
+            // Remove location link
+            $('#tmgmt-location-remove').on('click', function() {
+                $('#tmgmt_event_location_id').val('');
+                $('#tmgmt-location-info').hide();
+                $('#tmgmt-location-search-wrap').show();
             });
             
             // Close search on click outside
@@ -441,381 +554,332 @@ class TMGMT_Event_Meta_Boxes {
                     $('#tmgmt_location_search_results').hide();
                 }
             });
+
+            // Create new location dialog
+            $('#tmgmt-create-location-btn').on('click', function() {
+                Swal.fire({
+                    title: 'Neuen Ort anlegen',
+                    html: `
+                        <div style="text-align: left;">
+                            <div style="margin-bottom: 10px;">
+                                <label style="display: block; font-weight: 600; margin-bottom: 5px;">Name *</label>
+                                <input type="text" id="swal-loc-name" class="swal2-input" style="width: 100%; margin: 0;" placeholder="z.B. Stadthalle Musterstadt">
+                            </div>
+                            <div style="margin-bottom: 10px; display: flex; gap: 10px;">
+                                <div style="flex: 3;">
+                                    <label style="display: block; font-weight: 600; margin-bottom: 5px;">Straße</label>
+                                    <input type="text" id="swal-loc-street" class="swal2-input" style="width: 100%; margin: 0;">
+                                </div>
+                                <div style="flex: 1;">
+                                    <label style="display: block; font-weight: 600; margin-bottom: 5px;">Nr.</label>
+                                    <input type="text" id="swal-loc-number" class="swal2-input" style="width: 100%; margin: 0;">
+                                </div>
+                            </div>
+                            <div style="margin-bottom: 10px; display: flex; gap: 10px;">
+                                <div style="flex: 1;">
+                                    <label style="display: block; font-weight: 600; margin-bottom: 5px;">PLZ</label>
+                                    <input type="text" id="swal-loc-zip" class="swal2-input" style="width: 100%; margin: 0;">
+                                </div>
+                                <div style="flex: 2;">
+                                    <label style="display: block; font-weight: 600; margin-bottom: 5px;">Ort</label>
+                                    <input type="text" id="swal-loc-city" class="swal2-input" style="width: 100%; margin: 0;">
+                                </div>
+                            </div>
+                            <div style="margin-bottom: 10px;">
+                                <label style="display: block; font-weight: 600; margin-bottom: 5px;">Land</label>
+                                <input type="text" id="swal-loc-country" class="swal2-input" style="width: 100%; margin: 0;" value="Deutschland">
+                            </div>
+                            <div style="margin-bottom: 10px;">
+                                <label style="display: block; font-weight: 600; margin-bottom: 5px;">Hinweise Anreise / Bus</label>
+                                <textarea id="swal-loc-notes" class="swal2-textarea" style="width: 100%; margin: 0;" rows="3"></textarea>
+                            </div>
+                        </div>
+                    `,
+                    width: 500,
+                    showCancelButton: true,
+                    confirmButtonText: 'Anlegen & Übernehmen',
+                    cancelButtonText: 'Abbrechen',
+                    preConfirm: function() {
+                        var name = $('#swal-loc-name').val();
+                        if (!name || name.trim() === '') {
+                            Swal.showValidationMessage('Bitte geben Sie einen Namen ein.');
+                            return false;
+                        }
+                        return {
+                            name: name.trim(),
+                            street: $('#swal-loc-street').val(),
+                            number: $('#swal-loc-number').val(),
+                            zip: $('#swal-loc-zip').val(),
+                            city: $('#swal-loc-city').val(),
+                            country: $('#swal-loc-country').val(),
+                            notes: $('#swal-loc-notes').val()
+                        };
+                    }
+                }).then(function(result) {
+                    if (result.isConfirmed && result.value) {
+                        createLocationAndApply(result.value);
+                    }
+                });
+            });
+
+            function createLocationAndApply(data) {
+                Swal.fire({
+                    title: 'Erstelle Ort...',
+                    allowOutsideClick: false,
+                    didOpen: function() {
+                        Swal.showLoading();
+                    }
+                });
+
+                $.ajax({
+                    url: '/wp-json/tmgmt/v1/locations',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(data),
+                    beforeSend: function(xhr) {
+                        xhr.setRequestHeader('X-WP-Nonce', (typeof tmgmt_vars !== 'undefined' && tmgmt_vars.nonce) ? tmgmt_vars.nonce : wpApiSettings.nonce);
+                    },
+                    success: function(response) {
+                        if (response.success && response.id) {
+                            // Select the newly created location
+                            selectLocation({
+                                id: response.id,
+                                title: response.title,
+                                street: response.street || '',
+                                number: response.number || '',
+                                zip: response.zip || '',
+                                city: response.city || '',
+                                country: response.country || '',
+                                lat: response.lat || '',
+                                lng: response.lng || '',
+                                notes: data.notes || ''
+                            });
+                            
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Ort erstellt',
+                                text: 'Der Ort "' + response.title + '" wurde erstellt und verknüpft.',
+                                timer: 2000,
+                                showConfirmButton: false
+                            });
+                        } else {
+                            Swal.fire('Fehler', 'Ort konnte nicht erstellt werden.', 'error');
+                        }
+                    },
+                    error: function(xhr) {
+                        var msg = 'Unbekannter Fehler';
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            msg = xhr.responseJSON.message;
+                        }
+                        Swal.fire('Fehler', msg, 'error');
+                    }
+                });
+            }
         });
         </script>
-        
-        <div id="tmgmt-map-container">
-            <div id="tmgmt-map"></div>
-        </div>
-
-        <div class="tmgmt-section-title">Hinweise</div>
-        <div class="tmgmt-row">
-            <div class="tmgmt-field">
-                <label for="tmgmt_arrival_notes">Hinweise Anreise / Bus</label>
-                <textarea id="tmgmt_arrival_notes" name="tmgmt_arrival_notes" rows="4"><?php echo esc_textarea($arrival_notes); ?></textarea>
-            </div>
-        </div>
         <?php
     }
 
-    public function render_contact_details_box($post) {
-        $contact_cpt_id = get_post_meta($post->ID, '_tmgmt_contact_cpt_id', true);
+    public function render_veranstalter_box($post) {
+        $veranstalter_id = get_post_meta($post->ID, '_tmgmt_event_veranstalter_id', true);
+        $location_id     = get_post_meta($post->ID, '_tmgmt_event_location_id', true);
 
-        // Standard: Daten aus Event-Meta
-        $salutation = get_post_meta($post->ID, '_tmgmt_contact_salutation', true);
-        $firstname = get_post_meta($post->ID, '_tmgmt_contact_firstname', true);
-        $lastname = get_post_meta($post->ID, '_tmgmt_contact_lastname', true);
-        $company = get_post_meta($post->ID, '_tmgmt_contact_company', true);
-        $contact_street = get_post_meta($post->ID, '_tmgmt_contact_street', true);
-        $contact_number = get_post_meta($post->ID, '_tmgmt_contact_number', true);
-        $contact_zip = get_post_meta($post->ID, '_tmgmt_contact_zip', true);
-        $contact_city = get_post_meta($post->ID, '_tmgmt_contact_city', true);
-        $contact_country = get_post_meta($post->ID, '_tmgmt_contact_country', true);
-        $email_contract = get_post_meta($post->ID, '_tmgmt_contact_email_contract', true);
-        $phone_contract = get_post_meta($post->ID, '_tmgmt_contact_phone_contract', true);
-        $name_tech = get_post_meta($post->ID, '_tmgmt_contact_name_tech', true);
-        $email_tech = get_post_meta($post->ID, '_tmgmt_contact_email_tech', true);
-        $phone_tech = get_post_meta($post->ID, '_tmgmt_contact_phone_tech', true);
-        $name_program = get_post_meta($post->ID, '_tmgmt_contact_name_program', true);
-        $email_program = get_post_meta($post->ID, '_tmgmt_contact_email_program', true);
-        $phone_program = get_post_meta($post->ID, '_tmgmt_contact_phone_program', true);
+        // Load Veranstalter data if linked
+        $veranstalter      = null;
+        $veranstalter_addr = array();
+        $contacts          = array();
+        $locations         = array();
+        $edit_url          = '';
 
-        // Wenn Kontakt-CPT-ID gesetzt, Daten aus Kontakte CPT laden
-        if (!empty($contact_cpt_id)) {
-            $contact_post = get_post($contact_cpt_id);
-            if ($contact_post && $contact_post->post_type === 'tmgmt_contact') {
-                $salutation = get_post_meta($contact_cpt_id, '_tmgmt_contact_salutation', true);
-                $firstname = get_post_meta($contact_cpt_id, '_tmgmt_contact_firstname', true);
-                $lastname = get_post_meta($contact_cpt_id, '_tmgmt_contact_lastname', true);
-                $company = get_post_meta($contact_cpt_id, '_tmgmt_contact_company', true);
-                $contact_street = get_post_meta($contact_cpt_id, '_tmgmt_contact_street', true);
-                $contact_number = get_post_meta($contact_cpt_id, '_tmgmt_contact_number', true);
-                $contact_zip = get_post_meta($contact_cpt_id, '_tmgmt_contact_zip', true);
-                $contact_city = get_post_meta($contact_cpt_id, '_tmgmt_contact_city', true);
-                $contact_country = get_post_meta($contact_cpt_id, '_tmgmt_contact_country', true);
-                // Optionale Felder, falls im CPT vorhanden
-                $email_contract = get_post_meta($contact_cpt_id, '_tmgmt_contact_email', true);
-                $phone_contract = get_post_meta($contact_cpt_id, '_tmgmt_contact_phone', true);
+        if (!empty($veranstalter_id)) {
+            $veranstalter = get_post($veranstalter_id);
+            if ($veranstalter && get_post_type($veranstalter_id) === 'tmgmt_veranstalter') {
+                $veranstalter_addr = array(
+                    'street'  => get_post_meta($veranstalter_id, '_tmgmt_veranstalter_street', true),
+                    'number'  => get_post_meta($veranstalter_id, '_tmgmt_veranstalter_number', true),
+                    'zip'     => get_post_meta($veranstalter_id, '_tmgmt_veranstalter_zip', true),
+                    'city'    => get_post_meta($veranstalter_id, '_tmgmt_veranstalter_city', true),
+                    'country' => get_post_meta($veranstalter_id, '_tmgmt_veranstalter_country', true),
+                );
+                $edit_url = get_edit_post_link($veranstalter_id, 'raw');
+
+                // Load contacts
+                $role_labels = array('vertrag' => 'Vertrag', 'technik' => 'Technik', 'programm' => 'Programm');
+                $contact_assignments = get_post_meta($veranstalter_id, '_tmgmt_veranstalter_contacts', true);
+                if (is_array($contact_assignments)) {
+                    foreach ($contact_assignments as $assignment) {
+                        $cid  = isset($assignment['contact_id']) ? intval($assignment['contact_id']) : 0;
+                        $role = isset($assignment['role']) ? $assignment['role'] : '';
+                        $contact_post = get_post($cid);
+                        if ($contact_post && get_post_type($cid) === 'tmgmt_contact') {
+                            $fn = get_post_meta($cid, '_tmgmt_contact_firstname', true);
+                            $ln = get_post_meta($cid, '_tmgmt_contact_lastname', true);
+                            $contacts[] = array(
+                                'role_label' => isset($role_labels[$role]) ? $role_labels[$role] : $role,
+                                'name'       => trim($fn . ' ' . $ln),
+                                'email'      => get_post_meta($cid, '_tmgmt_contact_email', true),
+                                'phone'      => get_post_meta($cid, '_tmgmt_contact_phone', true),
+                            );
+                        } else {
+                            $contacts[] = array(
+                                'role_label' => isset($role_labels[$role]) ? $role_labels[$role] : $role,
+                                'name'       => 'Kontakt nicht gefunden (ID: ' . $cid . ')',
+                                'email'      => '',
+                                'phone'      => '',
+                            );
+                        }
+                    }
+                }
+
+                // Load locations
+                $location_ids = get_post_meta($veranstalter_id, '_tmgmt_veranstalter_locations', true);
+                if (is_array($location_ids)) {
+                    foreach ($location_ids as $lid) {
+                        $lid = intval($lid);
+                        $loc_post = get_post($lid);
+                        if ($loc_post) {
+                            $locations[] = array(
+                                'id'    => $lid,
+                                'title' => $loc_post->post_title,
+                                'street'  => get_post_meta($lid, '_tmgmt_location_street', true),
+                                'number'  => get_post_meta($lid, '_tmgmt_location_number', true),
+                                'zip'     => get_post_meta($lid, '_tmgmt_location_zip', true),
+                                'city'    => get_post_meta($lid, '_tmgmt_location_city', true),
+                                'country' => get_post_meta($lid, '_tmgmt_location_country', true),
+                            );
+                        }
+                    }
+                }
+            } else {
+                // Invalid Veranstalter reference — reset
+                $veranstalter    = null;
+                $veranstalter_id = '';
             }
         }
+
+        $has_veranstalter = ($veranstalter !== null);
         
         ?>
-        
-        <div class="tmgmt-row" style="margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 15px;">
-            <div class="tmgmt-field" style="flex: 1; position: relative;">
-                <label for="tmgmt_contact_search">Kontakt suchen / laden</label>
-                <input type="text" id="tmgmt_contact_search" placeholder="Name oder Firma eingeben..." autocomplete="off">
-                <div class="tmgmt-field" style="flex: 1;">
-    <label for="tmgmt_contact_cpt_id">Kontakt CPT ID</label>
-    <input type="text" id="tmgmt_contact_cpt_id" name="tmgmt_contact_cpt_id" value="<?php echo esc_attr($contact_cpt_id); ?>">
-</div>
-                <div id="tmgmt_contact_search_results" style="display:none; position:absolute; top:100%; left:0; right:0; background:#fff; border:1px solid #ccc; z-index:100; max-height:200px; overflow-y:auto; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
+        <!-- Hidden field for Veranstalter ID -->
+        <input type="hidden" id="tmgmt_event_veranstalter_id" name="tmgmt_event_veranstalter_id" value="<?php echo esc_attr($veranstalter_id); ?>">
+
+        <!-- Search field -->
+        <div id="tmgmt-veranstalter-search-wrap" style="margin-bottom: 15px;<?php echo $has_veranstalter ? ' display:none;' : ''; ?>">
+            <div style="position: relative;">
+                <label for="tmgmt_veranstalter_search">Veranstalter suchen</label>
+                <input type="text" id="tmgmt_veranstalter_search" placeholder="Name eingeben (min. 2 Zeichen)..." autocomplete="off" style="width: 100%;">
+            </div>
+            <div style="margin-top: 10px;">
+                <button type="button" id="tmgmt-create-veranstalter-btn" class="button button-secondary">
+                    <span class="dashicons dashicons-plus-alt" style="vertical-align: text-bottom;"></span> Neuen Veranstalter anlegen
+                </button>
             </div>
         </div>
 
-        <div class="tmgmt-row">
-            <div class="tmgmt-field">
-                <label for="tmgmt_contact_salutation">Anrede</label>
-                <input type="text" id="tmgmt_contact_salutation" name="tmgmt_contact_salutation" value="<?php echo esc_attr($salutation); ?>">
-            </div>
-            <div class="tmgmt-field">
-                <label for="tmgmt_contact_firstname">Vorname</label>
-                <input type="text" id="tmgmt_contact_firstname" name="tmgmt_contact_firstname" value="<?php echo esc_attr($firstname); ?>">
-            </div>
-            <div class="tmgmt-field">
-                <label for="tmgmt_contact_lastname">Nachname</label>
-                <input type="text" id="tmgmt_contact_lastname" name="tmgmt_contact_lastname" value="<?php echo esc_attr($lastname); ?>">
-            </div>
-        </div>
-        <div class="tmgmt-row">
-            <div class="tmgmt-field">
-                <label for="tmgmt_contact_company">Firma / Verein</label>
-                <input type="text" id="tmgmt_contact_company" name="tmgmt_contact_company" value="<?php echo esc_attr($company); ?>">
-            </div>
-        </div>
-
-        <div class="tmgmt-section-title">Postadresse (Kontaktperson)</div>
-        <div class="tmgmt-row">
-            <div class="tmgmt-field" style="flex: 3;">
-                <label for="tmgmt_contact_street">Straße</label>
-                <input type="text" id="tmgmt_contact_street" name="tmgmt_contact_street" value="<?php echo esc_attr($contact_street); ?>">
-            </div>
-            <div class="tmgmt-field" style="flex: 1;">
-                <label for="tmgmt_contact_number">Nr.</label>
-                <input type="text" id="tmgmt_contact_number" name="tmgmt_contact_number" value="<?php echo esc_attr($contact_number); ?>">
-            </div>
-        </div>
-        <div class="tmgmt-row">
-            <div class="tmgmt-field" style="flex: 1;">
-                <label for="tmgmt_contact_zip">PLZ</label>
-                <input type="text" id="tmgmt_contact_zip" name="tmgmt_contact_zip" value="<?php echo esc_attr($contact_zip); ?>">
-            </div>
-            <div class="tmgmt-field" style="flex: 2;">
-                <label for="tmgmt_contact_city">Ort</label>
-                <input type="text" id="tmgmt_contact_city" name="tmgmt_contact_city" value="<?php echo esc_attr($contact_city); ?>">
-            </div>
-            <div class="tmgmt-field" style="flex: 2;">
-                <label for="tmgmt_contact_country">Land</label>
-                <input type="text" id="tmgmt_contact_country" name="tmgmt_contact_country" value="<?php echo esc_attr($contact_country); ?>">
-            </div>
-        </div>
-
-        <div class="tmgmt-section-title">Kommunikation</div>
-        <div class="tmgmt-row">
-            <div class="tmgmt-field">
-                <label for="tmgmt_contact_email_contract">E-Mail (Vertrag)</label>
-                <input type="email" id="tmgmt_contact_email_contract" name="tmgmt_contact_email_contract" value="<?php echo esc_attr($email_contract); ?>">
-            </div>
-            <div class="tmgmt-field">
-                <label for="tmgmt_contact_phone_contract">Telefon (Vertrag)</label>
-                <input type="tel" id="tmgmt_contact_phone_contract" name="tmgmt_contact_phone_contract" value="<?php echo esc_attr($phone_contract); ?>">
-            </div>
-        </div>
-        
-        <div class="tmgmt-row" style="margin-top: 10px;">
-            <div class="tmgmt-field">
-                <button type="button" id="tmgmt-save-contact-btn" class="button button-secondary">Als neuen Kontakt speichern</button>
-            </div>
-        </div>
-
-        <div class="tmgmt-section-title">Technik Kontakt</div>
-        <div class="tmgmt-row" style="margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 15px;">
-            <div class="tmgmt-field" style="flex: 1; position: relative;">
-                <label for="tmgmt_contact_tech_search">Kontakt suchen / laden</label>
-                <input type="text" id="tmgmt_contact_tech_search" placeholder="Name oder Firma eingeben..." autocomplete="off">
-                <div id="tmgmt_contact_tech_search_results" style="display:none; position:absolute; top:100%; left:0; right:0; background:#fff; border:1px solid #ccc; z-index:100; max-height:200px; overflow-y:auto; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
-            </div>
-        </div>
-        <div class="tmgmt-row">
-            <div class="tmgmt-field">
-                <label for="tmgmt_contact_name_tech">Name (Technik)</label>
-                <input type="text" id="tmgmt_contact_name_tech" name="tmgmt_contact_name_tech" value="<?php echo esc_attr($name_tech); ?>">
-            </div>
-            <div class="tmgmt-field">
-                <label for="tmgmt_contact_email_tech">E-Mail (Technik)</label>
-                <input type="email" id="tmgmt_contact_email_tech" name="tmgmt_contact_email_tech" value="<?php echo esc_attr($email_tech); ?>">
-            </div>
-            <div class="tmgmt-field">
-                <label for="tmgmt_contact_phone_tech">Telefon (Technik)</label>
-                <input type="tel" id="tmgmt_contact_phone_tech" name="tmgmt_contact_phone_tech" value="<?php echo esc_attr($phone_tech); ?>">
-            </div>
-        </div>
-        <div class="tmgmt-row" style="margin-top: 10px;">
-            <div class="tmgmt-field">
-                <button type="button" id="tmgmt-save-contact-tech-btn" class="button button-secondary">Als neuen Kontakt speichern</button>
-            </div>
-        </div>
-
-        <div class="tmgmt-section-title">Programm Kontakt</div>
-        <div class="tmgmt-row" style="margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 15px;">
-            <div class="tmgmt-field" style="flex: 1; position: relative;">
-                <label for="tmgmt_contact_program_search">Kontakt suchen / laden</label>
-                <input type="text" id="tmgmt_contact_program_search" placeholder="Name oder Firma eingeben..." autocomplete="off">
-                <div id="tmgmt_contact_program_search_results" style="display:none; position:absolute; top:100%; left:0; right:0; background:#fff; border:1px solid #ccc; z-index:100; max-height:200px; overflow-y:auto; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
-            </div>
-        </div>
-        <div class="tmgmt-row">
-            <div class="tmgmt-field">
-                <label for="tmgmt_contact_name_program">Name (Programm)</label>
-                <input type="text" id="tmgmt_contact_name_program" name="tmgmt_contact_name_program" value="<?php echo esc_attr($name_program); ?>">
-            </div>
-            <div class="tmgmt-field">
-                <label for="tmgmt_contact_email_program">E-Mail (Programm)</label>
-                <input type="email" id="tmgmt_contact_email_program" name="tmgmt_contact_email_program" value="<?php echo esc_attr($email_program); ?>">
-            </div>
-            <div class="tmgmt-field">
-                <label for="tmgmt_contact_phone_program">Telefon (Programm)</label>
-                <input type="tel" id="tmgmt_contact_phone_program" name="tmgmt_contact_phone_program" value="<?php echo esc_attr($phone_program); ?>">
-            </div>
-        </div>
-        <div class="tmgmt-row" style="margin-top: 10px;">
-            <div class="tmgmt-field">
-                <button type="button" id="tmgmt-save-contact-program-btn" class="button button-secondary">Als neuen Kontakt speichern</button>
-            </div>
-        </div>
-
-        <script>
-        jQuery(document).ready(function($) {
-            // Generic Search Function
-            function setupContactSearch(inputId, resultsId, onSelect) {
-                let searchTimeout;
-                $(inputId).on('input', function() {
-                    clearTimeout(searchTimeout);
-                    const term = $(this).val();
-                    if (term.length < 2) {
-                        $(resultsId).hide();
-                        return;
+        <!-- Veranstalter info (shown when linked) -->
+        <div id="tmgmt-veranstalter-info" style="<?php echo $has_veranstalter ? '' : 'display:none;'; ?>">
+            <!-- Name and edit link -->
+            <div style="margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #eee;">
+                <strong id="tmgmt-veranstalter-name"><?php
+                    if ($has_veranstalter) {
+                        if ($edit_url) {
+                            echo '<a href="' . esc_url($edit_url) . '" target="_blank">' . esc_html($veranstalter->post_title) . '</a>';
+                        } else {
+                            echo esc_html($veranstalter->post_title);
+                        }
                     }
-                    
-                    searchTimeout = setTimeout(function() {
-                        $.ajax({
-                            url: ajaxurl,
-                            data: {
-                                action: 'tmgmt_search_contacts',
-                                term: term
-                            },
-                            success: function(res) {
-                                if (res.success && res.data.length > 0) {
-                                    let html = '';
-                                    res.data.forEach(item => {
-                                        // Store data in a way we can retrieve it easily
-                                        // We use a data-json attribute to store the full object
-                                        const json = JSON.stringify(item).replace(/"/g, '&quot;');
-                                        html += `<div class="tmgmt-contact-result-item" style="padding: 8px; cursor: pointer; border-bottom: 1px solid #eee;" data-json="${json}">
-                                            <strong>${item.title}</strong><br><small>${item.company ? item.company + ' | ' : ''}${item.firstname} ${item.lastname}</small>
-                                        </div>`;
-                                    });
-                                    $(resultsId).html(html).show();
-                                } else {
-                                    $(resultsId).hide();
+                ?></strong>
+                <button type="button" id="tmgmt-veranstalter-remove" class="button button-link-delete" style="margin-left: 10px;">Verknüpfung entfernen</button>
+            </div>
+
+            <!-- Postal address -->
+            <div id="tmgmt-veranstalter-address" style="margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #eee;">
+                <div class="tmgmt-section-title" style="font-weight: bold; margin-bottom: 5px;">Postadresse</div>
+                <div id="tmgmt-veranstalter-address-content"><?php
+                    if ($has_veranstalter) {
+                        $addr_parts = array();
+                        $street_line = trim(($veranstalter_addr['street'] ?? '') . ' ' . ($veranstalter_addr['number'] ?? ''));
+                        if ($street_line) $addr_parts[] = esc_html($street_line);
+                        $city_line = trim(($veranstalter_addr['zip'] ?? '') . ' ' . ($veranstalter_addr['city'] ?? ''));
+                        if ($city_line) $addr_parts[] = esc_html($city_line);
+                        if (!empty($veranstalter_addr['country'])) $addr_parts[] = esc_html($veranstalter_addr['country']);
+                        echo implode('<br>', $addr_parts);
+                        if (empty($addr_parts)) echo '<em>Keine Adresse hinterlegt</em>';
+                    }
+                ?></div>
+            </div>
+
+            <!-- Contacts (read-only, per role) -->
+            <div id="tmgmt-veranstalter-contacts" style="margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #eee;">
+                <div class="tmgmt-section-title" style="font-weight: bold; margin-bottom: 5px;">Kontakte</div>
+                <div id="tmgmt-veranstalter-contacts-content"><?php
+                    if ($has_veranstalter) {
+                        if (empty($contacts)) {
+                            echo '<em>Keine Kontakte zugeordnet</em>';
+                        } else {
+                            foreach ($contacts as $contact) {
+                                echo '<div style="margin-bottom: 8px; padding: 6px; background: #f9f9f9; border-left: 3px solid #2271b1;">';
+                                echo '<strong>' . esc_html($contact['role_label']) . ':</strong> ' . esc_html($contact['name']);
+                                if (!empty($contact['email'])) {
+                                    echo '<br><span class="dashicons dashicons-email" style="font-size: 14px; width: 14px; height: 14px; vertical-align: text-bottom;"></span> ' . esc_html($contact['email']);
+                                }
+                                if (!empty($contact['phone'])) {
+                                    echo '<br><span class="dashicons dashicons-phone" style="font-size: 14px; width: 14px; height: 14px; vertical-align: text-bottom;"></span> ' . esc_html($contact['phone']);
+                                }
+                                echo '</div>';
+                            }
+                        }
+                    }
+                ?></div>
+            </div>
+
+            <!-- Locations (selection list) -->
+            <div id="tmgmt-veranstalter-locations">
+                <div class="tmgmt-section-title" style="font-weight: bold; margin-bottom: 5px;">Veranstaltungsorte</div>
+                <div id="tmgmt-veranstalter-locations-content"><?php
+                    if ($has_veranstalter) {
+                        if (empty($locations)) {
+                            echo '<em>Keine Veranstaltungsorte zugeordnet</em>';
+                        } else {
+                            echo '<select id="tmgmt-veranstalter-location-select" style="width: 100%; margin-bottom: 8px;">';
+                            echo '<option value="">-- Ort auswählen --</option>';
+                            foreach ($locations as $loc) {
+                                $selected = ($location_id == $loc['id']) ? ' selected' : '';
+                                echo '<option value="' . esc_attr($loc['id']) . '"'
+                                    . ' data-street="' . esc_attr($loc['street']) . '"'
+                                    . ' data-number="' . esc_attr($loc['number']) . '"'
+                                    . ' data-zip="' . esc_attr($loc['zip']) . '"'
+                                    . ' data-city="' . esc_attr($loc['city']) . '"'
+                                    . ' data-country="' . esc_attr($loc['country']) . '"'
+                                    . $selected . '>'
+                                    . esc_html($loc['title']) . '</option>';
+                            }
+                            echo '</select>';
+
+                            // Show address of selected location
+                            $selected_loc = null;
+                            foreach ($locations as $loc) {
+                                if ($location_id == $loc['id']) {
+                                    $selected_loc = $loc;
+                                    break;
                                 }
                             }
-                        });
-                    }, 300);
-                });
-
-                $(document).on('click', resultsId + ' .tmgmt-contact-result-item', function() {
-                    const data = $(this).data('json');
-                    onSelect(data);
-                    $(resultsId).hide();
-                    $(inputId).val('');
-                });
-            }
-
-            // 1. Main Contact Search
-            setupContactSearch('#tmgmt_contact_search', '#tmgmt_contact_search_results', function(data) {
-                $('#tmgmt_contact_salutation').val(data.salutation);
-                $('#tmgmt_contact_firstname').val(data.firstname);
-                $('#tmgmt_contact_lastname').val(data.lastname);
-                $('#tmgmt_contact_company').val(data.company);
-                $('#tmgmt_contact_street').val(data.street);
-                $('#tmgmt_contact_number').val(data.number);
-                $('#tmgmt_contact_zip').val(data.zip);
-                $('#tmgmt_contact_city').val(data.city);
-                $('#tmgmt_contact_country').val(data.country);
-                $('#tmgmt_contact_email_contract').val(data.email);
-                $('#tmgmt_contact_phone_contract').val(data.phone);
-            });
-
-            // 2. Tech Contact Search
-            setupContactSearch('#tmgmt_contact_tech_search', '#tmgmt_contact_tech_search_results', function(data) {
-                // Combine names for single field
-                let name = data.company;
-                if (data.firstname || data.lastname) {
-                    const fullName = (data.firstname + ' ' + data.lastname).trim();
-                    if (name) name += ' (' + fullName + ')';
-                    else name = fullName;
-                }
-                $('#tmgmt_contact_name_tech').val(name);
-                $('#tmgmt_contact_email_tech').val(data.email);
-                $('#tmgmt_contact_phone_tech').val(data.phone);
-            });
-
-            // 3. Program Contact Search
-            setupContactSearch('#tmgmt_contact_program_search', '#tmgmt_contact_program_search_results', function(data) {
-                // Combine names for single field
-                let name = data.company;
-                if (data.firstname || data.lastname) {
-                    const fullName = (data.firstname + ' ' + data.lastname).trim();
-                    if (name) name += ' (' + fullName + ')';
-                    else name = fullName;
-                }
-                $('#tmgmt_contact_name_program').val(name);
-                $('#tmgmt_contact_email_program').val(data.email);
-                $('#tmgmt_contact_phone_program').val(data.phone);
-            });
-
-            // Generic Save Function
-            function saveContact(btnId, getData) {
-                $(btnId).on('click', function() {
-                    const data = getData();
-                    
-                    if (!data.title) {
-                        Swal.fire('Fehlende Angabe', 'Bitte geben Sie mindestens einen Namen oder eine Firma ein.', 'warning');
-                        return;
-                    }
-                    
-                    const btn = $(this);
-                    btn.prop('disabled', true).text('Speichere...');
-                    
-                    $.ajax({
-                        url: ajaxurl,
-                        method: 'POST',
-                        data: Object.assign({ action: 'tmgmt_save_contact_from_event' }, data),
-                        success: function(res) {
-                            btn.prop('disabled', false).text('Als neuen Kontakt speichern');
-                            if (res.success) {
-                                Swal.fire('Gespeichert', 'Kontakt erfolgreich gespeichert!', 'success');
-                            } else {
-                                Swal.fire('Fehler', 'Fehler: ' + res.data, 'error');
+                            echo '<div id="tmgmt-veranstalter-location-address">';
+                            if ($selected_loc) {
+                                $loc_parts = array();
+                                $loc_street = trim(($selected_loc['street'] ?? '') . ' ' . ($selected_loc['number'] ?? ''));
+                                if ($loc_street) $loc_parts[] = esc_html($loc_street);
+                                $loc_city = trim(($selected_loc['zip'] ?? '') . ' ' . ($selected_loc['city'] ?? ''));
+                                if ($loc_city) $loc_parts[] = esc_html($loc_city);
+                                if (!empty($selected_loc['country'])) $loc_parts[] = esc_html($selected_loc['country']);
+                                echo implode('<br>', $loc_parts);
                             }
-                        },
-                        error: function() {
-                            btn.prop('disabled', false).text('Als neuen Kontakt speichern');
-                            Swal.fire('Fehler', 'Ein Fehler ist aufgetreten.', 'error');
+                            echo '</div>';
                         }
-                    });
-                });
-            }
-
-            // 1. Save Main Contact
-            saveContact('#tmgmt-save-contact-btn', function() {
-                const firstname = $('#tmgmt_contact_firstname').val();
-                const lastname = $('#tmgmt_contact_lastname').val();
-                const company = $('#tmgmt_contact_company').val();
-                
-                let title = company;
-                if (firstname || lastname) {
-                    title = (firstname + ' ' + lastname).trim();
-                    if (company) title += ' (' + company + ')';
-                }
-
-                return {
-                    title: title,
-                    salutation: $('#tmgmt_contact_salutation').val(),
-                    firstname: firstname,
-                    lastname: lastname,
-                    company: company,
-                    street: $('#tmgmt_contact_street').val(),
-                    number: $('#tmgmt_contact_number').val(),
-                    zip: $('#tmgmt_contact_zip').val(),
-                    city: $('#tmgmt_contact_city').val(),
-                    country: $('#tmgmt_contact_country').val(),
-                    email: $('#tmgmt_contact_email_contract').val(),
-                    phone: $('#tmgmt_contact_phone_contract').val()
-                };
-            });
-
-            // 2. Save Tech Contact
-            saveContact('#tmgmt-save-contact-tech-btn', function() {
-                const name = $('#tmgmt_contact_name_tech').val();
-                return {
-                    title: name,
-                    company: name, // We map the single name field to company/title for simplicity
-                    email: $('#tmgmt_contact_email_tech').val(),
-                    phone: $('#tmgmt_contact_phone_tech').val()
-                };
-            });
-
-            // 3. Save Program Contact
-            saveContact('#tmgmt-save-contact-program-btn', function() {
-                const name = $('#tmgmt_contact_name_program').val();
-                return {
-                    title: name,
-                    company: name,
-                    email: $('#tmgmt_contact_email_program').val(),
-                    phone: $('#tmgmt_contact_phone_program').val()
-                };
-            });
-            
-            // Close search on click outside
-            $(document).on('click', function(e) {
-                if (!$(e.target).closest('.tmgmt-field input[type="text"], [id$="_search_results"]').length) {
-                    $('[id$="_search_results"]').hide();
-                }
-            });
-        });
-        </script>
+                    }
+                ?></div>
+            </div>
+        </div>
         <?php
     }
 
@@ -1188,7 +1252,7 @@ class TMGMT_Event_Meta_Boxes {
         $old_status = get_post_meta($post_id, '_tmgmt_status', true);
         $new_status = isset($_POST['tmgmt_status']) ? sanitize_text_field($_POST['tmgmt_status']) : '';
 
-        // Check for changes relevant to Tour Planning (Time, Date, Status, Geo)
+        // Check for changes relevant to Tour Planning (Time, Date, Status, Location)
         $tour_relevant_changes = false;
         
         // 1. Time
@@ -1204,10 +1268,10 @@ class TMGMT_Event_Meta_Boxes {
         // 3. Status
         if ($old_status !== $new_status) $tour_relevant_changes = true;
 
-        // 4. Geo
-        $old_lat = get_post_meta($post_id, '_tmgmt_geo_lat', true);
-        $new_lat = isset($_POST['tmgmt_geo_lat']) ? sanitize_text_field($_POST['tmgmt_geo_lat']) : '';
-        if ($old_lat !== $new_lat) $tour_relevant_changes = true;
+        // 4. Location (changed location means potentially different geo coordinates)
+        $old_location_id = get_post_meta($post_id, '_tmgmt_event_location_id', true);
+        $new_location_id = isset($_POST['tmgmt_event_location_id']) ? sanitize_text_field($_POST['tmgmt_event_location_id']) : '';
+        if ($old_location_id !== $new_location_id) $tour_relevant_changes = true;
 
         if ($tour_relevant_changes) {
             // Flag Tour for NEW date
@@ -1290,17 +1354,12 @@ class TMGMT_Event_Meta_Boxes {
         }
 
         $fields = array(
-            'tmgmt_contact_cpt_id',
             // Event Details
             'tmgmt_event_date', 'tmgmt_event_start_time', 'tmgmt_event_arrival_time', 'tmgmt_event_departure_time',
-            'tmgmt_venue_name', 'tmgmt_venue_street', 'tmgmt_venue_number', 'tmgmt_venue_zip', 'tmgmt_venue_city', 'tmgmt_venue_country',
-            'tmgmt_geo_lat', 'tmgmt_geo_lng', 'tmgmt_arrival_notes',
-            // Contact Details
-            'tmgmt_contact_salutation', 'tmgmt_contact_firstname', 'tmgmt_contact_lastname', 'tmgmt_contact_company',
-            'tmgmt_contact_street', 'tmgmt_contact_number', 'tmgmt_contact_zip', 'tmgmt_contact_city', 'tmgmt_contact_country',
-            'tmgmt_contact_email_contract', 'tmgmt_contact_phone_contract',
-            'tmgmt_contact_name_tech', 'tmgmt_contact_email_tech', 'tmgmt_contact_phone_tech',
-            'tmgmt_contact_name_program', 'tmgmt_contact_email_program', 'tmgmt_contact_phone_program',
+            // Location (reference only, no duplicated address fields)
+            'tmgmt_event_location_id',
+            // Veranstalter
+            'tmgmt_event_veranstalter_id',
             // Inquiry
             'tmgmt_inquiry_date', 'tmgmt_status',
             // Contract
@@ -1313,12 +1372,6 @@ class TMGMT_Event_Meta_Boxes {
             if (isset($_POST[$field])) {
                 update_post_meta($post_id, '_' . $field, sanitize_text_field($_POST[$field]));
             } else {
-                // Handle unchecked checkboxes or empty fields if necessary, 
-                // but for text inputs, if they are missing from POST it usually means they weren't on the form.
-                // However, if the user clears the input, it comes as empty string.
-                // If we want to delete meta when empty:
-                // delete_post_meta($post_id, '_' . $field);
-                // For now, updating with empty string is fine.
                 update_post_meta($post_id, '_' . $field, '');
             }
         }

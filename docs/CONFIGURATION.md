@@ -78,7 +78,27 @@ Das Plugin bringt ein feingranulares Rechtesystem mit. Sie können für jede Wor
 
 *   **Setlist Template:** Wählen Sie hier die Vorlage für den Setlist-Export aus. Eigene Templates können im Ordner `templates/setlist/` abgelegt werden.
 
-## 8. Live Tracking
+## 8. Vertrag
+*Pfad: Einstellungen > Vertrag*
+
+Konfigurieren Sie hier die automatische Vertragsgenerierung. Diese Einstellungen gelten für alle Aktionen vom Typ "Vertragsgenerierung".
+
+*   **Organisations-Unterschrift:** Laden Sie ein Bild aus der Mediathek, das als digitale Unterschrift im Vertrag erscheint. Das Bild wird automatisch über dem "Ort, Datum"-Feld des Auftragnehmers platziert.
+*   **Benachrichtigungs-Empfänger:** Wählen Sie einen WordPress-Benutzer, der eine E-Mail erhält, sobald ein Kunde einen unterschriebenen Vertrag hochlädt. Ohne Auswahl wird die Administrator-E-Mail als Fallback verwendet.
+
+### Vertragsgenerierung einrichten
+
+1. Legen Sie unter **Einstellungen > Vertrag** die Organisations-Unterschrift und den Benachrichtigungs-Empfänger fest.
+2. Erstellen Sie eine E-Mail-Vorlage (Post-Type `tmgmt_email_template`) für den Vertragsversand. Die Vorlage sollte den Platzhalter `[customer_dashboard_link]` enthalten, damit der Kunde den Upload-Link erhält.
+3. Erstellen Sie eine Aktion (Post-Type `tmgmt_action`) vom Typ **Vertragsgenerierung** und wählen Sie die E-Mail-Vorlage aus.
+4. Weisen Sie die Aktion einem Event zu und führen Sie sie aus — das System generiert das PDF, sendet es per E-Mail und setzt den Status auf `contract_sent`.
+5. Der Kunde lädt den unterschriebenen Vertrag über den Dashboard-Link hoch. Der Status wechselt automatisch auf `contract_signed`.
+
+### Vertrags-Template anpassen
+
+Das Standard-Template liegt unter `templates/contract/default.php`. Es unterstützt alle Platzhalter des `TMGMT_Placeholder_Parser` (z.B. `[event_date]`, `[contact_firstname]`, `[fee]`). Eigene Templates können im selben Verzeichnis abgelegt werden.
+
+## 9. Live Tracking
 *Pfad: Einstellungen > Live Tracking*
 
 *   **Test-Modus:** Aktivieren Sie diesen Modus, um GPS-Daten zu simulieren. Nützlich zum Testen der "Live View" ohne sich tatsächlich zu bewegen.

@@ -182,8 +182,11 @@ class TMGMT_Veranstalter_Post_Type {
         }
         ?>
         <div class="tmgmt-veranstalter-locations">
-            <div style="margin-bottom: 10px;">
-                <input type="text" class="tmgmt-veranstalter-location-search" placeholder="Ort suchen..." style="width: 70%;">
+            <div style="margin-bottom: 10px; display: flex; gap: 10px;">
+                <input type="text" class="tmgmt-veranstalter-location-search" placeholder="Ort suchen..." style="flex: 2;">
+                <button type="button" class="button button-secondary tmgmt-veranstalter-create-location-btn">
+                    <span class="dashicons dashicons-plus-alt" style="vertical-align: text-bottom;"></span> Neuer Ort
+                </button>
             </div>
             <div class="tmgmt-veranstalter-locations-list">
                 <?php foreach ($location_ids as $location_id) :

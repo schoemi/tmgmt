@@ -237,13 +237,21 @@ class TMGMT_PDF_Generator {
                     // We need to fetch it from the event ID.
                     
                     if (isset($item['id'])) {
-                        $notes = get_post_meta($item['id'], '_tmgmt_arrival_notes', true);
+                        // Get location data from linked location
+                        $location_id = get_post_meta($item['id'], '_tmgmt_event_location_id', true);
+                        $notes = '';
+                        $street = '';
+                        $number = '';
+                        $zip = '';
+                        $city = '';
                         
-                        // Fetch address from event meta to ensure it is up to date
-                        $street = get_post_meta($item['id'], '_tmgmt_venue_street', true);
-                        $number = get_post_meta($item['id'], '_tmgmt_venue_number', true);
-                        $zip = get_post_meta($item['id'], '_tmgmt_venue_zip', true);
-                        $city = get_post_meta($item['id'], '_tmgmt_venue_city', true);
+                        if (!empty($location_id)) {
+                            $notes = get_post_meta($location_id, '_tmgmt_location_notes', true);
+                            $street = get_post_meta($location_id, '_tmgmt_location_street', true);
+                            $number = get_post_meta($location_id, '_tmgmt_location_number', true);
+                            $zip = get_post_meta($location_id, '_tmgmt_location_zip', true);
+                            $city = get_post_meta($location_id, '_tmgmt_location_city', true);
+                        }
                         
                         $full_address = array();
                         if ($street) $full_address[] = $street . ' ' . $number;
@@ -323,6 +331,40 @@ class TMGMT_PDF_Generator {
         }
     }
 
+    /**
+     * Generate a contract PDF from rendered HTML and save it to a file.
+     *
+     * @param string $html        Rendered HTML content.
+     * @param string $output_path Absolute file path to save the PDF.
+     * @return true|WP_Error
+     */
+    public function generate_contract_pdf( string $html, string $output_path ): bool|WP_Error {
+        if ( ! class_exists( '\Mpdf\Mpdf' ) ) {
+            return new WP_Error( 'mpdf_missing', 'mPDF library is not installed. Please run "composer require mpdf/mpdf" in the plugin directory.' );
+        }
+
+        try {
+            $mpdf = new \Mpdf\Mpdf( [
+                'mode'        => 'utf-8',
+                'format'      => 'A4',
+                'orientation' => 'P',
+            ] );
+
+            $org_data = $this->get_organization_data();
+            $mpdf->SetTitle( 'Vertrag' );
+            $mpdf->SetAuthor( $org_data['name'] );
+            $mpdf->SetCreator( 'Töns Management Plugin' );
+
+            $mpdf->WriteHTML( $html );
+            $mpdf->Output( $output_path, \Mpdf\Output\Destination::FILE );
+
+            return true;
+
+        } catch ( \Mpdf\MpdfException $e ) {
+            return new WP_Error( 'mpdf_error', $e->getMessage() );
+        }
+    }
+
     private function get_setlist_data($event_id) {
         // 1. Check if Event has a selected Setlist
         $selected_setlist_id = get_post_meta($event_id, '_tmgmt_selected_setlist', true);
@@ -377,11 +419,19 @@ class TMGMT_PDF_Generator {
             }
         }
         
+        // Get location name from linked location
+        $location_id = get_post_meta($event_id, '_tmgmt_event_location_id', true);
+        $location_name = '';
+        if (!empty($location_id)) {
+            $location_post = get_post($location_id);
+            $location_name = $location_post ? $location_post->post_title : '';
+        }
+        
         return array(
             'event_id' => $event_id,
             'event_title' => get_the_title($event_id),
-            'event_date' => get_post_meta($event_id, '_tmgmt_event_date', true), // Correct meta key
-            'location' => get_post_meta($event_id, '_tmgmt_venue_name', true), // Correct meta key
+            'event_date' => get_post_meta($event_id, '_tmgmt_event_date', true),
+            'location' => $location_name,
             'setlist' => $processed_setlist
         );
     }
