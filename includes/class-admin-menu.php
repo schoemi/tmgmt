@@ -20,14 +20,14 @@ class TMGMT_Admin_Menu {
 
         // Define desired order by slug
         $desired_order = array(
-            'tmgmt-dashboard',          // Dashboard
-            'tmgmt-tour-overview',      // Touren-Übersicht
-            'tmgmt-appointment-list',   // Terminliste
-            'edit.php?post_type=event', // Alle Gigs
-            'post-new.php?post_type=event', // Neuen Gig hinzufügen (keep it near Gigs)
-            'edit.php?post_type=tmgmt_tour', // Alle Tourenpläne
-            'tmgmt-mail-queue',         // E-Mail Posteingang
-            'tmgmt-settings'            // Einstellungen
+            'tmgmt-dashboard',                              // Dashboard
+            'tmgmt-tour-overview',                          // Touren-Übersicht
+            'tmgmt-appointment-list',                       // Terminliste
+            'edit.php?post_type=event',                     // Alle Gigs
+            'post-new.php?post_type=event',                 // Neuen Gig hinzufügen
+            'edit.php?post_type=tmgmt_tour',                // Alle Tourenpläne
+            'tmgmt-mail-queue',                             // E-Mail Posteingang
+            'tmgmt-settings'                                // Einstellungen
         );
 
         // Helper to find item by slug

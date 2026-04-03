@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Töns Management
  * Description: Gig Management Plugin for WordPress
- * Version: 0.5.5
+ * Version: 0.7.1
  */
 
 if (!defined('ABSPATH')) {
@@ -37,6 +37,7 @@ require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-contact-post-type.php
 require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-veranstalter-post-type.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-service-post-type.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-invoice-post-type.php';
+require_once TMGMT_PLUGIN_DIR . 'includes/post-types/class-contract-template-post-type.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-integration-manager.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-integration-settings.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-placeholder-parser.php';
@@ -90,6 +91,7 @@ function tmgmt_init() {
     new TMGMT_Veranstalter_Post_Type();
     new TMGMT_Service_Post_Type();
     new TMGMT_Invoice_Post_Type();
+    new TMGMT_Contract_Template_Post_Type();
     new TMGMT_Integration_Manager();
     new TMGMT_Action_Handler();
     new TMGMT_Dashboard();

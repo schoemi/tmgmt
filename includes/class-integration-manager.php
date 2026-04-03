@@ -304,26 +304,22 @@ class TMGMT_Integration_Manager {
         $field = $parts[1] ?? '';
 
         if ($object === 'contact') {
-            // Mapping Event-Meta zu Kontakt-Meta
-            $mapping = array(
-                'lastname' => '_tmgmt_contact_lastname',
-                'firstname' => '_tmgmt_contact_firstname',
-                'company' => '_tmgmt_contact_company',
-                'street' => '_tmgmt_contact_street',
-                'number' => '_tmgmt_contact_number',
-                'zip' => '_tmgmt_contact_zip',
-                'city' => '_tmgmt_contact_city',
-                'email' => '_tmgmt_contact_email_contract'
+            // Mapping: Kontaktfeld → Meta-Key am tmgmt_contact CPT
+            $contact_field_map = array(
+                'lastname'  => 'lastname',
+                'firstname' => 'firstname',
+                'company'   => 'company',
+                'street'    => 'street',
+                'number'    => 'number',
+                'zip'       => 'zip',
+                'city'      => 'city',
+                'email'     => 'email',
             );
-            if (isset($mapping[$field])) {
-                // 1. Kontakt-ID aus Event holen
-                $contact_cpt_id = get_post_meta($event_id, '_tmgmt_contact_cpt_id', true);
-                if ($contact_cpt_id) {
-                    $val = get_post_meta($contact_cpt_id, $mapping[$field], true);
-                    if (!empty($val)) return $val;
-                }
-                // 2. Fallback: Wert aus Event-Meta
-                return get_post_meta($event_id, $mapping[$field], true);
+            if (isset($contact_field_map[$field])) {
+                // Vertrag-Kontakt über Veranstalter auflösen
+                $contact_data = TMGMT_Placeholder_Parser::get_contact_data_for_event($event_id);
+                $val = $contact_data['vertrag'][$contact_field_map[$field]] ?? '';
+                return $val;
             }
         }
         

@@ -3,10 +3,11 @@
  * Unit Tests für Fehlerfälle der Vertragsgenerierung
  *
  * Tests:
- * - test_template_missing_returns_wp_error()         — Req. 1.5
- * - test_missing_contract_email_returns_wp_error()   — Req. 5.4
- * - test_pdf_generation_failure_does_not_change_status() — Req. 4.5
- * - test_signature_img_tag_present_when_url_set()    — Req. 1.3
+ * - test_template_missing_returns_wp_error()             — Req. 1.10
+ * - test_missing_contract_email_returns_wp_error()       — Req. 5.4
+ * - test_pdf_generation_failure_does_not_change_status() — Req. 4.8
+ * - test_empty_template_content_returns_wp_error()       — Req. 4.2
+ * - test_signature_img_tag_present_when_url_set()        — Req. 1.9
  */
 
 // Define plugin dir constant if not already set
@@ -194,14 +195,15 @@ class ContractErrorCasesTest extends \PHPUnit\Framework\TestCase
         }
     }
 
-    private function seedActionMeta(int $actionId, string $targetStatus = 'contract_sent'): void
+    private function seedActionMeta(int $actionId, string $targetStatus = 'contract_sent', int $templatePostId = 3001): void
     {
         update_post_meta($actionId, '_tmgmt_action_type', 'contract_generation');
         update_post_meta($actionId, '_tmgmt_action_email_template_id', '0');
         update_post_meta($actionId, '_tmgmt_action_target_status', $targetStatus);
+        update_post_meta($actionId, '_tmgmt_action_contract_template_id', (string) $templatePostId);
     }
 
-    private function seedPostStore(int $eventId, int $actionId): void
+    private function seedPostStore(int $eventId, int $actionId, int $templatePostId = 3001): void
     {
         global $test_post_store;
 
@@ -218,31 +220,40 @@ class ContractErrorCasesTest extends \PHPUnit\Framework\TestCase
         $fakeAction->post_content = '';
         $fakeAction->post_type    = 'tmgmt_action';
         $test_post_store[$actionId] = $fakeAction;
+
+        $fakeTemplate               = new stdClass();
+        $fakeTemplate->ID           = $templatePostId;
+        $fakeTemplate->post_title   = 'Test Template';
+        $fakeTemplate->post_content = '<p>Vertrag für [contact_firstname] [contact_lastname]</p>';
+        $fakeTemplate->post_status  = 'publish';
+        $fakeTemplate->post_type    = 'tmgmt_contract_tpl';
+        $test_post_store[$templatePostId] = $fakeTemplate;
     }
 
     // =========================================================================
-    // Test 1 — Req. 1.5
+    // Test 1 — Req. 1.10
     // =========================================================================
 
     /**
-     * When no template file exists, render_template() returns WP_Error
+     * When no template post exists (or is not published), render_template() returns WP_Error
      * with code 'template_missing'.
      *
-     * Requirements: 1.5
+     * Requirements: 1.10
      */
     public function test_template_missing_returns_wp_error(): void
     {
         $sut = new TMGMT_Contract_Generator();
 
+        // Pass a post ID that does not exist in the test store → get_post() returns null
         $result = $sut->render_template(
             event_id: 1,
-            template_file: 'this_template_does_not_exist_xyz.php'
+            template_post_id: 99999
         );
 
         $this->assertInstanceOf(
             WP_Error::class,
             $result,
-            'render_template() must return WP_Error when the template file does not exist'
+            'render_template() must return WP_Error when the template post does not exist'
         );
         $this->assertSame(
             'template_missing',
@@ -287,7 +298,7 @@ class ContractErrorCasesTest extends \PHPUnit\Framework\TestCase
     }
 
     // =========================================================================
-    // Test 3 — Req. 4.5
+    // Test 3 — Req. 4.8
     // =========================================================================
 
     /**
@@ -297,7 +308,7 @@ class ContractErrorCasesTest extends \PHPUnit\Framework\TestCase
      * Uses TMGMT_Contract_Generator_PdfFails — a subclass that overrides
      * save_pdf() to return a WP_Error, simulating a PDF library failure.
      *
-     * Requirements: 4.5
+     * Requirements: 4.8
      */
     public function test_pdf_generation_failure_does_not_change_status(): void
     {
@@ -331,7 +342,50 @@ class ContractErrorCasesTest extends \PHPUnit\Framework\TestCase
     }
 
     // =========================================================================
-    // Test 4 — Req. 6.6
+    // Test 4 — Req. 4.2
+    // =========================================================================
+
+    /**
+     * When a published template post has empty post_content, render_template()
+     * returns WP_Error with code 'empty_template_content'.
+     *
+     * Requirements: 4.2
+     */
+    public function test_empty_template_content_returns_wp_error(): void
+    {
+        global $test_post_store;
+
+        $eventId    = 104;
+        $templateId = 3104;
+
+        // Create a published template post with empty content
+        $fakeTemplate               = new stdClass();
+        $fakeTemplate->ID           = $templateId;
+        $fakeTemplate->post_title   = 'Empty Template';
+        $fakeTemplate->post_content = '';   // empty — triggers the guard
+        $fakeTemplate->post_status  = 'publish';
+        $fakeTemplate->post_type    = 'tmgmt_contract_tpl';
+        $test_post_store[$templateId] = $fakeTemplate;
+
+        $this->seedEventMeta($eventId);
+
+        $sut    = new TMGMT_Contract_Generator();
+        $result = $sut->render_template($eventId, $templateId);
+
+        $this->assertInstanceOf(
+            WP_Error::class,
+            $result,
+            'render_template() must return WP_Error when template post_content is empty'
+        );
+        $this->assertSame(
+            'empty_template_content',
+            $result->get_error_code(),
+            'WP_Error code must be "empty_template_content"'
+        );
+    }
+
+    // =========================================================================
+    // Test 5 — Req. 6.6
     // =========================================================================
 
     /**
@@ -426,7 +480,7 @@ class ContractErrorCasesTest extends \PHPUnit\Framework\TestCase
     }
 
     // =========================================================================
-    // Test 5 — Req. 1.3
+    // Test 6 — Req. 1.9
     // =========================================================================
 
     /**
@@ -437,7 +491,7 @@ class ContractErrorCasesTest extends \PHPUnit\Framework\TestCase
      * We set the option to a non-zero ID and verify the rendered HTML contains
      * an <img> tag pointing to that URL.
      *
-     * Requirements: 1.3
+     * Requirements: 1.9
      */
     public function test_signature_img_tag_present_when_url_set(): void
     {
@@ -448,11 +502,22 @@ class ContractErrorCasesTest extends \PHPUnit\Framework\TestCase
         update_option('tmgmt_contract_signature_id', 42);
 
         // Minimal event meta so the template renders without errors
-        $eventId = 103;
+        $eventId    = 103;
+        $templateId = 3103;
         $this->seedEventMeta($eventId);
 
+        // Create a published template post in the store
+        global $test_post_store;
+        $fakeTemplate               = new stdClass();
+        $fakeTemplate->ID           = $templateId;
+        $fakeTemplate->post_title   = 'Signature Test Template';
+        $fakeTemplate->post_content = '<p>Vertrag</p></body>';
+        $fakeTemplate->post_status  = 'publish';
+        $fakeTemplate->post_type    = 'tmgmt_contract_tpl';
+        $test_post_store[$templateId] = $fakeTemplate;
+
         $sut    = new TMGMT_Contract_Generator();
-        $result = $sut->render_template($eventId);
+        $result = $sut->render_template($eventId, $templateId);
 
         $this->assertIsString(
             $result,

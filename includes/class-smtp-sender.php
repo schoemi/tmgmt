@@ -80,6 +80,30 @@ class TMGMT_SMTP_Sender {
             $mail->setFrom($from_email, $from_name);
             $mail->addAddress($to);
 
+            // Optional CC / BCC / Reply-To
+            if (!empty($params['cc'])) {
+                foreach (array_map('trim', explode(',', $params['cc'])) as $addr) {
+                    if ($addr) $mail->addCC($addr);
+                }
+            }
+            if (!empty($params['bcc'])) {
+                foreach (array_map('trim', explode(',', $params['bcc'])) as $addr) {
+                    if ($addr) $mail->addBCC($addr);
+                }
+            }
+            if (!empty($params['reply_to'])) {
+                $mail->addReplyTo($params['reply_to']);
+            }
+
+            // Attachments
+            if (!empty($params['attachments']) && is_array($params['attachments'])) {
+                foreach ($params['attachments'] as $path) {
+                    if (file_exists($path)) {
+                        $mail->addAttachment($path);
+                    }
+                }
+            }
+
             // Subject and body
             $mail->Subject = $subject;
             $mail->isHTML(true);
@@ -113,6 +137,7 @@ class TMGMT_SMTP_Sender {
                 'success'    => false,
                 'raw_email'  => '',
                 'message_id' => '',
+                'error'      => $mail->ErrorInfo ?: $e->getMessage(),
             ];
         }
     }
@@ -145,9 +170,10 @@ class TMGMT_SMTP_Sender {
             ];
         }
 
+        $detail = !empty($result['error']) ? ' Fehler: ' . $result['error'] : '';
         return [
             'success' => false,
-            'message' => 'SMTP-Verbindung fehlgeschlagen. Bitte Zugangsdaten und Servereinstellungen prüfen.',
+            'message' => 'SMTP-Verbindung fehlgeschlagen. Bitte Zugangsdaten und Servereinstellungen prüfen.' . $detail,
         ];
     }
 }

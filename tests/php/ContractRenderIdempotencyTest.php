@@ -99,7 +99,8 @@ class ContractRenderIdempotencyTest extends \PHPUnit\Framework\TestCase
                 $test_post_meta_store = [];
                 $test_post_store      = [];
 
-                $eventId = 1001;
+                $eventId    = 1001;
+                $templateId = 2001;
 
                 // Create a fake WP post object in the store
                 $fakePost               = new stdClass();
@@ -108,6 +109,15 @@ class ContractRenderIdempotencyTest extends \PHPUnit\Framework\TestCase
                 $fakePost->post_content = '';
                 $fakePost->post_type    = 'tmgmt_event';
                 $test_post_store[$eventId] = $fakePost;
+
+                // Create a published template post
+                $fakeTemplate               = new stdClass();
+                $fakeTemplate->ID           = $templateId;
+                $fakeTemplate->post_title   = 'Test Template';
+                $fakeTemplate->post_content = '<p>Vertrag für [contact_firstname] [contact_lastname]</p>';
+                $fakeTemplate->post_status  = 'publish';
+                $fakeTemplate->post_type    = 'tmgmt_contract_tpl';
+                $test_post_store[$templateId] = $fakeTemplate;
 
                 // Populate all meta keys used by TMGMT_Placeholder_Parser
                 $metaValues = [
@@ -144,8 +154,8 @@ class ContractRenderIdempotencyTest extends \PHPUnit\Framework\TestCase
                 }
 
                 // Call render_template() twice with the same event data
-                $result1 = $this->sut->render_template($eventId);
-                $result2 = $this->sut->render_template($eventId);
+                $result1 = $this->sut->render_template($eventId, $templateId);
+                $result2 = $this->sut->render_template($eventId, $templateId);
 
                 // Both calls must succeed
                 $this->assertFalse(

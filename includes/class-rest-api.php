@@ -427,26 +427,6 @@ class TMGMT_REST_API {
             'departure_time' => '_tmgmt_event_departure_time',
             'location_id'    => '_tmgmt_event_location_id',
             'status'         => '_tmgmt_status',
-            // Contact
-            'contact_salutation' => '_tmgmt_contact_salutation',
-            'contact_firstname'  => '_tmgmt_contact_firstname',
-            'contact_lastname'   => '_tmgmt_contact_lastname',
-            'contact_company'    => '_tmgmt_contact_company',
-            'contact_street'     => '_tmgmt_contact_street',
-            'contact_number'     => '_tmgmt_contact_number',
-            'contact_zip'        => '_tmgmt_contact_zip',
-            'contact_city'       => '_tmgmt_contact_city',
-            'contact_country'    => '_tmgmt_contact_country',
-            'contact_email'      => '_tmgmt_contact_email',
-            'contact_phone'      => '_tmgmt_contact_phone',
-            'contact_email_contract' => '_tmgmt_contact_email_contract',
-            'contact_phone_contract' => '_tmgmt_contact_phone_contract',
-            'contact_name_tech'      => '_tmgmt_contact_name_tech',
-            'contact_email_tech'     => '_tmgmt_contact_email_tech',
-            'contact_phone_tech'     => '_tmgmt_contact_phone_tech',
-            'contact_name_program'   => '_tmgmt_contact_name_program',
-            'contact_email_program'  => '_tmgmt_contact_email_program',
-            'contact_phone_program'  => '_tmgmt_contact_phone_program',
             // Inquiry
             'inquiry_date'   => '_tmgmt_inquiry_date',
             // Contract
@@ -811,6 +791,32 @@ class TMGMT_REST_API {
             }
         }
 
+        // Inject contact data resolved via Veranstalter → Contact CPT
+        $contact_data = TMGMT_Placeholder_Parser::get_contact_data_for_event( $event_id );
+        $vertrag  = $contact_data['vertrag'];
+        $technik  = $contact_data['technik'];
+        $programm = $contact_data['programm'];
+
+        $clean_meta['contact_salutation']     = $vertrag['salutation'];
+        $clean_meta['contact_firstname']      = $vertrag['firstname'];
+        $clean_meta['contact_lastname']       = $vertrag['lastname'];
+        $clean_meta['contact_company']        = $vertrag['company'];
+        $clean_meta['contact_street']         = $vertrag['street'];
+        $clean_meta['contact_number']         = $vertrag['number'];
+        $clean_meta['contact_zip']            = $vertrag['zip'];
+        $clean_meta['contact_city']           = $vertrag['city'];
+        $clean_meta['contact_country']        = $vertrag['country'];
+        $clean_meta['contact_email']          = $vertrag['email'];
+        $clean_meta['contact_phone']          = $vertrag['phone'];
+        $clean_meta['contact_email_contract'] = $vertrag['email'];
+        $clean_meta['contact_phone_contract'] = $vertrag['phone'];
+        $clean_meta['contact_name_tech']      = trim( $technik['firstname'] . ' ' . $technik['lastname'] );
+        $clean_meta['contact_email_tech']     = $technik['email'];
+        $clean_meta['contact_phone_tech']     = $technik['phone'];
+        $clean_meta['contact_name_program']   = trim( $programm['firstname'] . ' ' . $programm['lastname'] );
+        $clean_meta['contact_email_program']  = $programm['email'];
+        $clean_meta['contact_phone_program']  = $programm['phone'];
+
         return array(
             'id' => $event_id,
             'title' => $post->post_title,
@@ -839,13 +845,10 @@ class TMGMT_REST_API {
         }
 
         $email_template_id = get_post_meta($action_id, '_tmgmt_action_email_template_id', true);
-        if (!$email_template_id) {
-            return new WP_Error('no_template', 'Keine E-Mail Vorlage definiert', array('status' => 400));
-        }
 
-        $subject_raw = get_post_meta($email_template_id, '_tmgmt_email_subject', true);
-        $body_raw = get_post_meta($email_template_id, '_tmgmt_email_body', true);
-        $recipient_raw = get_post_meta($email_template_id, '_tmgmt_email_recipient', true);
+        $subject_raw   = $email_template_id ? get_post_meta($email_template_id, '_tmgmt_email_subject', true) : '';
+        $body_raw      = $email_template_id ? get_post_meta($email_template_id, '_tmgmt_email_body', true) : '';
+        $recipient_raw = $email_template_id ? get_post_meta($email_template_id, '_tmgmt_email_recipient', true) : '';
 
         // Fallback for recipient if empty
         if (empty($recipient_raw)) {
@@ -883,6 +886,9 @@ class TMGMT_REST_API {
         $log_message = "Aktion ausgeführt: " . $action_post->post_title;
 
         if ($type === 'email' || $type === 'email_confirmation') {
+            // Always load template ID upfront
+            $email_template_id = get_post_meta($action_id, '_tmgmt_action_email_template_id', true);
+
             // Use provided subject/body or fallback to template
             $subject = isset($params['email_subject']) ? $params['email_subject'] : '';
             $body = isset($params['email_body']) ? $params['email_body'] : '';
@@ -890,7 +896,6 @@ class TMGMT_REST_API {
             
             // If not provided (e.g. direct execution without preview), parse from template
             if (empty($subject) || empty($body) || empty($recipient)) {
-                $email_template_id = get_post_meta($action_id, '_tmgmt_action_email_template_id', true);
                 if ($email_template_id) {
                     if (empty($subject)) {
                         $raw = get_post_meta($email_template_id, '_tmgmt_email_subject', true);
@@ -911,11 +916,11 @@ class TMGMT_REST_API {
             // Handle Confirmation Link
             if ($type === 'email_confirmation') {
                 $conf_manager = new TMGMT_Confirmation_Manager();
-                $request = $conf_manager->create_request($event_id, $action_id, $recipient);
+                $conf_result = $conf_manager->create_request($event_id, $action_id, $recipient);
                 
-                if ($request) {
-                    $body = str_replace('{{confirmation_link}}', $request['link'], $body);
-                    $body = str_replace('{{confirmation_url}}', $request['link'], $body);
+                if ($conf_result) {
+                    $body = str_replace('{{confirmation_link}}', $conf_result['link'], $body);
+                    $body = str_replace('{{confirmation_url}}', $conf_result['link'], $body);
                 }
             }
 

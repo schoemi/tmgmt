@@ -10,30 +10,60 @@ class TMGMT_Contract_Generator {
     /**
      * Renders the contract template to HTML with all placeholders replaced.
      *
-     * @param int    $event_id      Event Post-ID.
-     * @param string $template_file Template filename relative to templates/contract/.
+     * Loads the post_content of the given tmgmt_contract_template post, renders
+     * Gutenberg blocks via apply_filters('the_content', ...), replaces all
+     * placeholders via TMGMT_Placeholder_Parser::parse(), and inserts the
+     * signature overlay image.
+     *
+     * @param int $event_id          Event Post-ID.
+     * @param int $template_post_id  Post-ID of the tmgmt_contract_template post.
      * @return string|WP_Error Rendered HTML string, or WP_Error on failure.
      */
-    public function render_template( int $event_id, string $template_file = 'default.php' ): string|WP_Error {
-        $template_path = TMGMT_PLUGIN_DIR . 'templates/contract/' . $template_file;
-
-        if ( ! file_exists( $template_path ) ) {
+    public function render_template( int $event_id, int $template_post_id ): string|WP_Error {
+        // Step 1: Load template post — must exist and be published (Req. 4.1).
+        $template_post = get_post( $template_post_id );
+        if ( ! $template_post || $template_post->post_status !== 'publish' ) {
             return new WP_Error(
                 'template_missing',
-                sprintf( 'Contract template not found: %s', $template_file )
+                sprintf( 'Contract template post not found or not published: %d', $template_post_id )
             );
         }
 
-        // Resolve signature URL from the stored attachment ID.
+        // Step 2: Render Gutenberg blocks to HTML (Req. 4.1).
+        $html = apply_filters( 'the_content', $template_post->post_content );
+
+        // Step 3: Guard against empty rendered content (Req. 4.2).
+        if ( empty( trim( $html ) ) ) {
+            return new WP_Error(
+                'empty_template_content',
+                sprintf( 'Rendered template content is empty for post ID: %d', $template_post_id )
+            );
+        }
+
+        // Step 4: Replace all [placeholder] tokens with event data (Req. 4.3).
+        $html = TMGMT_Placeholder_Parser::parse( $html, $event_id );
+
+        // Step 5: Insert signature overlay image (Req. 1.9, 4.4).
         $signature_id  = get_option( 'tmgmt_contract_signature_id' );
         $signature_url = $signature_id ? wp_get_attachment_url( (int) $signature_id ) : '';
 
-        ob_start();
-        include $template_path;
-        $html = ob_get_clean();
+        if ( ! empty( $signature_url ) ) {
+            $overlay = '<img src="' . esc_url( $signature_url ) . '" '
+                     . 'style="position:absolute;top:-10px;left:0;max-height:60px;opacity:0.9;" '
+                     . 'alt="Unterschrift">';
 
-        // Replace all [placeholder] tokens with event data.
-        $html = TMGMT_Placeholder_Parser::parse( $html, $event_id );
+            if ( str_contains( $html, 'class="tmgmt-signature-marker"' ) ) {
+                $html = str_replace(
+                    'class="tmgmt-signature-marker"',
+                    'class="tmgmt-signature-marker" style="position:relative;">' . $overlay . '<span style="display:none;"',
+                    $html
+                );
+            } elseif ( str_contains( $html, '</body>' ) ) {
+                $html = str_replace( '</body>', $overlay . '</body>', $html );
+            } else {
+                $html .= $overlay;
+            }
+        }
 
         return $html;
     }
@@ -81,25 +111,25 @@ class TMGMT_Contract_Generator {
     public function generate_and_send( int $event_id, int $action_id ): bool|WP_Error {
         $log = new TMGMT_Log_Manager();
 
-        // Step 1: Check contract email address (Req. 5.4).
-        $contract_email = get_post_meta( $event_id, '_tmgmt_contact_email_contract', true );
+        // Step 1: Check contract email address via Veranstalter → Kontakt (Rolle: vertrag).
+        $contact_data   = TMGMT_Placeholder_Parser::get_contact_data_for_event( $event_id );
+        $contract_email = $contact_data['vertrag']['email'];
         if ( empty( $contract_email ) ) {
-            $error = new WP_Error( 'missing_contract_email', 'Keine Vertrags-E-Mail-Adresse am Event hinterlegt.' );
+            $error = new WP_Error( 'missing_contract_email', 'Keine Vertrags-E-Mail-Adresse am verknüpften Kontakt (Rolle: Vertrag) hinterlegt.' );
             $log->log( $event_id, 'contract_error', $error->get_error_message() );
             return $error;
         }
 
-        // Step 2: Determine template file (Req. 1.1, 1.5).
-        $template_file = 'default.php';
-        $template_path = TMGMT_PLUGIN_DIR . 'templates/contract/' . $template_file;
-        if ( ! file_exists( $template_path ) ) {
-            $error = new WP_Error( 'template_missing', sprintf( 'Contract template not found: %s', $template_file ) );
+        // Step 2: Determine template post ID from action meta (Req. 4.1).
+        $template_post_id = (int) get_post_meta( $action_id, '_tmgmt_action_contract_template_id', true );
+        if ( ! $template_post_id ) {
+            $error = new WP_Error( 'template_missing', 'Keine Vertragsvorlage an der Aktion konfiguriert.' );
             $log->log( $event_id, 'contract_error', $error->get_error_message() );
             return $error;
         }
 
         // Step 3: Render template (Req. 4.1).
-        $html = $this->render_template( $event_id, $template_file );
+        $html = $this->render_template( $event_id, $template_post_id );
         if ( is_wp_error( $html ) ) {
             $log->log( $event_id, 'contract_error', $html->get_error_message() );
             return $html;
@@ -145,9 +175,10 @@ class TMGMT_Contract_Generator {
      * @return true|WP_Error
      */
     public function send_contract_email( int $event_id, int $email_template_id, string $pdf_path ): bool|WP_Error {
-        $recipient = get_post_meta( $event_id, '_tmgmt_contact_email_contract', true );
+        $contact_data = TMGMT_Placeholder_Parser::get_contact_data_for_event( $event_id );
+        $recipient    = $contact_data['vertrag']['email'];
         if ( empty( $recipient ) ) {
-            return new WP_Error( 'missing_contract_email', 'Keine Vertrags-E-Mail-Adresse am Event hinterlegt.' );
+            return new WP_Error( 'missing_contract_email', 'Keine Vertrags-E-Mail-Adresse am verknüpften Kontakt (Rolle: Vertrag) hinterlegt.' );
         }
 
         // Resolve subject and body from email template (if configured).
@@ -158,50 +189,30 @@ class TMGMT_Contract_Generator {
             $template = get_post( $email_template_id );
             if ( $template ) {
                 $subject = get_post_meta( $template->ID, '_tmgmt_email_subject', true ) ?: $subject;
-                $body    = $template->post_content;
+                // Body is stored in post meta _tmgmt_email_body, not post_content.
+                $body = get_post_meta( $template->ID, '_tmgmt_email_body', true );
             }
         }
 
-        // Ensure a valid customer dashboard token exists so [customer_dashboard_link]
-        // can be resolved to a real URL (Req. 5.3).
-        if ( strpos( $body, '[customer_dashboard_link]' ) !== false ) {
-            $access_manager = new TMGMT_Customer_Access_Manager();
-            $token_row      = $access_manager->get_valid_token( $event_id );
-
-            if ( $token_row ) {
-                $dashboard_url = home_url( '/?tmgmt_token=' . $token_row->token );
-            } else {
-                // No active token — create one now so the customer can access the dashboard.
-                global $wpdb;
-                $new_token = bin2hex( random_bytes( 32 ) );
-                $wpdb->insert(
-                    $wpdb->prefix . 'tmgmt_access_tokens',
-                    array(
-                        'event_id'   => $event_id,
-                        'token'      => $new_token,
-                        'created_by' => 0,
-                        'status'     => 'active',
-                    ),
-                    array( '%d', '%s', '%d', '%s' )
-                );
-                $dashboard_url = home_url( '/?tmgmt_token=' . $new_token );
-            }
-
-            $dashboard_link = '<a href="' . esc_url( $dashboard_url ) . '">' . esc_url( $dashboard_url ) . '</a>';
-            $body           = str_replace( '[customer_dashboard_link]', $dashboard_link, $body );
-        }
-
-        // Replace all remaining placeholders in subject and body (Req. 5.2).
+        // Replace all placeholders in subject and body — this also handles
+        // [customer_dashboard_link] internally via TMGMT_Placeholder_Parser (Bug 3 fix).
         $subject = TMGMT_Placeholder_Parser::parse( $subject, $event_id );
         $body    = TMGMT_Placeholder_Parser::parse( $body, $event_id );
 
-        $headers     = array( 'Content-Type: text/html; charset=UTF-8' );
         $attachments = file_exists( $pdf_path ) ? array( $pdf_path ) : array();
 
-        $sent = wp_mail( $recipient, $subject, $body, $headers, $attachments );
+        // Send via SMTP sender, consistent with the rest of the plugin (Bug 1 fix).
+        $smtp_sender = new TMGMT_SMTP_Sender();
+        $smtp_result = $smtp_sender->send( array(
+            'to'          => $recipient,
+            'subject'     => $subject,
+            'body'        => $body,
+            'attachments' => $attachments,
+        ) );
 
-        if ( ! $sent ) {
-            return new WP_Error( 'email_send_failed', sprintf( 'E-Mail-Versand an %s fehlgeschlagen.', $recipient ) );
+        if ( ! $smtp_result['success'] ) {
+            $detail = ! empty( $smtp_result['error'] ) ? ' (' . $smtp_result['error'] . ')' : '';
+            return new WP_Error( 'email_send_failed', sprintf( 'E-Mail-Versand an %s fehlgeschlagen%s', $recipient, $detail ) );
         }
 
         // Log communication entry (Req. 5.3).

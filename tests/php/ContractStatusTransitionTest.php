@@ -171,6 +171,16 @@ class ContractStatusTransitionTest extends \PHPUnit\Framework\TestCase
                 $fakeAction->post_type    = 'tmgmt_action';
                 $test_post_store[$actionId] = $fakeAction;
 
+                // Create a published template post
+                $templateId                   = 8001;
+                $fakeTemplate                 = new stdClass();
+                $fakeTemplate->ID             = $templateId;
+                $fakeTemplate->post_title     = 'Test Template';
+                $fakeTemplate->post_content   = '<p>Vertrag für [contact_firstname] [contact_lastname]</p>';
+                $fakeTemplate->post_status    = 'publish';
+                $fakeTemplate->post_type      = 'tmgmt_contract_tpl';
+                $test_post_store[$templateId] = $fakeTemplate;
+
                 // Populate all meta keys used by TMGMT_Placeholder_Parser
                 $metaValues = [
                     '_tmgmt_event_date'              => '2024-06-15',
@@ -209,6 +219,7 @@ class ContractStatusTransitionTest extends \PHPUnit\Framework\TestCase
                 update_post_meta($actionId, '_tmgmt_action_type', 'contract_generation');
                 update_post_meta($actionId, '_tmgmt_action_email_template_id', '0');
                 update_post_meta($actionId, '_tmgmt_action_target_status', $targetStatus);
+                update_post_meta($actionId, '_tmgmt_action_contract_template_id', (string) $templateId);
 
                 // Execute the main method under test
                 $result = $this->sut->generate_and_send($eventId, $actionId);

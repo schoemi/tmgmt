@@ -173,7 +173,7 @@ class TMGMT_Settings_Menu {
         global $current_screen;
         if (!is_object($current_screen)) return $parent_file;
         
-        $cpts = array('tmgmt_status_def', 'tmgmt_action', 'tmgmt_email_template', 'tmgmt_webhook', 'tmgmt_kanban_col');
+        $cpts = array('tmgmt_status_def', 'tmgmt_action', 'tmgmt_email_template', 'tmgmt_webhook', 'tmgmt_kanban_col', 'tmgmt_contract_tpl');
         if (in_array($current_screen->post_type, $cpts)) {
             return 'edit.php?post_type=event';
         }
@@ -184,7 +184,7 @@ class TMGMT_Settings_Menu {
         global $current_screen;
         if (!is_object($current_screen)) return $submenu_file;
 
-        $cpts = array('tmgmt_status_def', 'tmgmt_action', 'tmgmt_email_template', 'tmgmt_webhook', 'tmgmt_kanban_col');
+        $cpts = array('tmgmt_status_def', 'tmgmt_action', 'tmgmt_email_template', 'tmgmt_webhook', 'tmgmt_kanban_col', 'tmgmt_contract_tpl');
         if (in_array($current_screen->post_type, $cpts)) {
             return 'tmgmt-settings';
         }
@@ -343,6 +343,16 @@ class TMGMT_Settings_Menu {
                     <div style="padding: 15px;">
                         <p>Konfigurieren Sie IMAP- und SMTP-Zugangsdaten für das E-Mail Ticket-System.</p>
                         <a href="admin.php?page=tmgmt-connection-settings" class="button button-primary">Konfigurieren</a>
+                    </div>
+                </div>
+
+                <div class="card" style="padding: 0; overflow: hidden;">
+                    <div style="padding: 15px; background: #f0f0f1; border-bottom: 1px solid #c3c4c7;">
+                        <h2 style="margin:0; font-size: 16px;">Vertragsvorlagen</h2>
+                    </div>
+                    <div style="padding: 15px;">
+                        <p>Erstellen und bearbeiten Sie Vorlagen für die automatische Vertragsgenerierung.</p>
+                        <a href="edit.php?post_type=tmgmt_contract_tpl" class="button button-primary">Verwalten</a>
                     </div>
                 </div>
 

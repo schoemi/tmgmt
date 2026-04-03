@@ -459,17 +459,16 @@ class TMGMT_Action_Handler {
             }
 
         } elseif ($action_type === 'email' || $action_type === 'email_confirmation') {
-            // Email Logic
-            if (empty($email_template_id)) {
-                wp_send_json_error(array('message' => 'Keine E-Mail Vorlage ausgewählt.'));
-            }
-
-            // Check for overrides from dialog
+            // Check for overrides from dialog first
             if (isset($_POST['email_recipient']) && isset($_POST['email_subject']) && isset($_POST['email_body'])) {
                 $recipient = sanitize_text_field($_POST['email_recipient']);
                 $subject = sanitize_text_field($_POST['email_subject']);
                 $body = wp_kses_post($_POST['email_body']);
             } else {
+                // No dialog data — require a template
+                if (empty($email_template_id)) {
+                    wp_send_json_error(array('message' => 'Keine E-Mail Vorlage ausgewählt.'));
+                }
                 $recipient_raw = get_post_meta($email_template_id, '_tmgmt_email_recipient', true);
                 $subject_raw = get_post_meta($email_template_id, '_tmgmt_email_subject', true);
                 $body_raw = get_post_meta($email_template_id, '_tmgmt_email_body', true);
@@ -493,27 +492,13 @@ class TMGMT_Action_Handler {
                 }
             }
 
-            $cc_raw = get_post_meta($email_template_id, '_tmgmt_email_cc', true);
-            $bcc_raw = get_post_meta($email_template_id, '_tmgmt_email_bcc', true);
-            $reply_to_raw = get_post_meta($email_template_id, '_tmgmt_email_reply_to', true);
+            $cc_raw       = $email_template_id ? get_post_meta($email_template_id, '_tmgmt_email_cc', true) : '';
+            $bcc_raw      = $email_template_id ? get_post_meta($email_template_id, '_tmgmt_email_bcc', true) : '';
+            $reply_to_raw = $email_template_id ? get_post_meta($email_template_id, '_tmgmt_email_reply_to', true) : '';
 
-            // Optional Headers
-            $headers = array('Content-Type: text/html; charset=UTF-8');
-            
-            if (!empty($cc_raw)) {
-                $cc = TMGMT_Placeholder_Parser::parse($cc_raw, $event_id);
-                if (!empty($cc)) $headers[] = 'Cc: ' . $cc;
-            }
-            
-            if (!empty($bcc_raw)) {
-                $bcc = TMGMT_Placeholder_Parser::parse($bcc_raw, $event_id);
-                if (!empty($bcc)) $headers[] = 'Bcc: ' . $bcc;
-            }
-            
-            if (!empty($reply_to_raw)) {
-                $reply_to = TMGMT_Placeholder_Parser::parse($reply_to_raw, $event_id);
-                if (!empty($reply_to)) $headers[] = 'Reply-To: ' . $reply_to;
-            }
+            $cc       = (!empty($cc_raw))       ? TMGMT_Placeholder_Parser::parse($cc_raw, $event_id)       : '';
+            $bcc      = (!empty($bcc_raw))      ? TMGMT_Placeholder_Parser::parse($bcc_raw, $event_id)      : '';
+            $reply_to = (!empty($reply_to_raw)) ? TMGMT_Placeholder_Parser::parse($reply_to_raw, $event_id) : '';
 
             // Handle Attachments
             $attachments = array();
@@ -580,27 +565,38 @@ class TMGMT_Action_Handler {
                 }
             }
 
-            // Send
-            $sent = wp_mail($recipient, $subject, nl2br($body), $headers, $attachments);
+            // Send via SMTP
+            $smtp_sender = new TMGMT_SMTP_Sender();
+            $smtp_params = array(
+                'to'      => $recipient,
+                'subject' => $subject,
+                'body'    => nl2br($body),
+            );
+            if (!empty($cc))       $smtp_params['cc']       = $cc;
+            if (!empty($bcc))      $smtp_params['bcc']      = $bcc;
+            if (!empty($reply_to)) $smtp_params['reply_to'] = $reply_to;
+            if (!empty($attachments)) $smtp_params['attachments'] = $attachments;
 
-            if ($sent) {
+            $smtp_result = $smtp_sender->send($smtp_params);
+
+            if ($smtp_result['success']) {
                 $log_message .= " - E-Mail gesendet an: $recipient";
-                
-                // Save Communication
+
                 $comm_manager = new TMGMT_Communication_Manager();
                 $comm_id = $comm_manager->add_entry($event_id, 'email', $recipient, $subject, $body);
-                
+
                 $log_manager->log($event_id, 'email_sent', "E-Mail '$subject' an $recipient gesendet.", null, $comm_id);
             } else {
                 $log_manager->log($event_id, 'email_error', "Fehler beim Senden der E-Mail an $recipient.");
-                wp_send_json_error(array('message' => 'E-Mail konnte nicht gesendet werden.'));
+                wp_send_json_error(array('message' => 'E-Mail konnte nicht gesendet werden. Bitte SMTP-Konfiguration prüfen.'));
             }
 
         } elseif ($action_type === 'contract_generation') {
-            $generator = new TMGMT_Contract_Generator();
-            $result = $generator->generate_and_send($event_id, $action_id);
+            $generator = $this->make_contract_generator();
+            $result    = $generator->generate_and_send($event_id, $action_id);
             if (is_wp_error($result)) {
                 wp_send_json_error(array('message' => $result->get_error_message()));
+                return;
             }
 
         } else {
@@ -624,7 +620,8 @@ class TMGMT_Action_Handler {
         $log_manager->log($event_id, 'action', $log_message);
 
         // 5. Handle Status Change
-        if (!empty($target_status)) {
+        // For contract_generation, status is managed inside generate_and_send() — skip here.
+        if ($action_type !== 'contract_generation' && !empty($target_status)) {
             if ($target_status !== $status_slug) {
                 update_post_meta($event_id, '_tmgmt_status', $target_status);
                 
@@ -731,6 +728,14 @@ class TMGMT_Action_Handler {
             'can_edit' => $can_edit,
             'edit_link' => $edit_link
         ));
+    }
+
+    /**
+     * Factory method for TMGMT_Contract_Generator.
+     * Overridable in tests to inject a spy/stub.
+     */
+    protected function make_contract_generator() {
+        return new TMGMT_Contract_Generator();
     }
 
     private function get_event_payload($event_id) {

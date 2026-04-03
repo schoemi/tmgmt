@@ -708,9 +708,8 @@ class TMGMT_Customer_Access_Manager {
         $content = $template->post_content;
 
         if ($event_id) {
-            $parser = new TMGMT_Placeholder_Parser($event_id);
-            $subject = $parser->parse($subject);
-            $content = $parser->parse($content);
+            $subject = TMGMT_Placeholder_Parser::parse($subject, $event_id);
+            $content = TMGMT_Placeholder_Parser::parse($content, $event_id);
         }
 
         // Send Email

@@ -36,7 +36,13 @@ if (!function_exists('checked')) {
     }
 }
 
+// Define plugin dir constant if not already set
+if (!defined('TMGMT_PLUGIN_DIR')) {
+    define('TMGMT_PLUGIN_DIR', dirname(__DIR__, 2) . '/');
+}
+
 require_once dirname(__DIR__, 2) . '/includes/post-types/class-action-post-type.php';
+require_once dirname(__DIR__, 2) . '/includes/post-types/class-contract-template-post-type.php';
 
 class ContractActionTypeTest extends \PHPUnit\Framework\TestCase
 {
@@ -72,6 +78,25 @@ class ContractActionTypeTest extends \PHPUnit\Framework\TestCase
             'Vertragsgenerierung',
             $html,
             'The option label "Vertragsgenerierung" should be present'
+        );
+    }
+
+    /**
+     * Verifies that the contract template dropdown with name="tmgmt_action_contract_template_id"
+     * is present in the rendered metabox HTML (Requirement 3.2).
+     */
+    public function test_contract_template_dropdown_present_in_metabox(): void
+    {
+        $post = (object) array('ID' => 1);
+
+        ob_start();
+        $this->sut->render_settings_box($post);
+        $html = ob_get_clean();
+
+        $this->assertStringContainsString(
+            'name="tmgmt_action_contract_template_id"',
+            $html,
+            'The metabox should contain a select with name="tmgmt_action_contract_template_id"'
         );
     }
 

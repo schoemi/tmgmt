@@ -97,54 +97,57 @@ class TMGMT_Placeholder_Parser {
             '[event_link]' => get_permalink($event_id),
         );
 
-        // 2. Meta Fields
-        // Map placeholder => meta_key
+        // 2. Meta Fields (event-direct)
         $meta_map = array(
-            // Event Details
-            '[event_date]' => '_tmgmt_event_date',
-            '[event_start_time]' => '_tmgmt_event_start_time',
-            '[event_arrival_time]' => '_tmgmt_event_arrival_time',
+            '[event_date]'        => '_tmgmt_event_date',
+            '[event_start_time]'  => '_tmgmt_event_start_time',
+            '[event_arrival_time]'   => '_tmgmt_event_arrival_time',
             '[event_departure_time]' => '_tmgmt_event_departure_time',
-            
-            // Contact
-            '[contact_salutation]' => '_tmgmt_contact_salutation',
-            '[contact_firstname]' => '_tmgmt_contact_firstname',
-            '[contact_lastname]' => '_tmgmt_contact_lastname',
-            '[contact_company]' => '_tmgmt_contact_company',
-            '[contact_street]' => '_tmgmt_contact_street',
-            '[contact_number]' => '_tmgmt_contact_number',
-            '[contact_zip]' => '_tmgmt_contact_zip',
-            '[contact_city]' => '_tmgmt_contact_city',
-            '[contact_country]' => '_tmgmt_contact_country',
-            '[contact_email]' => '_tmgmt_contact_email',
-            '[contact_phone]' => '_tmgmt_contact_phone',
-            
-            // Communication
-            '[contact_email_contract]' => '_tmgmt_contact_email_contract',
-            '[contact_phone_contract]' => '_tmgmt_contact_phone_contract',
-            '[contact_name_tech]' => '_tmgmt_contact_name_tech',
-            '[contact_email_tech]' => '_tmgmt_contact_email_tech',
-            '[contact_phone_tech]' => '_tmgmt_contact_phone_tech',
-            '[contact_name_program]' => '_tmgmt_contact_name_program',
-            '[contact_email_program]' => '_tmgmt_contact_email_program',
-            '[contact_phone_program]' => '_tmgmt_contact_phone_program',
-            
-            // Contract
-            '[fee]' => '_tmgmt_fee',
-            '[deposit]' => '_tmgmt_deposit',
+            '[fee]'          => '_tmgmt_fee',
+            '[deposit]'      => '_tmgmt_deposit',
             '[inquiry_date]' => '_tmgmt_inquiry_date',
         );
 
         foreach ($meta_map as $placeholder => $meta_key) {
             $value = get_post_meta($event_id, $meta_key, true);
-            
-            // Format Date Fields
             if (strpos($placeholder, 'date') !== false && !empty($value)) {
                 $value = date_i18n(get_option('date_format'), strtotime($value));
             }
-            
             $replacements[$placeholder] = $value;
         }
+
+        // 2b. Contact Fields – resolved via veranstalter → contact CPT
+        $contact_data = self::get_contact_data_for_event($event_id);
+
+        // Vertrag-Kontakt → [contact_*] (Hauptkontakt für Platzhalter)
+        $vertrag = $contact_data['vertrag'];
+        $replacements['[contact_salutation]'] = $vertrag['salutation'];
+        $replacements['[contact_firstname]']  = $vertrag['firstname'];
+        $replacements['[contact_lastname]']   = $vertrag['lastname'];
+        $replacements['[contact_company]']    = $vertrag['company'];
+        $replacements['[contact_street]']     = $vertrag['street'];
+        $replacements['[contact_number]']     = $vertrag['number'];
+        $replacements['[contact_zip]']        = $vertrag['zip'];
+        $replacements['[contact_city]']       = $vertrag['city'];
+        $replacements['[contact_country]']    = $vertrag['country'];
+        $replacements['[contact_email]']      = $vertrag['email'];
+        $replacements['[contact_phone]']      = $vertrag['phone'];
+
+        // Vertrag-Kontakt → [contact_*_contract]
+        $replacements['[contact_email_contract]'] = $vertrag['email'];
+        $replacements['[contact_phone_contract]'] = $vertrag['phone'];
+
+        // Technik-Kontakt
+        $technik = $contact_data['technik'];
+        $replacements['[contact_name_tech]']  = trim($technik['firstname'] . ' ' . $technik['lastname']);
+        $replacements['[contact_email_tech]'] = $technik['email'];
+        $replacements['[contact_phone_tech]'] = $technik['phone'];
+
+        // Programm-Kontakt
+        $programm = $contact_data['programm'];
+        $replacements['[contact_name_program]']  = trim($programm['firstname'] . ' ' . $programm['lastname']);
+        $replacements['[contact_email_program]'] = $programm['email'];
+        $replacements['[contact_phone_program]'] = $programm['phone'];
         
         // 2b. Venue Fields - get from linked location
         $location_id = get_post_meta($event_id, '_tmgmt_event_location_id', true);
@@ -167,7 +170,27 @@ class TMGMT_Placeholder_Parser {
             $replacements['[arrival_notes]'] = '';
         }
 
-        // 3. Customer Dashboard Link
+        // 3. Confirmation Link
+        if (strpos($text, '[confirmation_link]') !== false) {
+            // Confirmation links are generated per-action request; resolve to empty string
+            // when no active confirmation request exists for this event.
+            global $wpdb;
+            $confirmations_table = $wpdb->prefix . 'tmgmt_confirmations';
+            $row = $wpdb->get_row(
+                $wpdb->prepare(
+                    "SELECT token FROM $confirmations_table WHERE event_id = %d AND status = 'pending' ORDER BY requested_at DESC LIMIT 1",
+                    $event_id
+                )
+            );
+            if ($row && !empty($row->token)) {
+                $confirm_url = admin_url('admin-post.php?action=tmgmt_confirm_action&token=' . $row->token);
+                $replacements['[confirmation_link]'] = '<a href="' . esc_url($confirm_url) . '">' . esc_url($confirm_url) . '</a>';
+            } else {
+                $replacements['[confirmation_link]'] = '';
+            }
+        }
+
+        // 4. Customer Dashboard Link
         if (strpos($text, '[customer_dashboard_link]') !== false) {
             $access_manager = new TMGMT_Customer_Access_Manager();
             $token_row = $access_manager->get_valid_token($event_id);
@@ -183,5 +206,68 @@ class TMGMT_Placeholder_Parser {
 
         // 4. Perform Replacement
         return str_replace(array_keys($replacements), array_values($replacements), $text);
+    }
+
+    /**
+     * Resolves contact data for an event via the linked Veranstalter CPT.
+     *
+     * Returns an array keyed by role ('vertrag', 'technik', 'programm'), each
+     * containing the contact's meta fields. Missing contacts return empty strings.
+     *
+     * @param int $event_id
+     * @return array{vertrag: array, technik: array, programm: array}
+     */
+    public static function get_contact_data_for_event( int $event_id ): array {
+        $empty = array(
+            'salutation' => '', 'firstname' => '', 'lastname' => '',
+            'company'    => '', 'street'    => '', 'number'   => '',
+            'zip'        => '', 'city'      => '', 'country'  => '',
+            'email'      => '', 'phone'     => '',
+        );
+
+        $result = array(
+            'vertrag'  => $empty,
+            'technik'  => $empty,
+            'programm' => $empty,
+        );
+
+        $veranstalter_id = get_post_meta( $event_id, '_tmgmt_event_veranstalter_id', true );
+        if ( empty( $veranstalter_id ) ) {
+            return $result;
+        }
+
+        $assignments = get_post_meta( $veranstalter_id, '_tmgmt_veranstalter_contacts', true );
+        if ( ! is_array( $assignments ) ) {
+            return $result;
+        }
+
+        foreach ( $assignments as $assignment ) {
+            $role       = isset( $assignment['role'] ) ? $assignment['role'] : '';
+            $contact_id = isset( $assignment['contact_id'] ) ? intval( $assignment['contact_id'] ) : 0;
+
+            if ( ! isset( $result[ $role ] ) || ! $contact_id ) {
+                continue;
+            }
+
+            if ( get_post_type( $contact_id ) !== 'tmgmt_contact' ) {
+                continue;
+            }
+
+            $result[ $role ] = array(
+                'salutation' => get_post_meta( $contact_id, '_tmgmt_contact_salutation', true ),
+                'firstname'  => get_post_meta( $contact_id, '_tmgmt_contact_firstname',  true ),
+                'lastname'   => get_post_meta( $contact_id, '_tmgmt_contact_lastname',   true ),
+                'company'    => get_post_meta( $contact_id, '_tmgmt_contact_company',    true ),
+                'street'     => get_post_meta( $contact_id, '_tmgmt_contact_street',     true ),
+                'number'     => get_post_meta( $contact_id, '_tmgmt_contact_number',     true ),
+                'zip'        => get_post_meta( $contact_id, '_tmgmt_contact_zip',        true ),
+                'city'       => get_post_meta( $contact_id, '_tmgmt_contact_city',       true ),
+                'country'    => get_post_meta( $contact_id, '_tmgmt_contact_country',    true ),
+                'email'      => get_post_meta( $contact_id, '_tmgmt_contact_email',      true ),
+                'phone'      => get_post_meta( $contact_id, '_tmgmt_contact_phone',      true ),
+            );
+        }
+
+        return $result;
     }
 }

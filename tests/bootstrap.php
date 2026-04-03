@@ -17,9 +17,25 @@ if (!function_exists('__')) {
     }
 }
 
+// In-memory post type registry for testing
+global $test_registered_post_types;
+$test_registered_post_types = array();
+
 if (!function_exists('register_post_type')) {
     function register_post_type($post_type, $args = array()) {
+        global $test_registered_post_types;
+        $test_registered_post_types[$post_type] = $args;
         return (object) $args;
+    }
+}
+
+if (!function_exists('get_post_type_object')) {
+    function get_post_type_object($post_type) {
+        global $test_registered_post_types;
+        if (isset($test_registered_post_types[$post_type])) {
+            return (object) $test_registered_post_types[$post_type];
+        }
+        return null;
     }
 }
 
@@ -29,6 +45,12 @@ if (!function_exists('add_action')) {
 
 if (!function_exists('add_filter')) {
     function add_filter($tag, $callback, $priority = 10, $accepted_args = 1) {}
+}
+
+if (!function_exists('apply_filters')) {
+    function apply_filters($tag, $value, ...$args) {
+        return $value;
+    }
 }
 
 // In-memory meta data store for testing
@@ -138,6 +160,9 @@ if (!function_exists('esc_attr')) {
 
 if (!function_exists('get_current_screen')) {
     function get_current_screen() {
+        if (!empty($GLOBALS['test_current_screen_post_type'])) {
+            return (object) array('post_type' => $GLOBALS['test_current_screen_post_type']);
+        }
         return null;
     }
 }
@@ -346,6 +371,22 @@ if (!function_exists('trailingslashit')) {
 if (!function_exists('get_current_user_id')) {
     function get_current_user_id(): int {
         return 0;
+    }
+}
+
+// In-memory script localization store for testing
+global $test_localized_scripts;
+$test_localized_scripts = array();
+
+if (!function_exists('wp_enqueue_script')) {
+    function wp_enqueue_script($handle, $src = '', $deps = array(), $ver = false, $in_footer = false) {}
+}
+
+if (!function_exists('wp_localize_script')) {
+    function wp_localize_script($handle, $object_name, $l10n) {
+        global $test_localized_scripts;
+        $test_localized_scripts[$handle][$object_name] = $l10n;
+        return true;
     }
 }
 

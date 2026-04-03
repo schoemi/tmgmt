@@ -71,6 +71,10 @@ class TMGMT_Action_Post_Type {
         $send_receipt = get_post_meta($post->ID, '_tmgmt_action_send_receipt', true);
         $receipt_template_id = get_post_meta($post->ID, '_tmgmt_action_receipt_template', true);
 
+        // Contract Template Fields
+        $contract_template_id = get_post_meta($post->ID, '_tmgmt_action_contract_template_id', true);
+        $contract_templates   = get_posts(array('post_type' => 'tmgmt_contract_tpl', 'numberposts' => -1, 'post_status' => 'publish'));
+
         // Get Webhooks
         $webhooks = get_posts(array('post_type' => 'tmgmt_webhook', 'numberposts' => -1));
         
@@ -123,13 +127,13 @@ class TMGMT_Action_Post_Type {
             
             <!-- Contract Specific Fields -->
             <tr class="tmgmt-contract-row" style="display:none;">
-                <th><label for="tmgmt_action_contract_email_template_id">E-Mail Vorlage (Vertragsversand)</label></th>
+                <th><label for="tmgmt_action_contract_template_id">Vertragsvorlage</label></th>
                 <td>
-                    <select name="tmgmt_action_email_template_id" id="tmgmt_action_contract_email_template_id">
+                    <select name="tmgmt_action_contract_template_id" id="tmgmt_action_contract_template_id">
                         <option value="">-- Wählen --</option>
-                        <?php foreach ($email_templates as $et) : ?>
-                            <option value="<?php echo esc_attr($et->ID); ?>" <?php selected($email_template_id, $et->ID); ?>>
-                                <?php echo esc_html($et->post_title); ?>
+                        <?php foreach ($contract_templates as $ct) : ?>
+                            <option value="<?php echo esc_attr($ct->ID); ?>" <?php selected($contract_template_id, $ct->ID); ?>>
+                                <?php echo esc_html($ct->post_title); ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -223,6 +227,11 @@ class TMGMT_Action_Post_Type {
 
         if (isset($_POST['tmgmt_action_receipt_template'])) {
             update_post_meta($post_id, '_tmgmt_action_receipt_template', sanitize_text_field($_POST['tmgmt_action_receipt_template']));
+        }
+
+        // Save Contract Template ID
+        if (isset($_POST['tmgmt_action_contract_template_id'])) {
+            update_post_meta($post_id, '_tmgmt_action_contract_template_id', absint($_POST['tmgmt_action_contract_template_id']));
         }
     }
 
