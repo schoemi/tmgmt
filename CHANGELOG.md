@@ -4,10 +4,97 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- **Event-Detail-Ansicht** (`assets/vue/components/EventDetail.vue`): neue PrimeVue-basierte Full-Page-Komponente mit Tabs (Details, Kontakt, Vertrag, Logbuch, Kommunikation, Anhänge), Sidebar mit Aktionen/Touren/Leaflet-Karte, Auto-Save und Status-Validierung
+- `assets/vue/components/EventDetail.stories.js`: Storybook-Stories (Default, Loading, Error, Empty)
+- `assets/vue/tests/eventDetail.property.test.js`: 9 Tests (Unit + Property-Based mit fast-check)
+- **Event-Listenansicht** (`assets/vue/components/EventListWidget.vue`): Dashboard-Widget mit PrimeVue `DataTable`, Textsuche, Status-Filter, Sortierung und Zeilen-Klick-Navigation
+- `assets/vue/components/EventListWidget.stories.js`: Storybook-Stories (Default, Empty, Loading, Error)
+- `assets/vue/tests/eventListWidget.property.test.js`: 7 Tests (Unit + Property-Based + Suchfilter)
+- Neuer REST-Endpunkt `GET /tmgmt/v1/events` in `TMGMT_REST_API::list_events()`: flache Event-Liste mit Location/Veranstalter-Auflösung und Status-Map; mit `check_permission` abgesichert
+- **Kundendashboard-Redesign** (`includes/class-customer-access-manager.php`): sektionsbasierte Architektur mit `get_default_readable_fields()`, `get_effective_config()` und 8 privaten Render-Methoden (Header, Event-Details, Location, Kontakte, Finanzen, Bestätigungen, Anhänge, Vertrag-Upload)
+- `assets/css/customer-dashboard.css`: externes Stylesheet mit `.cd-*`-Klassen, max-width 900px, responsive Media Queries
+- `tests/php/CustomerDashboardSectionHeaderTest.php`: PHPUnit-Test für Dashboard-Sektionen
+
+### Changed
+
+- `assets/vue/main.js`: `EventListWidget` als zweites Dashboard-Widget „Liste" registriert (order: 2, icon: `fa-list`)
+- `assets/vue/components/AppShell.vue`: `EventModal` (Dialog) durch `EventDetail` (Full-Page-View) ersetzt; Widget-Navigation wird bei Event-Auswahl ausgeblendet
+- `assets/vue/tests/appShell.property.test.js`: Tests auf neue Architektur (EventDetail statt EventModal) umgeschrieben
+
+### Fixed
+
+- `.storybook/main.js`: PrimeVue-Komponenten (`datatable`, `column`, `inputtext`, `select`, `tag`, `message`, `progressspinner`, `iconfield`, `inputicon`) und `@primeuix/themes/aura` in `optimizeDeps.include` aufgenommen — Storybook konnte PrimeVue-Komponenten nicht dynamisch importieren und zeigte „error loading dynamically imported module" für `primevue_datatable.js`
+
+---
+
 ## [Unreleased] – 2026-04-04
 
 ### Added
 
+- **Kundendashboard-Redesign** (`includes/class-customer-access-manager.php`, `assets/css/customer-dashboard.css`): Monolithische `render_dashboard()`-Methode in sektionsbasierte Architektur umgebaut
+  - Neues externes Stylesheet `assets/css/customer-dashboard.css` mit `.cd-*`-Klassen-Prefix, max-width 900px, responsive Media Queries (≤ 640px)
+  - `get_default_readable_fields()`: Standardfelder (Titel, Beschreibung, Datum, Zeiten, Veranstaltungsort) sind ohne Admin-Konfiguration lesbar
+  - `get_effective_config()`: Merged gespeicherte Feldkonfiguration mit Defaults als Fallback
+  - `render_dashboard()` als Orchestrator mit semantischem HTML-Grundgerüst (`<!DOCTYPE html>`, `<header>`, `<main>`, `<footer>`, externes CSS per `<link>`)
+  - `render_section_header()`: Event-Titel als `<h1>`, Status-Badge via `TMGMT_Event_Status::get_label()`
+  - `render_event_details_section()`: Beschreibung, Datum, Start-/Ankunfts-/Abfahrtszeit mit Read/Write-Steuerung aus Config
+  - `render_location_section()`: Adresse und Hinweise aus verknüpftem `tmgmt_location`-Post
+  - `render_contact_section()`: Kontaktdaten über `TMGMT_Placeholder_Parser::get_contact_data_for_event()`, gruppiert nach Rolle (Vertrag, Programm, Technik)
+  - `render_finance_section()`: Gage und Anzahlung mit Read/Write-Steuerung
+  - `render_confirmations_section()`: Bestätigungen aus `wp_tmgmt_confirmations` mit Status (Ausstehend/Bestätigt) und Datum
+  - `render_attachments_section()`: Dateien aus `_tmgmt_event_attachments` mit Download-Links, ungültige IDs werden still übersprungen
+  - `handle_dashboard_save()` nutzt `get_effective_config()` statt direktem `get_option()`-Aufruf
+
+### Changed
+
+- `render_contract_upload_section()`: Inline-Styles durch `.cd-*` CSS-Klassen ersetzt, AJAX-Upload-Logik unverändert
+
+### Reverted
+
+- Vuetify-basierte Event-Detail-Ansicht vollständig zurückgenommen – UI-Framework bleibt PrimeVue
+  - `vuetify` und `@mdi/font` als Dependencies entfernt
+  - `assets/vue/components/EventDetail.vue`, `EventDetail.stories.js` und `assets/vue/tests/eventDetail.property.test.js` gelöscht
+  - `.storybook/preview.js`: Vuetify-Plugin-Registrierung und CSS-Imports entfernt
+  - `assets/vue/vite.config.js`: Vuetify-spezifische Vitest-Konfiguration (`css: false`, `server.deps.inline`) entfernt
+
+### Added
+
+- **Event-Detail-Ansicht** (`assets/vue/components/EventDetail.vue`): neue PrimeVue-basierte Full-Page-Komponente als Alternative zum bestehenden `EventModal` (Dialog)
+  - Header-Zeile mit Event-ID-Chip, editierbarem Titel, Auto-Save-Status-Tag und Status-Dropdown
+  - 6 Tabs (PrimeVue `Tabs`/`TabList`/`TabPanel`): Details (Anfrage, Venue, Planung, Notizen), Kontakt (editierbarer Vertragskontakt + Read-Only-Cards für Technik/Programm), Vertrag (Gage/Anzahlung als `InputNumber currency`), Logbuch (chronologisch absteigend mit User-Anzeige), Kommunikation (Accordion pro E-Mail mit Betreff/Empfänger/Inhalt), Anhänge (mit Kategorie-Tags)
+  - Sidebar rechts: Aktionen-Panel mit Loading-State, Touren-Liste mit Status-Icons (ok/warning/error), Leaflet-Karte (via `ref` statt DOM-ID)
+  - Auto-Save bei Blur, Status-Validierung mit `MissingFieldsModal`, responsive Layout (Sidebar unter Tabs bei ≤ 768 px)
+  - Nutzt bestehenden `apiService` (GET `/events/{id}`, POST `/events/{id}`) und `window.tmgmtData` für Statuskonfiguration
+- `assets/vue/components/EventDetail.stories.js`: Storybook-Stories für Default (vollständige Mock-Daten), Loading, Error (404) und Empty (neues Event ohne Logs/Anhänge)
+- `assets/vue/tests/eventDetail.property.test.js`: 9 Tests (alle grün) — 4 Unit-Tests (Event-ID-Anzeige, Titel-Input, Fehlermeldung, Lade-Spinner), 4 Property-Based Tests mit fast-check (beliebige Titel, Logs, Kommunikation, Anhänge), 1 Sortierungstest (Logbuch absteigend); `apiService` via `vi.mock` gemockt, jsdom-Polyfills für `matchMedia` und `ResizeObserver`
+
+- **Event-Listenansicht** (`assets/vue/components/EventListWidget.vue`): neues Dashboard-Widget mit PrimeVue `DataTable` als tabellarische Übersicht aller Events
+  - Spalten: ID (Tag), Datum (formatiert de-DE), Titel, Location, Stadt, Veranstalter, Status (farbiger Tag), Gage (€-Formatierung)
+  - Toolbar mit Textsuche (filtert über Titel, Event-ID, Stadt, Venue, Veranstalter) und Status-Filter-Dropdown
+  - Sortierung über alle Spalten, Zeilen-Klick emittiert `open-event-modal` für Navigation zur Detail-Ansicht
+  - Responsive: Toolbar bricht bei schmalen Viewports um
+- Neuer REST-Endpunkt `GET /tmgmt/v1/events` in `TMGMT_REST_API::list_events()`: liefert alle Events als flache Liste mit `event_id`, `title`, `status`, `date`, `time`, `city`, `venue` (Location-Titel), `veranstalter` (Veranstalter-Titel), `fee`; dazu `statuses`-Map; mit `check_permission` abgesichert
+- `assets/vue/main.js`: `EventListWidget` als zweites Dashboard-Widget „Liste" registriert (order: 2, icon: `fa-list`)
+- `assets/vue/components/EventListWidget.stories.js`: Storybook-Stories für Default (5 Mock-Events), Empty, Loading und Error
+- `assets/vue/tests/eventListWidget.property.test.js`: 7 Tests (alle grün) — 4 Unit-Tests (Events-Anzeige, Fehlermeldung, Lade-Spinner, leere Liste), 1 Emit-Test (Zeilen-Klick), 1 Property-Based Test (beliebige Anzahl Events), 1 Suchfilter-Test
+
+### Changed
+
+- **AppShell: EventDetail als Inline-Detail-Ansicht integriert** – `EventModal` (Dialog) durch `EventDetail` (Full-Page-View) ersetzt
+  - `assets/vue/components/AppShell.vue`: bei Auswahl eines Events (aus Kanban oder Liste) wird die Widget-Navigation (TabMenu) ausgeblendet und stattdessen `EventDetail` mit einem „Zurück zur Übersicht"-Button angezeigt; `EventModal`-Import entfernt, `EventDetail`- und PrimeVue-`Button`-Import hinzugefügt
+  - `selectedEventId` steuert den Ansichtswechsel: `null` = Dashboard, Zahl = Detail-Ansicht; `openEventDetail(id)` und `closeEventDetail()` via `defineExpose` für Tests zugänglich
+  - `open-event-modal`-Event der Widgets (Kanban, Liste) wird jetzt auf `openEventDetail` gemappt statt auf das alte Modal
+- `assets/vue/tests/appShell.property.test.js`: Tests auf neue Architektur umgeschrieben — PrimeVue-Plugin + Aura-Theme, `apiService`-Mock, jsdom-Polyfills (`matchMedia`, `ResizeObserver`); 4 Tests: localStorage-Round-Trip (Property), Widget-Navigation sichtbar, EventDetail bei Event-Auswahl, Rückkehr zum Dashboard nach `closeEventDetail`
+
+- **Spec: Kundendashboard-Redesign** (`customer-dashboard-redesign`): Requirements, Design und Implementierungsplan erstellt für die Überarbeitung des externen Veranstalter-Dashboards (Token-basierter Zugang)
+  - 10 EARS-konforme Requirements: Standardmäßig sichtbare Event-Informationen ohne Admin-Konfiguration, sektionsbasiertes Layout (Veranstaltungsdetails, Ort, Kontakte, Finanzen, Bestätigungen, Dateien, Vertrag-Upload), Veranstaltungsort-Anzeige aus verknüpfter Location, Kontaktdaten über Veranstalter→Kontakt-Kette, Event-Status-Anzeige, Bestätigungen mit Status (ausstehend/bestätigt), Dateien/Anhänge mit Download-Links, Vertrag-Upload bei Status `contract_sent`, schreibbare Felder gemäß Admin-Konfiguration, modernes HTML/CSS mit externem Stylesheet
+  - Design-Dokument: Sektionsbasierte Architektur mit privaten Helper-Methoden pro Sektion in `TMGMT_Customer_Access_Manager`, Default-Feld-System via `get_effective_config()`, externes CSS (`assets/css/customer-dashboard.css` mit `.cd-*` Prefix), Kontaktdaten über `TMGMT_Placeholder_Parser::get_contact_data_for_event()`, Datenfluss-Diagramme (Mermaid)
+  - Implementierungsplan (`tasks.md`) mit 6 Tasks: CSS-Stylesheet + Default-Config-Methoden, Refactoring von `render_dashboard()` in 10 Sektions-Methoden (Header, Event-Details, Location, Kontakte, Finanzen, Bestätigungen, Anhänge, Vertrag-Upload, Formular-Save, CSS-Migration), 5 Correctness Properties (Default-Config-Merge, Section-Visibility, Contact-Source, Attachment-Resilience, Writable-Field-Enforcement)
+  - Glossar mit Domainbegriffen: Dashboard, Veranstalter, Feldkonfiguration, Standardfelder, Sektion, Location, Kontaktdaten, Bestätigung, Anhang, Event_Status
 - **Vertrag-PDF als Event-Anhang** (`contract-event-attachment`): Nach dem Versand eines Vertrags wird das generierte PDF automatisch als WordPress-Attachment registriert und dem Event zugeordnet
   - Neue Methode `TMGMT_Contract_Generator::register_pdf_attachment()`: erstellt WP-Attachment via `wp_insert_attachment` mit `post_parent = event_id`, speichert Attachment-ID als `_tmgmt_contract_attachment_id` Post-Meta, trägt Eintrag mit Kategorie `Vertrag` in `_tmgmt_event_attachments` ein
   - Aufruf als Step 5b in `generate_and_send()` zwischen PDF-Meta-Speicherung und E-Mail-Versand; bei Fehler wird geloggt und der Versand fortgesetzt (kein Abbruch)

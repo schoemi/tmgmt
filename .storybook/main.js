@@ -11,6 +11,21 @@ const config = {
   async viteFinal(config) {
     config.plugins = config.plugins || [];
     config.plugins.push(vue());
+    config.optimizeDeps = config.optimizeDeps || {};
+    config.optimizeDeps.include = [
+      ...(config.optimizeDeps.include || []),
+      'primevue/datatable',
+      'primevue/column',
+      'primevue/inputtext',
+      'primevue/iconfield',
+      'primevue/inputicon',
+      'primevue/select',
+      'primevue/tag',
+      'primevue/message',
+      'primevue/progressspinner',
+      'primevue/config',
+      '@primeuix/themes/aura',
+    ];
     return config;
   },
 };

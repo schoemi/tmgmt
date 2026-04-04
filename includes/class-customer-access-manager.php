@@ -23,6 +23,41 @@ class TMGMT_Customer_Access_Manager {
         add_action('wp_ajax_nopriv_tmgmt_upload_signed_contract', array($this, 'handle_signed_contract_upload'));
     }
 
+    /**
+     * Returns the default fields that should be readable without explicit configuration.
+     *
+     * @return array<string, array{read: bool, write: bool}>
+     */
+    private static function get_default_readable_fields(): array {
+        return array(
+            'core_content'                => array('read' => true, 'write' => false),
+            '_tmgmt_event_date'           => array('read' => true, 'write' => false),
+            '_tmgmt_event_start_time'     => array('read' => true, 'write' => false),
+            '_tmgmt_event_arrival_time'   => array('read' => true, 'write' => false),
+            '_tmgmt_event_departure_time' => array('read' => true, 'write' => false),
+            '_tmgmt_event_location_id'    => array('read' => true, 'write' => false),
+        );
+    }
+
+    /**
+     * Computes the effective field configuration by merging stored config with defaults.
+     *
+     * @return array<string, array{read: bool, write: bool}>
+     */
+    private function get_effective_config(): array {
+        $config = get_option('tmgmt_customer_dashboard_config', array());
+        if (empty($config)) {
+            return self::get_default_readable_fields();
+        }
+        $defaults = self::get_default_readable_fields();
+        foreach ($defaults as $key => $settings) {
+            if (!isset($config[$key])) {
+                $config[$key] = $settings;
+            }
+        }
+        return $config;
+    }
+
     public function create_table() {
         global $wpdb;
         $charset_collate = $wpdb->get_charset_collate();
@@ -232,63 +267,58 @@ class TMGMT_Customer_Access_Manager {
     }
 
     private function handle_dashboard_save($event_id) {
-        $config = get_option('tmgmt_customer_dashboard_config', array());
-        
-        // Only save fields that are configured as writable
+        $config = $this->get_effective_config();
+
+        // Collect writable fields
+        $writable_fields = array();
         foreach ($config as $key => $settings) {
-            if (isset($settings['write']) && $settings['write']) {
-                if (isset($_POST[$key])) {
-                    // Sanitize based on field type (simplified for now)
-                    $value = sanitize_text_field($_POST[$key]);
-                    update_post_meta($event_id, $key, $value);
-                }
+            if (!empty($settings['write'])) {
+                $writable_fields[$key] = $settings;
             }
         }
-        
-        // Add success message or redirect
-        echo '<div style="background: #d4edda; color: #155724; padding: 15px; margin-bottom: 20px; border: 1px solid #c3e6cb; border-radius: 4px;">Änderungen erfolgreich gespeichert.</div>';
+
+        // No-op if nothing is writable
+        if (empty($writable_fields)) {
+            return;
+        }
+
+        // Save only writable fields
+        foreach ($writable_fields as $key => $settings) {
+            if (!isset($_POST[$key])) {
+                continue;
+            }
+
+            if ($key === 'core_content') {
+                // Update post content via wp_update_post
+                wp_update_post(array(
+                    'ID'           => $event_id,
+                    'post_content' => wp_kses_post($_POST[$key]),
+                ));
+            } else {
+                $value = sanitize_text_field($_POST[$key]);
+                update_post_meta($event_id, $key, $value);
+            }
+        }
+
+        echo '<div class="cd-success-message">Änderungen erfolgreich gespeichert.</div>';
     }
 
     private function render_dashboard($event_id) {
         $event = get_post($event_id);
         if (!$event) wp_die('Event nicht gefunden.');
 
-        // Get Configuration
-        $config = get_option('tmgmt_customer_dashboard_config', array());
-        
-        // Define Labels (should match settings menu)
-        $field_labels = array(
-            'core_content' => 'Beschreibung',
-            '_tmgmt_event_date' => 'Datum',
-            '_tmgmt_event_start_time' => 'Startzeit',
-            '_tmgmt_event_arrival_time' => 'Ankunftszeit',
-            '_tmgmt_event_departure_time' => 'Abfahrtszeit',
-            '_tmgmt_event_location_id' => 'Veranstaltungsort',
-            '_tmgmt_contact_firstname' => 'Kontakt Vorname',
-            '_tmgmt_contact_lastname' => 'Kontakt Nachname',
-            '_tmgmt_contact_email' => 'Kontakt E-Mail',
-            '_tmgmt_contact_phone' => 'Kontakt Telefon',
-            
-            // Contact Address (Contract)
-            '_tmgmt_contact_street' => 'Kontakt Straße',
-            '_tmgmt_contact_number' => 'Kontakt Hausnummer',
-            '_tmgmt_contact_zip' => 'Kontakt PLZ',
-            '_tmgmt_contact_city' => 'Kontakt Stadt',
-            '_tmgmt_contact_country' => 'Kontakt Land',
+        $config     = $this->get_effective_config();
+        $status_key = get_post_meta($event_id, '_tmgmt_status', true);
+        $css_url    = TMGMT_PLUGIN_URL . 'assets/css/customer-dashboard.css';
 
-            // Contact Program
-            '_tmgmt_contact_name_program' => 'Kontakt Name (Programm)',
-            '_tmgmt_contact_email_program' => 'Kontakt E-Mail (Programm)',
-            '_tmgmt_contact_phone_program' => 'Kontakt Telefon (Programm)',
-
-            // Contact Tech
-            '_tmgmt_contact_name_tech' => 'Kontakt Name (Technik)',
-            '_tmgmt_contact_email_tech' => 'Kontakt E-Mail (Technik)',
-            '_tmgmt_contact_phone_tech' => 'Kontakt Telefon (Technik)',
-
-            '_tmgmt_fee' => 'Gage',
-            '_tmgmt_deposit' => 'Anzahlung',
-        );
+        // Determine if any field is writable (controls form + save button)
+        $has_writable = false;
+        foreach ($config as $settings) {
+            if (!empty($settings['write'])) {
+                $has_writable = true;
+                break;
+            }
+        }
 
         ?>
         <!DOCTYPE html>
@@ -297,105 +327,443 @@ class TMGMT_Customer_Access_Manager {
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Event Dashboard: <?php echo esc_html($event->post_title); ?></title>
-            <style>
-                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; background: #f0f0f1; color: #3c434a; margin: 0; padding: 20px; }
-                .container { max-width: 800px; margin: 0 auto; background: #fff; padding: 40px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-radius: 4px; }
-                h1 { margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 20px; }
-                .field-group { margin-bottom: 20px; }
-                .field-label { font-weight: bold; display: block; margin-bottom: 5px; color: #1d2327; }
-                .field-value { padding: 10px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 3px; }
-                .field-input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 3px; font-size: 16px; box-sizing: border-box; }
-                .footer { margin-top: 40px; font-size: 12px; color: #666; text-align: center; border-top: 1px solid #eee; padding-top: 20px; }
-                .button { display: inline-block; text-decoration: none; font-size: 13px; line-height: 2.15384615; min-height: 30px; margin: 0; padding: 0 10px; cursor: pointer; border-width: 1px; border-style: solid; -webkit-appearance: none; border-radius: 3px; white-space: nowrap; box-sizing: border-box; background: #2271b1; border-color: #2271b1; color: #fff; }
-                .button:hover { background: #135e96; border-color: #135e96; color: #fff; }
-            </style>
+            <link rel="stylesheet" href="<?php echo esc_url($css_url); ?>">
         </head>
-        <body>
-            <div class="container">
-                <h1><?php echo esc_html($event->post_title); ?></h1>
-                
-                <form method="post">
-                    <input type="hidden" name="tmgmt_save_dashboard" value="1">
-                    
-                    <?php 
-                    // Core Content
-                    if (isset($config['core_content']['read']) && $config['core_content']['read']) {
-                        echo '<div class="field-group">';
-                        echo '<span class="field-label">Beschreibung</span>';
-                        echo '<div class="field-value">' . wp_kses_post(wpautop($event->post_content)) . '</div>';
-                        echo '</div>';
+        <body class="cd-body">
+            <div class="cd-container">
+
+                <header>
+                    <?php $this->render_section_header($event->post_title, $status_key); ?>
+                </header>
+
+                <main>
+                    <?php if ($has_writable): ?>
+                    <form method="post">
+                        <input type="hidden" name="tmgmt_save_dashboard" value="1">
+                    <?php endif; ?>
+
+                    <?php
+                    $this->render_event_details_section($event_id, $config);
+                    $this->render_location_section($event_id);
+                    $this->render_contact_section($event_id);
+                    $this->render_finance_section($event_id, $config);
+                    $this->render_confirmations_section($event_id);
+                    $this->render_attachments_section($event_id);
+
+                    if ($status_key === TMGMT_Event_Status::CONTRACT_SENT) {
+                        $this->render_contract_upload_section($event_id);
                     }
 
-                    // Meta Fields
-                    foreach ($field_labels as $key => $label) {
-                        if ($key === 'core_content') continue;
-
-                        $is_readable = isset($config[$key]['read']) && $config[$key]['read'];
-                        $is_writable = isset($config[$key]['write']) && $config[$key]['write'];
-                        
-                        if (!$is_readable && !$is_writable) continue;
-
-                        $val = get_post_meta($event_id, $key, true);
-                        
-                        echo '<div class="field-group">';
-                        echo '<label class="field-label" for="' . esc_attr($key) . '">' . esc_html($label) . '</label>';
-                        
-                        if ($is_writable) {
-                            echo '<input type="text" id="' . esc_attr($key) . '" name="' . esc_attr($key) . '" value="' . esc_attr($val) . '" class="field-input">';
-                        } else {
-                            echo '<div class="field-value">' . esc_html($val) . '</div>';
-                        }
-                        echo '</div>';
-                    }
-                    
-                    // Check if any field is writable to show save button
-                    $has_writable = false;
-                    foreach ($config as $s) {
-                        if (isset($s['write']) && $s['write']) {
-                            $has_writable = true;
-                            break;
-                        }
-                    }
-                    
                     if ($has_writable) {
-                        echo '<button type="submit" class="button">Änderungen speichern</button>';
+                        echo '<button type="submit" class="cd-button">Änderungen speichern</button>';
                     }
                     ?>
-                </form>
 
-                <?php
-                $status = get_post_meta($event_id, '_tmgmt_status', true);
-                if ($status === TMGMT_Event_Status::CONTRACT_SENT) {
-                    $this->render_contract_upload_section($event_id);
-                }
-                ?>
+                    <?php if ($has_writable): ?>
+                    </form>
+                    <?php endif; ?>
+                </main>
 
-                <div class="footer">
+                <footer class="cd-footer">
                     Powered by Töns Management
-                </div>
+                </footer>
+
             </div>
         </body>
         </html>
         <?php
     }
 
+    /**
+     * Renders the header section with event title and status badge.
+     * @param string $event_title The event title.
+     * @param string $status_key  The event status slug.
+     */
+    private function render_section_header(string $event_title, string $status_key): void {
+        ?>
+        <div class="cd-header">
+            <h1><?php echo esc_html($event_title); ?></h1>
+            <?php if (!empty($status_key)) :
+                $status_label = TMGMT_Event_Status::get_label($status_key);
+                ?>
+                <span class="cd-status-badge"><?php echo esc_html($status_label); ?></span>
+            <?php endif; ?>
+        </div>
+        <?php
+    }
+
+    /**
+     * Renders the event details section (description, date, times).
+     * @param int   $event_id The event post ID.
+     * @param array $config   The effective field configuration.
+     */
+    private function render_event_details_section(int $event_id, array $config): void {
+        $fields = array(
+            'core_content'                => 'Beschreibung',
+            '_tmgmt_event_date'           => 'Datum',
+            '_tmgmt_event_start_time'     => 'Startzeit',
+            '_tmgmt_event_arrival_time'   => 'Ankunftszeit',
+            '_tmgmt_event_departure_time' => 'Abfahrtszeit',
+        );
+
+        // Check if any field is visible
+        $has_visible = false;
+        foreach ($fields as $key => $label) {
+            if (isset($config[$key]) && !empty($config[$key]['read'])) {
+                $has_visible = true;
+                break;
+            }
+        }
+
+        if (!$has_visible) {
+            return;
+        }
+
+        ?>
+        <section class="cd-section">
+            <h2 class="cd-section-title">Veranstaltungsdetails</h2>
+            <?php foreach ($fields as $key => $label) :
+                if (!isset($config[$key]) || empty($config[$key]['read'])) {
+                    continue;
+                }
+
+                $is_writable = !empty($config[$key]['write']);
+
+                if ($key === 'core_content') {
+                    $value = get_post($event_id)->post_content;
+                    ?>
+                    <div class="cd-field-group">
+                        <?php if ($is_writable) : ?>
+                            <label class="cd-field-label" for="core_content"><?php echo esc_html($label); ?></label>
+                            <textarea class="cd-field-input" id="core_content" name="core_content" rows="5"><?php echo esc_textarea($value); ?></textarea>
+                        <?php else : ?>
+                            <span class="cd-field-label"><?php echo esc_html($label); ?></span>
+                            <div class="cd-field-value"><?php echo wp_kses_post(wpautop($value)); ?></div>
+                        <?php endif; ?>
+                    </div>
+                    <?php
+                } elseif ($key === '_tmgmt_event_date') {
+                    $value = get_post_meta($event_id, $key, true);
+                    ?>
+                    <div class="cd-field-group">
+                        <?php if ($is_writable) : ?>
+                            <label class="cd-field-label" for="<?php echo esc_attr($key); ?>"><?php echo esc_html($label); ?></label>
+                            <input class="cd-field-input" type="date" id="<?php echo esc_attr($key); ?>" name="<?php echo esc_attr($key); ?>" value="<?php echo esc_attr($value); ?>">
+                        <?php else : ?>
+                            <span class="cd-field-label"><?php echo esc_html($label); ?></span>
+                            <span class="cd-field-value"><?php echo esc_html($value); ?></span>
+                        <?php endif; ?>
+                    </div>
+                    <?php
+                } else {
+                    // Time fields
+                    $value = get_post_meta($event_id, $key, true);
+                    ?>
+                    <div class="cd-field-group">
+                        <?php if ($is_writable) : ?>
+                            <label class="cd-field-label" for="<?php echo esc_attr($key); ?>"><?php echo esc_html($label); ?></label>
+                            <input class="cd-field-input" type="time" id="<?php echo esc_attr($key); ?>" name="<?php echo esc_attr($key); ?>" value="<?php echo esc_attr($value); ?>">
+                        <?php else : ?>
+                            <span class="cd-field-label"><?php echo esc_html($label); ?></span>
+                            <span class="cd-field-value"><?php echo esc_html($value); ?></span>
+                        <?php endif; ?>
+                    </div>
+                    <?php
+                }
+            endforeach; ?>
+        </section>
+        <?php
+    }
+
+    /**
+     * Renders the location section with address and notes.
+     * @param int $event_id The event post ID.
+     */
+    private function render_location_section(int $event_id): void {
+        $location_id = get_post_meta($event_id, '_tmgmt_event_location_id', true);
+        if (empty($location_id)) {
+            return;
+        }
+
+        $location = get_post($location_id);
+        if (!$location) {
+            return;
+        }
+
+        $street  = get_post_meta($location_id, '_tmgmt_location_street', true);
+        $number  = get_post_meta($location_id, '_tmgmt_location_number', true);
+        $zip     = get_post_meta($location_id, '_tmgmt_location_zip', true);
+        $city    = get_post_meta($location_id, '_tmgmt_location_city', true);
+        $country = get_post_meta($location_id, '_tmgmt_location_country', true);
+        $notes   = get_post_meta($location_id, '_tmgmt_location_notes', true);
+
+        ?>
+        <section class="cd-section">
+            <h2 class="cd-section-title">Veranstaltungsort</h2>
+
+            <div class="cd-field-group">
+                <span class="cd-field-label">Name</span>
+                <span class="cd-field-value"><?php echo esc_html($location->post_title); ?></span>
+            </div>
+
+            <div class="cd-field-group">
+                <span class="cd-field-label">Adresse</span>
+                <span class="cd-field-value">
+                    <?php
+                    $address_lines = array();
+
+                    $street_line = trim($street . ' ' . $number);
+                    if (!empty($street_line)) {
+                        $address_lines[] = esc_html($street_line);
+                    }
+
+                    $city_line = trim($zip . ' ' . $city);
+                    if (!empty($city_line)) {
+                        $address_lines[] = esc_html($city_line);
+                    }
+
+                    if (!empty($country)) {
+                        $address_lines[] = esc_html($country);
+                    }
+
+                    echo implode('<br>', $address_lines);
+                    ?>
+                </span>
+            </div>
+
+            <?php if (!empty($notes)) : ?>
+            <div class="cd-field-group">
+                <span class="cd-field-label">Hinweise</span>
+                <div class="cd-field-value"><?php echo wp_kses_post(wpautop($notes)); ?></div>
+            </div>
+            <?php endif; ?>
+        </section>
+        <?php
+    }
+
+    /**
+     * Renders the contact section grouped by role.
+     * @param int $event_id The event post ID.
+     */
+    private function render_contact_section(int $event_id): void {
+        $contacts = TMGMT_Placeholder_Parser::get_contact_data_for_event($event_id);
+
+        $roles = array(
+            'vertrag'  => 'Vertrag',
+            'programm' => 'Programm',
+            'technik'  => 'Technik',
+        );
+
+        // Check if any role has data (firstname or lastname non-empty)
+        $has_any = false;
+        foreach ($roles as $key => $label) {
+            $role_data = $contacts[$key] ?? array();
+            if (!empty($role_data['firstname']) || !empty($role_data['lastname'])) {
+                $has_any = true;
+                break;
+            }
+        }
+
+        if (!$has_any) {
+            return;
+        }
+
+        ?>
+        <section class="cd-section">
+            <h2 class="cd-section-title">Kontaktdaten</h2>
+            <?php foreach ($roles as $key => $label) :
+                $role_data = $contacts[$key] ?? array();
+                $firstname = $role_data['firstname'] ?? '';
+                $lastname  = $role_data['lastname'] ?? '';
+
+                if (empty($firstname) && empty($lastname)) {
+                    continue;
+                }
+
+                $name  = trim($firstname . ' ' . $lastname);
+                $email = $role_data['email'] ?? '';
+                $phone = $role_data['phone'] ?? '';
+                ?>
+                <div class="cd-contact-role">
+                    <h3 class="cd-contact-role-title"><?php echo esc_html($label); ?></h3>
+
+                    <div class="cd-field-group">
+                        <span class="cd-field-label">Name</span>
+                        <span class="cd-field-value"><?php echo esc_html($name); ?></span>
+                    </div>
+
+                    <?php if (!empty($email)) : ?>
+                    <div class="cd-field-group">
+                        <span class="cd-field-label">E-Mail</span>
+                        <span class="cd-field-value"><?php echo esc_html($email); ?></span>
+                    </div>
+                    <?php endif; ?>
+
+                    <?php if (!empty($phone)) : ?>
+                    <div class="cd-field-group">
+                        <span class="cd-field-label">Telefon</span>
+                        <span class="cd-field-value"><?php echo esc_html($phone); ?></span>
+                    </div>
+                    <?php endif; ?>
+                </div>
+            <?php endforeach; ?>
+        </section>
+        <?php
+    }
+
+    /**
+     * Renders the finance section (fee, deposit).
+     * @param int   $event_id The event post ID.
+     * @param array $config   The effective field configuration.
+     */
+    private function render_finance_section(int $event_id, array $config): void {
+        $fields = array(
+            '_tmgmt_fee'     => 'Gage',
+            '_tmgmt_deposit' => 'Anzahlung',
+        );
+
+        // Check if any finance field is visible
+        $has_visible = false;
+        foreach ($fields as $key => $label) {
+            if (isset($config[$key]) && !empty($config[$key]['read'])) {
+                $has_visible = true;
+                break;
+            }
+        }
+
+        if (!$has_visible) {
+            return;
+        }
+
+        ?>
+        <section class="cd-section">
+            <h2 class="cd-section-title">Finanzen</h2>
+            <?php foreach ($fields as $key => $label) :
+                if (!isset($config[$key]) || empty($config[$key]['read'])) {
+                    continue;
+                }
+
+                $is_writable = !empty($config[$key]['write']);
+                $value = get_post_meta($event_id, $key, true);
+                ?>
+                <div class="cd-field-group">
+                    <?php if ($is_writable) : ?>
+                        <label class="cd-field-label" for="<?php echo esc_attr($key); ?>"><?php echo esc_html($label); ?></label>
+                        <input class="cd-field-input" type="text" id="<?php echo esc_attr($key); ?>" name="<?php echo esc_attr($key); ?>" value="<?php echo esc_attr($value); ?>">
+                    <?php else : ?>
+                        <span class="cd-field-label"><?php echo esc_html($label); ?></span>
+                        <span class="cd-field-value"><?php echo esc_html($value); ?></span>
+                    <?php endif; ?>
+                </div>
+            <?php endforeach; ?>
+        </section>
+        <?php
+    }
+
+    /**
+     * Renders the confirmations section.
+     * @param int $event_id The event post ID.
+     */
+    private function render_confirmations_section(int $event_id): void {
+        global $wpdb;
+        $table = $wpdb->prefix . 'tmgmt_confirmations';
+
+        $confirmations = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT * FROM $table WHERE event_id = %d ORDER BY requested_at DESC",
+                $event_id
+            )
+        );
+
+        if (empty($confirmations)) {
+            return;
+        }
+
+        ?>
+        <section class="cd-section">
+            <h2 class="cd-section-title">Bestätigungen</h2>
+            <ul class="cd-confirmation-list">
+                <?php foreach ($confirmations as $row) :
+                    $action_title = get_the_title($row->action_id);
+                    $is_confirmed = $row->status === 'confirmed';
+                    $status_label = $is_confirmed ? 'Bestätigt' : 'Ausstehend';
+                    $date         = $is_confirmed ? $row->confirmed_at : $row->requested_at;
+                    ?>
+                    <li>
+                        <span class="cd-field-label"><?php echo esc_html($action_title); ?></span>
+                        <span class="cd-field-value"><?php echo esc_html($status_label); ?> — <?php echo esc_html($date); ?></span>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        </section>
+        <?php
+    }
+
+    /**
+     * Renders the attachments/files section.
+     * @param int $event_id The event post ID.
+     */
+    private function render_attachments_section(int $event_id): void {
+        $attachments = get_post_meta($event_id, '_tmgmt_event_attachments', true);
+
+        if (empty($attachments) || !is_array($attachments)) {
+            return;
+        }
+
+        // Filter to only valid attachments
+        $valid = array();
+        foreach ($attachments as $entry) {
+            if (empty($entry['id'])) {
+                continue;
+            }
+            $post = get_post($entry['id']);
+            if (!$post) {
+                continue;
+            }
+            $valid[] = $entry;
+        }
+
+        if (empty($valid)) {
+            return;
+        }
+
+        ?>
+        <section class="cd-section">
+            <h2 class="cd-section-title">Dateien</h2>
+            <ul class="cd-attachment-list">
+                <?php foreach ($valid as $entry) :
+                    $filename     = basename(get_attached_file($entry['id']));
+                    $category     = $entry['category'] ?? '';
+                    $download_url = wp_get_attachment_url($entry['id']);
+                    ?>
+                    <li>
+                        <span class="cd-field-label"><?php echo esc_html($filename); ?></span>
+                        <span class="cd-field-value"><?php echo esc_html($category); ?></span>
+                        <a href="<?php echo esc_url($download_url); ?>" class="cd-button" download>Download</a>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        </section>
+        <?php
+    }
+
     private function render_contract_upload_section($event_id) {
         $token = isset($_GET['tmgmt_token']) ? sanitize_text_field($_GET['tmgmt_token']) : '';
         ?>
-        <div class="tmgmt-contract-upload-section" style="margin-top: 40px; padding: 20px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9;">
-            <h2 style="margin-top: 0;">Unterschriebenen Vertrag hochladen</h2>
+        <div id="tmgmt-contract-upload-section" class="cd-section cd-upload-area">
+            <h2 class="cd-section-title">Unterschriebenen Vertrag hochladen</h2>
             <p>Bitte laden Sie den unterschriebenen Vertrag als PDF, JPG oder PNG hoch.</p>
-            <div id="tmgmt-upload-message" style="display:none; padding: 10px; border-radius: 4px; margin-bottom: 15px;"></div>
+            <div id="tmgmt-upload-message" class="cd-success-message" style="display:none;"></div>
             <form id="tmgmt-contract-upload-form" enctype="multipart/form-data">
                 <input type="hidden" name="action" value="tmgmt_upload_signed_contract">
                 <input type="hidden" name="tmgmt_token" value="<?php echo esc_attr($token); ?>">
                 <input type="hidden" name="event_id" value="<?php echo esc_attr($event_id); ?>">
                 <input type="hidden" name="nonce" value="<?php echo wp_create_nonce('tmgmt_upload_signed_contract_nonce'); ?>">
-                <div style="margin-bottom: 15px;">
-                    <label for="tmgmt-signed-contract-file" style="display: block; font-weight: bold; margin-bottom: 5px;">Datei auswählen</label>
+                <div class="cd-field-group">
+                    <label class="cd-field-label" for="tmgmt-signed-contract-file">Datei auswählen</label>
                     <input type="file" id="tmgmt-signed-contract-file" name="signed_contract" accept=".pdf,.jpg,.jpeg,.png" required>
                 </div>
-                <button type="submit" class="button" style="background: #2271b1; border-color: #2271b1; color: #fff; padding: 8px 16px; cursor: pointer; border-radius: 3px; border-style: solid;">Vertrag hochladen</button>
+                <button type="submit" class="cd-button">Vertrag hochladen</button>
             </form>
             <script>
             (function() {

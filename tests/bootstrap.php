@@ -11,6 +11,14 @@ if (!defined('ABSPATH')) {
     define('ABSPATH', dirname(__DIR__) . '/');
 }
 
+if (!defined('TMGMT_PLUGIN_DIR')) {
+    define('TMGMT_PLUGIN_DIR', dirname(__DIR__) . '/');
+}
+
+if (!defined('TMGMT_PLUGIN_URL')) {
+    define('TMGMT_PLUGIN_URL', 'http://example.com/wp-content/plugins/tmgmt/');
+}
+
 // Canonical WP_Error stub — loaded once here so all test files share the same definition.
 if (!class_exists('WP_Error')) {
     class WP_Error {

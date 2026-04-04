@@ -1,0 +1,276 @@
+/* ==========================================================================
+   Customer Dashboard Stylesheet
+   External page rendered via token link — standalone, no WordPress admin styles.
+   All classes use the .cd-* prefix (customer-dashboard).
+   ========================================================================== */
+
+/* Reset & Base */
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+body.cd-body {
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    color: #1a1a1a;
+    background: #f5f6f8;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Container — max-width 900px, centered */
+.cd-container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 24px 20px 48px;
+}
+
+/* Header */
+.cd-header {
+    margin-bottom: 32px;
+}
+
+.cd-header h1 {
+    margin: 0 0 8px;
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #172b4d;
+}
+
+/* Status Badge */
+.cd-status-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border-radius: 12px;
+    background: #e4e6eb;
+    color: #444;
+}
+
+/* Section */
+.cd-section {
+    background: #fff;
+    border: 1px solid #dfe1e6;
+    border-radius: 8px;
+    padding: 24px;
+    margin-bottom: 20px;
+}
+
+.cd-section-title {
+    margin: 0 0 16px;
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: #172b4d;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #eee;
+}
+
+/* Field Group — label + value pairs */
+.cd-field-group {
+    margin-bottom: 14px;
+}
+
+.cd-field-group:last-child {
+    margin-bottom: 0;
+}
+
+.cd-field-label {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #5e6c84;
+}
+
+.cd-field-value {
+    font-size: 1rem;
+    color: #1a1a1a;
+}
+
+/* Editable input fields */
+.cd-field-input {
+    width: 100%;
+    padding: 8px 12px;
+    font-size: 1rem;
+    font-family: inherit;
+    border: 1px solid #dfe1e6;
+    border-radius: 4px;
+    background: #fff;
+    color: #1a1a1a;
+    transition: border-color 0.15s;
+}
+
+.cd-field-input:focus {
+    outline: none;
+    border-color: #0079bf;
+    box-shadow: 0 0 0 2px rgba(0, 121, 191, 0.2);
+}
+
+/* Confirmation List */
+.cd-confirmation-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.cd-confirmation-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 0.95rem;
+}
+
+.cd-confirmation-list li:last-child {
+    border-bottom: none;
+}
+
+/* Attachment List */
+.cd-attachment-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.cd-attachment-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 0.95rem;
+}
+
+.cd-attachment-list li:last-child {
+    border-bottom: none;
+}
+
+.cd-attachment-list a {
+    color: #0079bf;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.cd-attachment-list a:hover {
+    text-decoration: underline;
+}
+
+/* Footer */
+.cd-footer {
+    margin-top: 32px;
+    padding-top: 16px;
+    border-top: 1px solid #dfe1e6;
+    text-align: center;
+    font-size: 0.85rem;
+    color: #8993a4;
+}
+
+/* Success Message */
+.cd-success-message {
+    background: #e3fcef;
+    color: #006644;
+    border: 1px solid #abf5d1;
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    font-size: 0.95rem;
+    font-weight: 500;
+}
+
+/* Primary Button */
+.cd-button {
+    display: inline-block;
+    padding: 10px 24px;
+    font-size: 1rem;
+    font-weight: 600;
+    font-family: inherit;
+    color: #fff;
+    background: #0079bf;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.cd-button:hover {
+    background: #026aa7;
+}
+
+.cd-button:focus-visible {
+    outline: 2px solid #0079bf;
+    outline-offset: 2px;
+}
+
+.cd-button:disabled {
+    background: #ccc;
+    color: #666;
+    cursor: not-allowed;
+}
+
+/* Contact sub-group */
+.cd-contact-role {
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.cd-contact-role:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.cd-contact-role-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #172b4d;
+    margin: 0 0 8px;
+}
+
+/* Contract upload area */
+.cd-upload-area {
+    border: 2px dashed #dfe1e6;
+    border-radius: 8px;
+    padding: 24px;
+    text-align: center;
+    background: #fafbfc;
+}
+
+/* ==========================================================================
+   Responsive — Mobile-friendly
+   ========================================================================== */
+
+@media (max-width: 640px) {
+    .cd-container {
+        padding: 16px 12px 32px;
+    }
+
+    .cd-header h1 {
+        font-size: 1.35rem;
+    }
+
+    .cd-section {
+        padding: 16px;
+        border-radius: 6px;
+    }
+
+    .cd-section-title {
+        font-size: 1.05rem;
+    }
+
+    .cd-confirmation-list li,
+    .cd-attachment-list li {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+    }
+
+    .cd-button {
+        width: 100%;
+        text-align: center;
+    }
+}

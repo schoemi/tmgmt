@@ -4,6 +4,7 @@ import PrimeVue from 'primevue/config'
 import Aura from '@primeuix/themes/aura'
 import AppShell from './components/AppShell.vue'
 import KanbanWidget from './components/KanbanWidget.vue'
+import EventListWidget from './components/EventListWidget.vue'
 import widgetRegistry from './registry/widgetRegistry.js'
 
 // Requirement 3.6: Prüfe Verfügbarkeit von window.tmgmtData
@@ -25,13 +26,21 @@ if (!window.tmgmtData) {
         }
     })
 
-    // Standard-Widget registrieren (KanbanWidget)
+    // Standard-Widgets registrieren
     widgetRegistry.register({
         id: 'kanban',
         label: 'Kanban',
         icon: 'fa-columns',
         component: KanbanWidget,
         order: 1,
+    })
+
+    widgetRegistry.register({
+        id: 'event-list',
+        label: 'Liste',
+        icon: 'fa-list',
+        component: EventListWidget,
+        order: 2,
     })
 
     app.mount('#tmgmt-dashboard-app')

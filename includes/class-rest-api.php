@@ -23,6 +23,13 @@ class TMGMT_REST_API {
             'permission_callback' => array($this, 'check_permission'),
         ));
 
+        // List Events
+        register_rest_route(self::NAMESPACE, '/events', array(
+            'methods'             => 'GET',
+            'callback'            => array($this, 'list_events'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
         // Get Single Event
         register_rest_route(self::NAMESPACE, '/events/(?P<id>\d+)', array(
             'methods'             => 'GET',
@@ -645,6 +652,66 @@ class TMGMT_REST_API {
             'columns' => $columns,
             'events' => $event_data,
             'statuses' => TMGMT_Event_Status::get_all_statuses()
+        );
+    }
+
+    /**
+     * GET /events – Returns all events as a flat list with key fields for the list view.
+     */
+    public function list_events($request) {
+        $events = get_posts(array(
+            'post_type'      => 'event',
+            'posts_per_page' => -1,
+            'post_status'    => array('publish', 'future', 'draft', 'pending', 'private'),
+        ));
+
+        $event_data = array();
+        foreach ($events as $event) {
+            $status    = get_post_meta($event->ID, '_tmgmt_status', true);
+            $date_raw  = get_post_meta($event->ID, '_tmgmt_event_date', true);
+            $time_raw  = get_post_meta($event->ID, '_tmgmt_event_start_time', true);
+            $event_id  = get_post_meta($event->ID, '_tmgmt_event_id', true);
+            $fee       = get_post_meta($event->ID, '_tmgmt_fee', true);
+
+            // Location city
+            $location_id = get_post_meta($event->ID, '_tmgmt_event_location_id', true);
+            $city = '';
+            $venue_name = '';
+            if (!empty($location_id)) {
+                $city = get_post_meta($location_id, '_tmgmt_location_city', true);
+                $location_post = get_post($location_id);
+                if ($location_post) {
+                    $venue_name = $location_post->post_title;
+                }
+            }
+
+            // Veranstalter name
+            $veranstalter_id = get_post_meta($event->ID, '_tmgmt_event_veranstalter_id', true);
+            $veranstalter_name = '';
+            if (!empty($veranstalter_id)) {
+                $v_post = get_post($veranstalter_id);
+                if ($v_post) {
+                    $veranstalter_name = $v_post->post_title;
+                }
+            }
+
+            $event_data[] = array(
+                'id'               => $event->ID,
+                'event_id'         => $event_id ?: '',
+                'title'            => $event->post_title,
+                'status'           => $status ?: '',
+                'date'             => $date_raw ?: '',
+                'time'             => $time_raw ?: '',
+                'city'             => $city,
+                'venue'            => $venue_name,
+                'veranstalter'     => $veranstalter_name,
+                'fee'              => $fee ?: '',
+            );
+        }
+
+        return array(
+            'events'   => $event_data,
+            'statuses' => TMGMT_Event_Status::get_all_statuses(),
         );
     }
 

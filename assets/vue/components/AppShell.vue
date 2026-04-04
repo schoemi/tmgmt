@@ -1,38 +1,48 @@
 <template>
   <div class="tmgmt-app-shell">
-    <!-- Navigation -->
-    <TabMenu :model="tabItems" :activeIndex="activeIndex" @tab-change="onTabChange" />
+    <!-- Event Detail View -->
+    <template v-if="selectedEventId !== null">
+      <div class="tmgmt-app-shell__detail-header">
+        <Button
+          icon="pi pi-arrow-left"
+          :label="'Zurück zur ' + (activeWidget?.label ?? 'Übersicht')"
+          severity="secondary"
+          text
+          @click="closeEventDetail"
+        />
+      </div>
+      <EventDetail :event-id="selectedEventId" />
+    </template>
 
-    <!-- Active Widget -->
-    <div class="tmgmt-dashboard-content">
-      <component
-        v-if="activeWidget"
-        :is="activeWidget.component"
-        @open-event-modal="openEventModal"
-      />
-    </div>
+    <!-- Dashboard (Widgets) -->
+    <template v-else>
+      <!-- Navigation -->
+      <TabMenu :model="tabItems" :activeIndex="activeIndex" @tab-change="onTabChange" />
 
-    <!-- Event Modal -->
-    <EventModal
-      v-if="eventModalId !== null"
-      :event-id="eventModalId"
-      @close="closeEventModal"
-    />
+      <!-- Active Widget -->
+      <div class="tmgmt-dashboard-content">
+        <component
+          v-if="activeWidget"
+          :is="activeWidget.component"
+          @open-event-modal="openEventDetail"
+        />
+      </div>
+    </template>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import TabMenu from 'primevue/tabmenu'
+import Button from 'primevue/button'
 import registry from '../registry/widgetRegistry.js'
-import EventModal from './EventModal.vue'
+import EventDetail from './EventDetail.vue'
 
 const STORAGE_KEY = 'tmgmt_active_widget'
 
 const userCapabilities = window.tmgmtData?.capabilities ?? {}
 const visibleWidgets = computed(() => registry.getVisible(userCapabilities))
 
-// Map widgets to PrimeVue TabMenu items
 const tabItems = computed(() =>
   visibleWidgets.value.map(w => ({
     label: w.label,
@@ -47,7 +57,7 @@ const activeWidget = computed(() =>
   visibleWidgets.value[activeIndex.value] ?? null
 )
 
-const eventModalId = ref(null)
+const selectedEventId = ref(null)
 
 function mapIcon(faIcon) {
   const iconMap = {
@@ -69,13 +79,15 @@ function onTabChange(event) {
   }
 }
 
-function openEventModal(id) {
-  eventModalId.value = id
+function openEventDetail(id) {
+  selectedEventId.value = id
 }
 
-function closeEventModal() {
-  eventModalId.value = null
+function closeEventDetail() {
+  selectedEventId.value = null
 }
+
+defineExpose({ openEventDetail, closeEventDetail, selectedEventId, activeIndex })
 
 onMounted(() => {
   const stored = localStorage.getItem(STORAGE_KEY)
@@ -96,5 +108,9 @@ onMounted(() => {
 .tmgmt-dashboard-content {
   width: 100%;
   margin-top: 16px;
+}
+
+.tmgmt-app-shell__detail-header {
+  margin-bottom: 12px;
 }
 </style>
