@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Töns Management
  * Description: Gig Management Plugin for WordPress
- * Version: 0.7.5
+ * Version: 0.8.0
  */
 
 if (!defined('ABSPATH')) {
