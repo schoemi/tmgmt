@@ -17,7 +17,7 @@ const mockStatuses = {
 }
 
 function setupMocks(events = mockEvents) {
-  window.tmgmtData = window.tmgmtData ?? {
+  window.tmgmtData = {
     nonce: 'fake', apiUrl: '/wp-json/tmgmt/v1', capabilities: {},
     statuses: mockStatuses, status_requirements: {},
   }
@@ -59,7 +59,7 @@ export const Loading = {
   render: () => ({
     components: { EventListWidget },
     setup() {
-      window.tmgmtData = window.tmgmtData ?? { statuses: {} }
+      window.tmgmtData = { nonce: 'x', apiUrl: '/wp-json/tmgmt/v1', statuses: {} }
       window.fetch = () => new Promise(() => {})
       return {}
     },
@@ -71,7 +71,7 @@ export const Error = {
   render: () => ({
     components: { EventListWidget },
     setup() {
-      window.tmgmtData = window.tmgmtData ?? { nonce: 'x', apiUrl: '/wp-json/tmgmt/v1', statuses: {} }
+      window.tmgmtData = { nonce: 'x', apiUrl: '/wp-json/tmgmt/v1', statuses: {} }
       window.fetch = async () => new Response(
         JSON.stringify({ message: 'Serverfehler' }),
         { status: 500, headers: { 'Content-Type': 'application/json' } }

@@ -22,7 +22,10 @@ export const Default = {
   render: () => ({
     components: { AppShell },
     setup() {
-      window.tmgmtData = window.tmgmtData ?? { capabilities: {}, statuses: {} }
+      window.tmgmtData = {
+        nonce: 'fake', apiUrl: '/wp-json/tmgmt/v1',
+        capabilities: {}, statuses: {}, status_requirements: {},
+      }
       widgetRegistry.register({
         id: 'kanban',
         label: 'Kanban',

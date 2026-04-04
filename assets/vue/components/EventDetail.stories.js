@@ -64,7 +64,7 @@ const mockEvent = {
 }
 
 function setupMocks() {
-  window.tmgmtData = window.tmgmtData ?? {
+  window.tmgmtData = {
     nonce: 'fake-nonce',
     apiUrl: '/wp-json/tmgmt/v1',
     capabilities: {},
@@ -102,7 +102,7 @@ export const Loading = {
   render: () => ({
     components: { EventDetail },
     setup() {
-      window.tmgmtData = window.tmgmtData ?? { statuses: {} }
+      window.tmgmtData = { nonce: 'x', apiUrl: '/wp-json/tmgmt/v1', statuses: {} }
       window.fetch = () => new Promise(() => {})
       return {}
     },
@@ -114,7 +114,7 @@ export const Error = {
   render: () => ({
     components: { EventDetail },
     setup() {
-      window.tmgmtData = window.tmgmtData ?? { nonce: 'x', apiUrl: '/wp-json/tmgmt/v1', statuses: {} }
+      window.tmgmtData = { nonce: 'x', apiUrl: '/wp-json/tmgmt/v1', statuses: {} }
       window.fetch = async () => new Response(
         JSON.stringify({ message: 'Event nicht gefunden' }),
         { status: 404, headers: { 'Content-Type': 'application/json' } }
@@ -134,7 +134,7 @@ export const Empty = {
         meta: { event_id: '26XYZ789', status: 'inquiry' },
         logs: [], communication: [], actions: [], attachments: [], tours: [],
       }
-      window.tmgmtData = window.tmgmtData ?? {
+      window.tmgmtData = {
         nonce: 'x', apiUrl: '/wp-json/tmgmt/v1',
         statuses: { inquiry: 'Anfrage', confirmed: 'Bestätigt' },
         status_requirements: {},

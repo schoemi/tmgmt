@@ -43,6 +43,7 @@ require_once TMGMT_PLUGIN_DIR . 'includes/class-integration-settings.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-placeholder-parser.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-action-handler.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-dashboard.php';
+require_once TMGMT_PLUGIN_DIR . 'includes/class-admin-dashboard.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-appointment-list.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-rest-api.php';
 require_once TMGMT_PLUGIN_DIR . 'includes/class-assets.php';
@@ -94,7 +95,7 @@ function tmgmt_init() {
     new TMGMT_Contract_Template_Post_Type();
     new TMGMT_Integration_Manager();
     new TMGMT_Action_Handler();
-    new TMGMT_Dashboard();
+    new TMGMT_Admin_Dashboard();
     new TMGMT_Appointment_List();
     new TMGMT_REST_API();
     new TMGMT_Assets();

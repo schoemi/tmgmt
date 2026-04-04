@@ -122,7 +122,9 @@ const apiService = createApiService(
             const data = (typeof window !== 'undefined' && window.tmgmtData) || {}
             return data[prop]
         },
-    })
+    }),
+    // Lazy fetch: immer aktuelles window.fetch verwenden (wichtig für Storybook/Tests)
+    (...args) => window.fetch(...args)
 )
 
 export default apiService

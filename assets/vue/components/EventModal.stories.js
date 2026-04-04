@@ -12,9 +12,12 @@ export const Default = {
   render: () => ({
     components: { EventModal },
     setup() {
-      window.tmgmtData = window.tmgmtData ?? {
+      window.tmgmtData = {
+        nonce: 'fake',
+        apiUrl: '/wp-json/tmgmt/v1',
         capabilities: {},
         statuses: { inquiry: 'Anfrage', confirmed: 'Bestätigt', done: 'Abgeschlossen' },
+        status_requirements: {},
       }
       return {}
     },
