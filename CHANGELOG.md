@@ -4,6 +4,179 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased] – 2026-04-04
+
+### Added
+
+- **Vertrag-PDF als Event-Anhang** (`contract-event-attachment`): Nach dem Versand eines Vertrags wird das generierte PDF automatisch als WordPress-Attachment registriert und dem Event zugeordnet
+  - Neue Methode `TMGMT_Contract_Generator::register_pdf_attachment()`: erstellt WP-Attachment via `wp_insert_attachment` mit `post_parent = event_id`, speichert Attachment-ID als `_tmgmt_contract_attachment_id` Post-Meta, trägt Eintrag mit Kategorie `Vertrag` in `_tmgmt_event_attachments` ein
+  - Aufruf als Step 5b in `generate_and_send()` zwischen PDF-Meta-Speicherung und E-Mail-Versand; bei Fehler wird geloggt und der Versand fortgesetzt (kein Abbruch)
+  - Normalisierung bestehender `_tmgmt_event_attachments`-Einträge (numerische Werte → `{id, category}`), Duplikat-Vermeidung bei gleicher Attachment-ID
+  - Logging: `attachment_added` bei Erfolg, `contract_error` bei Fehler
+  - Property-Based Test (Eris, 100 Iterationen): Fehlerresilienz — Versand wird bei Attachment-Fehler fortgesetzt (Property 4)
+  - `docs/data_structure-kommentiert.md`: neues Meta-Feld `_tmgmt_contract_attachment_id` dokumentiert
+- **Spec: Vertrag-Senden-Dialog** (`contract-send-dialog`): Vollständige Implementierung aller 8 Tasks
+  - `TMGMT_Contract_Generator`: neue Methode `render_preview()` für temporäre PDF-Vorschau ohne WP-Attachment; `generate_and_send()` um `$overrides`-Parameter erweitert (to, cc, bcc, subject, body, template_id); Factory-Methoden für testbare Dependency Injection
+  - Zwei neue REST-Endpunkte: `GET /tmgmt/v1/events/{id}/contract-preview` (E-Mail-Felder + PDF-URL + Templates) und `POST /tmgmt/v1/events/{id}/contract-send` (finaler Versand mit Override-Feldern); beide mit `permission_callback` abgesichert
+  - Dialog-HTML-Markup in `render_actions_box()`: zweispaltige Ansicht (E-Mail-Formular links, PDF-iframe rechts), Template-Selector, deutsche Labels
+  - `assets/js/contract-send-dialog.js`: Button-Interception für `contract_generation`-Aktionen, Preview-Laden, Template-Wechsel, Send-Flow mit SweetAlert2-Feedback, Cancel- und Error-Handling (404 → kein Dialog, 500 → Fehler in PDF-Spalte)
+  - 6 Property-Based Tests (Eris, je 100 Iterationen): Preview-Vollständigkeit, Overrides-Round-Trip, Template-Sichtbarkeit, render_template()-Determinismus, Status-Update, Auth-Schutz
+  - Unit-Tests für REST-Endpunkt-Fehlerbehandlung (404, 500, 400), Dialog-Markup, Overrides-Backward-Compatibility
+  - `docs/api_documentation.md`: Contract API-Sektion mit beiden neuen Endpunkten ergänzt
+  - `tests/bootstrap.php`: kanonischer `WP_Error`-Stub mit `get_error_data()`, `get_posts()`-Stub filtert aus `$test_post_store`
+- PrimeVue 4 mit Aura-Theme-Preset in das Vue-Frontend integriert (`primevue`, `@primeuix/themes` als devDependencies)
+- `assets/vue/main.js`: PrimeVue-Plugin mit Aura-Preset registriert (`app.use(PrimeVue, { theme: { preset: Aura } })`)
+- `.storybook/preview.js`: PrimeVue + Aura global für alle Stories konfiguriert, damit PrimeVue-Komponenten in Storybook korrekt rendern
+- Neue Storybook Stories: `AppShell.stories.js`, `EventModal.stories.js`
+
+### Changed
+
+- **Dashboard-Komponenten auf PrimeVue umgebaut** – alle 4 Vue-Komponenten nutzen jetzt PrimeVue statt Custom-HTML/CSS:
+  - `AppShell.vue`: Navigation von Custom-Buttons auf PrimeVue `TabMenu` umgestellt; Font-Awesome-Icons auf PrimeIcons gemappt
+  - `KanbanWidget.vue`: `Button`, `Tag`, `Message`, `ProgressSpinner` statt Custom-HTML; Karten-Meta mit `Tag`-Badges; Spalten-Count als `Tag rounded`
+  - `EventModal.vue`: Custom-Modal durch PrimeVue `Dialog` ersetzt; alle Formularfelder auf `InputText`, `InputNumber`, `DatePicker`, `Select`, `Textarea` umgestellt; Collapsible-Sections durch `Accordion`/`AccordionPanel` ersetzt; Gage/Anzahlung als `InputNumber` mit `mode="currency"` und `locale="de-DE"`; Status-Dropdown als PrimeVue `Select`; Logbuch-Einträge mit `Tag` für Datum; Save-Status als `Tag` mit Severity
+  - `MissingFieldsModal.vue`: Custom-Modal durch PrimeVue `Dialog` ersetzt; Inputs auf `InputText`, `InputNumber`, `DatePicker` umgestellt; Warnung als PrimeVue `Message`; Footer mit PrimeVue `Button`
+- CSS-Variablen nutzen jetzt PrimeVue Design-Tokens (`--p-surface-*`, `--p-border-radius`, `--p-text-*`) statt Hardcoded-Werte
+- Spec `contract-send-dialog`: Implementierungsplan (`tasks.md`) erstellt mit 8 Tasks – Backend (Contract Generator Preview/Overrides, REST-Endpunkte), Frontend (Dialog-HTML, `contract-send-dialog.js` mit Template-Wechsel und Send-Flow), Status-Update/Kommunikationslogging; Property-Tests (Eris) als optionale Sub-Tasks für alle 6 Correctness Properties; zwei Checkpoints nach Backend- und Frontend-Phase
+- Storybook 8 (`@storybook/vue3-vite`) zum Projekt hinzugefügt für isolierte Vue-Komponentenentwicklung
+- `.storybook/main.js`: Konfiguration mit Story-Discovery in `assets/vue/**/*.stories.js`
+- `.storybook/preview.js`: globales Pinia-Setup für alle Stories
+- `assets/vue/components/KanbanWidget.stories.js`: Stories für Default, Loading, Error und Empty-Zustände
+- `assets/vue/components/MissingFieldsModal.stories.js`: Stories für Default, SingleField und ManyFields-Varianten
+- npm-Scripts `storybook` und `build-storybook` in `package.json`
+
+### Fixed
+
+- `.storybook/main.js`: `@vitejs/plugin-vue` via `viteFinal` explizit registriert — Storybook startet einen eigenen Vite-Dev-Server und liest die bestehende `assets/vue/vite.config.js` nicht automatisch ein; ohne das Plugin schlug das Parsen von `.vue`-Dateien mit „Failed to parse source for import analysis" fehl
+- `ContractMetaRoundTripTest`, `ContractPdfValidityTest`, `ContractStatusTransitionTest`: auf testbare Subklassen mit Spy-SMTP-Sender umgestellt und `to`-Override übergeben — Tests schlugen fehl, weil `generate_and_send()` jetzt die Veranstalter→Kontakt-Kette für die E-Mail-Adresse benötigt und der echte `TMGMT_SMTP_Sender` PHPMailer voraussetzt
+
+---
+
+## [Unreleased] – 2026-04-03 (Reaktives Dashboard – Implementierung)
+
+### Added
+
+- **Vue 3 + Vite SPA** (`assets/vue/`): vollständige Migration des Vanilla-JS-Dashboards auf eine erweiterbare Single-Page-Anwendung mit Widget-Registry
+  - `assets/vue/main.js`: App-Einstiegspunkt mit `tmgmtData`-Guard, Pinia-Mount und `window.tmgmtDashboard.registerWidget`-API
+  - `assets/vue/vite.config.js`: IIFE-Output nach `assets/dist/dashboard.iife.js` + `dashboard.css`, Leaflet/SweetAlert2 als Externals, Vitest-Konfiguration
+  - `assets/vue/services/apiService.js`: zentraler API-Service mit automatischem `X-WP-Nonce`-Header, strukturierter Fehlerbehandlung (`{ status, message, data }`) und Deduplizierung gleichzeitiger Aufrufe
+  - `assets/vue/stores/eventStore.js`: Pinia-Store mit optimistischem Status-Update, Rollback bei API-Fehler und `tmgmt:event-updated` CustomEvent-Dispatch
+  - `assets/vue/registry/widgetRegistry.js`: Widget-Registry mit Duplikat-Schutz (inkl. Prototype-Pollution-Fix via `hasOwnProperty`), aufsteigender `order`-Sortierung und Permissions-Filterung
+  - `assets/vue/components/AppShell.vue`: App-Container mit `<nav class="tmgmt-dashboard-nav">`, `localStorage`-Persistenz unter `tmgmt_active_widget` und `<component :is>` Widget-Wechsel
+  - `assets/vue/components/KanbanWidget.vue`: Kanban-Board mit HTML5 Drag & Drop, optimistischem State-Update, Pflichtfeld-Prüfung, Mobile-Akkordeon bei ≤ 768 px und „Neues Event"-Button
+  - `assets/vue/components/EventModal.vue`: Event-Detailmodal mit Auto-Save bei `blur`, Status-Pflichtfeld-Prüfung, absteigendem Logbuch, Leaflet-Karte und Inline-Fehlermeldungen
+  - `assets/vue/components/MissingFieldsModal.vue`: Pflichtfelder-Modal als eigenständige Vue-Komponente (Props: `missingFields`, `targetStatus`; Emits: `confirmed`, `cancelled`)
+- **Property-Tests** (`assets/vue/tests/`, fast-check, je 100 Iterationen):
+  - Properties 1–4, 6–13, 16–17 abgedeckt: tmgmtData-Vollständigkeit, localStorage-Round-Trip, Widget-ID-Eindeutigkeit, Sortierreihenfolge, optimistisches Update, State-Revert, Kanban-Rendering, Pflichtfeld-Modal, Event-Modal-Round-Trip, Auto-Save, Logbuch-Sortierung, API-Nonce/URL, HTTP-Fehlerstruktur, Permissions-Sichtbarkeit, Window-Event
+- **Playwright-Tests** (`tests/iteration-8-reactive-dashboard.spec.js`): App-Shell-Sichtbarkeit, Drag & Drop, Event-Modal, Mobile-Akkordeon (375 px), Widget-Navigation ohne Seitenneuladen
+
+### Changed
+
+- `includes/class-frontend-dashboard.php`: Script-Handle auf `tmgmt-dashboard-vue`, Bundle-Pfad auf `assets/dist/dashboard.iife.js`, Style auf `assets/dist/dashboard.css`; SweetAlert2 als WordPress-Script registriert und enqueued; Mount-Point von `#tmgmt-kanban-app` auf `#tmgmt-dashboard-app` geändert; altes Modal-HTML und Bottom-Sheet-HTML entfernt; Version via `filemtime` bei `WP_DEBUG=true`
+- `package.json`: Vite, `@vitejs/plugin-vue`, Vue 3, Pinia, fast-check, Vitest, `@vue/test-utils`, jsdom als devDependencies ergänzt; `build`-, `dev`- und `test:unit`-Scripts hinzugefügt
+- `assets/vue/vite.config.js`: `test.include` auf `assets/vue/tests/**/*.test.js` eingeschränkt (verhindert Konflikt mit Playwright-Tests)
+
+---
+
+## [Unreleased] – 2026-04-03 (Spec: Reaktives Dashboard – Tasks)
+
+### Added
+
+- Spec `reactive-dashboard`: Implementierungsplan (`tasks.md`) erstellt mit 13 Tasks von der Vite Build-Pipeline über API-Service, Pinia-Store, Widget-Registry und alle Vue-Komponenten bis zur PHP-Anpassung und Playwright-Tests; Property-Tests (fast-check) als optionale Sub-Tasks direkt neben den jeweiligen Implementierungs-Tasks
+
+---
+
+## [Unreleased] – 2026-04-03 (Specs: Reaktives Dashboard Design & Contract-Send-Dialog Updates)
+
+### Added
+
+- Spec `reactive-dashboard`: Design-Dokument erstellt mit Architektur-Diagrammen (Mermaid), Komponentenstruktur (`AppShell.vue`, `KanbanWidget.vue`, `EventModal.vue`, `MissingFieldsModal.vue`, `widgetRegistry.js`, `apiService.js`, Pinia `eventStore`), Dateistruktur unter `assets/vue/`, 17 Correctness Properties und dualer Testing-Strategie (Vitest + fast-check PBT + Playwright E2E)
+
+### Changed
+
+- Spec `contract-send-dialog` Requirements aktualisiert und mit Design-Dokument synchronisiert:
+  - Permission-Check auf `edit_tmgmt_events || edit_posts` korrigiert (konsistent mit Plugin-Standard)
+  - `render_preview()`-Methode explizit gefordert (temporäres PDF ohne WordPress-Attachment-Eintrag)
+  - `no_template`-Flag in Preview-Response ergänzt
+  - `contract-send-dialog.js` als eigenständige Datei explizit gefordert
+  - HTTP-400 bei fehlenden Pflichtfeldern im Send-Endpoint ergänzt
+  - `Communication_Manager`-Eintrag und Log-Eintrag nach erfolgreichem Versand als Requirements aufgenommen
+  - `$overrides`-Parameter für `generate_and_send()` als Round-Trip-Anforderung 7.4 ergänzt
+
+---
+
+## [Unreleased] – 2026-04-03 (Spec: Reaktives Dashboard)
+
+### Added
+
+- Spec `reactive-dashboard`: Design-Dokument erstellt
+  - Architektur: Vite IIFE-Output nach `assets/dist/`, Pinia State-Store, zentraler `apiService.js` mit automatischem Nonce-Header
+  - Neue Dateistruktur `assets/vue/` für Vue 3 Quellcode (main.js, AppShell.vue, KanbanWidget.vue, EventModal.vue, MissingFieldsModal.vue, widgetRegistry.js, apiService.js, eventStore.js)
+  - Widget-Registry mit `registerWidget(config)` API und `window.tmgmtDashboard`-Exposition
+  - 2 Mermaid-Diagramme: Komponentenarchitektur und Drag-&-Drop-Sequenzdiagramm
+  - Datenmodelle für `tmgmtData`, `WidgetConfig`, `BoardData` und `ApiError`
+  - 17 Correctness Properties (fast-check PBT) für Widget-Registry, API-Service, Kanban-State, Auto-Save, Logbuch-Sortierung und Permissions
+  - Fehlerbehandlungstabelle und Testing-Strategie (Vitest + fast-check + Playwright)
+
+---
+
+## [Unreleased] – 2026-04-03 (Spec: Reaktives Dashboard)
+
+### Added
+
+- Spec `reactive-dashboard`: Requirements-Dokument erstellt für die Migration des Frontend-Dashboards von Vanilla JS auf Vue 3 + Vite
+  - 9 EARS-konforme Requirements: Vite Build-Pipeline, WordPress Asset-Integration, Dashboard App-Shell mit Widget-Navigation, Widget-Registrierungssystem (`registerWidget` API), Vue 3-Migration von Kanban-Board und Event-Modal, zentraler API-Service, CSS-Kompatibilität (`tmgmt-*` Klassen), Entwickler-Erweiterbarkeit via `window.tmgmtDashboard`
+  - Glossar mit zentralen Konzepten: Dashboard_App, Widget, Widget_Registry, WP_Bridge, Build_Pipeline
+
+---
+
+## [Unreleased] – 2026-04-03 (Mail-Bugfixes & Vertrag-Senden-Dialog)
+
+### Added
+
+- `assets/js/contract-template-editor.js`: Gutenberg Sidebar Panel mit klickbaren Platzhalter-Buttons für Vertragsvorlagen
+- `includes/post-types/class-contract-template-post-type.php`: neuer CPT `tmgmt_contract_tpl` (Slug auf 18 Zeichen gekürzt, `show_in_rest: true`, Block-Editor selektiv aktiviert)
+- `docs/placeholders.md`: vollständige Platzhalter-Referenz mit allen verfügbaren Platzhaltern
+- Neue PHPUnit-Testklassen: `ContractActionHandlerTest`, `ContractBlockEditorFilterTest`, `ContractCptRegistrationTest`, `ContractSidebarPlaceholderTest`, `ContractSignatureOverlayTest`, `ContractTemplateMetaRoundTripTest`
+- Spec `contract-send-dialog`: Requirements- und Design-Dokument mit Sequenzdiagramm, zwei neuen REST-Endpunkten (`contract-preview`, `contract-send`) und 6 Correctness Properties
+
+### Fixed
+
+- `TMGMT_Contract_Generator::send_contract_email`: E-Mail-Body wurde aus `post_content` statt aus `_tmgmt_email_body` (Post-Meta) gelesen — PHPMailer brach mit stiller Exception ab
+- `TMGMT_SMTP_Sender::send()`: `catch`-Block gibt jetzt `error` mit konkretem Fehlertext zurück statt Exception zu verwerfen
+- `TMGMT_SMTP_Sender::test_connection()`: Fehlermeldung enthält jetzt den PHPMailer-Fehlertext
+- `TMGMT_Action_Handler`: Template-Check blockierte Versand auch wenn recipient/subject/body vollständig aus Preview-Dialog übergeben wurden
+- `TMGMT_REST_API::preview_action`: HTTP 400 bei fehlender E-Mail-Vorlage entfernt — fehlende Werte werden als leere Strings behandelt und durch Fallbacks aufgefüllt
+- `TMGMT_Customer_Access_Manager::send_email_template`: `TMGMT_Placeholder_Parser` wurde fälschlicherweise als Objekt instanziiert (Fatal Error im Admin-Backend) — umgestellt auf statischen Aufruf `TMGMT_Placeholder_Parser::parse()`
+- `TMGMT_REST_API::execute_action`: `$email_template_id` war bei vollständig vom Frontend übergebenen Feldern undefined (PHP 8 Warning korrumpierte JSON-Response); `$request` bei `email_confirmation`-Aktionen durch `$conf_result` ersetzt
+- `TMGMT_Contract_Template_Post_Type`: Post-Type-Slug von `tmgmt_contract_template` (23 Zeichen) auf `tmgmt_contract_tpl` (18 Zeichen) gekürzt — WordPress erlaubt maximal 20 Zeichen
+- `TMGMT_Placeholder_Parser`: `[confirmation_link]`-Platzhalter wurde in `get_placeholders()` registriert aber nicht ersetzt — Ersetzung in `parse()` ergänzt
+
+### Changed
+
+- `TMGMT_Contract_Generator`: `generate_and_send()` und `send_contract_email()` ermitteln Vertrags-E-Mail-Adresse jetzt über `get_contact_data_for_event()` statt direktem Meta-Key-Zugriff
+- `TMGMT_Integration_Manager`: Kontaktfelder werden über `get_contact_data_for_event()` aufgelöst statt über veralteten `_tmgmt_contact_cpt_id`-Fallback
+- `TMGMT_Settings_Menu`: Unterseite „Vertrag" und Karte „Vertragsvorlagen" ergänzt; `tmgmt_contract_tpl` in `highlight_submenu_item()` aufgenommen
+- `TMGMT_Admin_Menu`: `edit.php?post_type=tmgmt_contract_tpl` aus `desired_order`-Liste entfernt
+- `TMGMT_SMTP_Sender::send()`: unterstützt jetzt zusätzliche Parameter `cc`, `bcc`, `reply_to` und `attachments`
+
+---
+
+## [Unreleased] – 2026-04-03 (Vertrag-Senden-Dialog – Design)
+
+### Added
+
+- **Spec: Vertrag-Senden-Dialog** (`contract-send-dialog`) – Design-Dokument erstellt:
+  - Sequenzdiagramm des vollständigen Dialog-Flows: Klick → Preview-Endpunkt → Dialog öffnen → (optional) Template wechseln → Versand
+  - Zwei neue REST-Endpunkte spezifiziert: `GET /tmgmt/v1/events/{id}/contract-preview` (liefert E-Mail-Felder + PDF-URL + verfügbare Templates) und `POST /tmgmt/v1/events/{id}/contract-send` (finaler Versand mit Override-Feldern)
+  - `TMGMT_Contract_Generator`: neue Methode `render_preview()` und `$overrides`-Parameter für `generate_and_send()`
+  - Neue JS-Datei `assets/js/contract-send-dialog.js` für Dialog-Steuerung (jQuery-UI-Dialog)
+  - Dialog-HTML-Struktur: zweispaltig (E-Mail-Formular links, PDF-iframe rechts), Template-Selector-Dropdown
+  - 6 Correctness Properties definiert (Preview-Vollständigkeit, Round-Trip, Template-Sichtbarkeit, Determinismus, Status-Update, Auth-Schutz)
+  - Fehlerbehandlungstabelle für alle Fehlerfälle (404, 500, 400, 401/403)
+
+---
+
 ## [Unreleased] – 2026-04-03 (Vertrag-Senden-Dialog)
 
 ### Added

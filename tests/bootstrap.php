@@ -11,6 +11,29 @@ if (!defined('ABSPATH')) {
     define('ABSPATH', dirname(__DIR__) . '/');
 }
 
+// Canonical WP_Error stub — loaded once here so all test files share the same definition.
+if (!class_exists('WP_Error')) {
+    class WP_Error {
+        private string $code;
+        private string $message;
+        private array $data;
+        public function __construct(string $code = '', string $message = '', $data = array()) {
+            $this->code    = $code;
+            $this->message = $message;
+            $this->data    = is_array($data) ? $data : array();
+        }
+        public function get_error_code(): string    { return $this->code; }
+        public function get_error_message(): string { return $this->message; }
+        public function get_error_data($code = '')  { return $this->data; }
+    }
+}
+
+if (!function_exists('is_wp_error')) {
+    function is_wp_error($thing): bool {
+        return $thing instanceof WP_Error;
+    }
+}
+
 if (!function_exists('__')) {
     function __($text, $domain = 'default') {
         return $text;
@@ -65,6 +88,10 @@ if (!function_exists('wp_verify_nonce')) {
 
 if (!function_exists('current_user_can')) {
     function current_user_can($capability, ...$args) {
+        global $test_current_user_caps;
+        if (isset($test_current_user_caps) && is_array($test_current_user_caps)) {
+            return in_array($capability, $test_current_user_caps, true);
+        }
         return true;
     }
 }
@@ -255,7 +282,20 @@ require_once dirname(__DIR__) . '/includes/post-types/class-veranstalter-post-ty
 
 if (!function_exists('get_posts')) {
     function get_posts($args = array()) {
-        return array();
+        global $test_post_store;
+        if (!isset($test_post_store) || !is_array($test_post_store)) {
+            return array();
+        }
+        $post_type   = $args['post_type'] ?? '';
+        $post_status = $args['post_status'] ?? 'publish';
+        $results     = array();
+        foreach ($test_post_store as $post) {
+            if (isset($post->post_type) && $post->post_type === $post_type
+                && isset($post->post_status) && $post->post_status === $post_status) {
+                $results[] = $post;
+            }
+        }
+        return $results;
     }
 }
 
@@ -325,7 +365,16 @@ if (!function_exists('get_post_mime_type')) {
 if (!class_exists('TMGMT_Log_Manager')) {
     class TMGMT_Log_Manager {
         public function render_log_table($post_id) {}
-        public function log($post_id, $type, $message) {}
+        public function log($post_id, $type, $message) {
+            global $test_log_calls;
+            if (isset($test_log_calls) && is_array($test_log_calls)) {
+                $test_log_calls[] = [
+                    'post_id' => $post_id,
+                    'type'    => $type,
+                    'message' => $message,
+                ];
+            }
+        }
     }
 }
 
@@ -402,4 +451,44 @@ if (!isset($GLOBALS['wpdb'])) {
         public function get_charset_collate() { return ''; }
         public function get_var($query) { return null; }
     };
+}
+
+if (!function_exists('wp_insert_attachment')) {
+    function wp_insert_attachment($args, $file = false, $parent = 0, $wp_error = false) {
+        global $test_attachment_counter, $test_post_store;
+        if (!isset($test_attachment_counter)) {
+            $test_attachment_counter = 9000;
+        }
+        $test_attachment_counter++;
+        $attachment_id = $test_attachment_counter;
+
+        // Store the attachment in the post store so get_post() can find it.
+        if (!isset($test_post_store) || !is_array($test_post_store)) {
+            $test_post_store = array();
+        }
+        $test_post_store[$attachment_id] = (object) array(
+            'ID'             => $attachment_id,
+            'post_type'      => 'attachment',
+            'post_mime_type' => $args['post_mime_type'] ?? '',
+            'post_title'     => $args['post_title'] ?? '',
+            'post_parent'    => $args['post_parent'] ?? $parent,
+            'post_status'    => 'inherit',
+            'guid'           => $args['guid'] ?? '',
+        );
+
+        // Store the file path so get_attached_file() can retrieve it.
+        if ($file) {
+            global $test_post_meta_store;
+            $test_post_meta_store[$attachment_id]['_wp_attached_file'] = $file;
+        }
+
+        return $attachment_id;
+    }
+}
+
+if (!function_exists('get_attached_file')) {
+    function get_attached_file($attachment_id) {
+        global $test_post_meta_store;
+        return $test_post_meta_store[$attachment_id]['_wp_attached_file'] ?? '';
+    }
 }

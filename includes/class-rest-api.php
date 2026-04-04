@@ -274,6 +274,46 @@ class TMGMT_REST_API {
             'callback'            => array($this, 'imap_fetch_now'),
             'permission_callback' => array($this, 'check_admin_permission'),
         ));
+
+        // Contract Preview
+        register_rest_route(self::NAMESPACE, '/events/(?P<event_id>\d+)/contract-preview', array(
+            'methods'             => 'GET',
+            'callback'            => array($this, 'get_contract_preview'),
+            'permission_callback' => array($this, 'check_permission'),
+            'args'                => array(
+                'event_id' => array(
+                    'validate_callback' => function($param, $request, $key) {
+                        return is_numeric($param);
+                    },
+                ),
+                'action_id' => array(
+                    'required'          => true,
+                    'validate_callback' => function($param, $request, $key) {
+                        return is_numeric($param);
+                    },
+                ),
+                'template_id' => array(
+                    'required'          => false,
+                    'validate_callback' => function($param, $request, $key) {
+                        return is_numeric($param);
+                    },
+                ),
+            ),
+        ));
+
+        // Contract Send
+        register_rest_route(self::NAMESPACE, '/events/(?P<event_id>\d+)/contract-send', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'send_contract'),
+            'permission_callback' => array($this, 'check_permission'),
+            'args'                => array(
+                'event_id' => array(
+                    'validate_callback' => function($param, $request, $key) {
+                        return is_numeric($param);
+                    },
+                ),
+            ),
+        ));
     }
 
     public function check_permission($request) {
@@ -1881,5 +1921,206 @@ class TMGMT_REST_API {
         } catch (\Exception $e) {
             return new WP_Error('imap_error', 'Fehler: ' . $e->getMessage() . ' | Debug: ' . implode(' -> ', $debug), array('status' => 500));
         }
+    }
+
+    /**
+     * GET /events/{event_id}/contract-preview
+     *
+     * Returns email preview data and a temporary PDF URL for the contract send dialog.
+     *
+     * @param WP_REST_Request $request
+     * @return WP_REST_Response|WP_Error
+     */
+    public function get_contract_preview($request) {
+        $event_id  = (int) $request['event_id'];
+        $action_id = (int) $request->get_param('action_id');
+
+        // Validate event exists and is of correct type.
+        $event = get_post($event_id);
+        if (!$event || $event->post_type !== 'event') {
+            return new WP_Error('not_found', 'Event nicht gefunden.', array('status' => 404));
+        }
+
+        // Validate action exists and is of correct type.
+        $action = get_post($action_id);
+        if (!$action || $action->post_type !== 'tmgmt_action') {
+            return new WP_Error('not_found', 'Aktion nicht gefunden.', array('status' => 404));
+        }
+
+        // Determine contract template ID: query param overrides action meta.
+        $template_id = $request->get_param('template_id')
+            ? (int) $request->get_param('template_id')
+            : (int) get_post_meta($action_id, '_tmgmt_action_contract_template_id', true);
+
+        // Resolve email template fields.
+        $email_template_id = (int) get_post_meta($action_id, '_tmgmt_action_email_template_id', true);
+
+        $to      = '';
+        $cc      = '';
+        $bcc     = '';
+        $subject = '';
+        $body    = '';
+        $attachments  = array();
+        $no_template  = false;
+
+        if ($email_template_id) {
+            $email_template = get_post($email_template_id);
+            if ($email_template) {
+                $subject_raw = get_post_meta($email_template_id, '_tmgmt_email_subject', true);
+                $body_raw    = get_post_meta($email_template_id, '_tmgmt_email_body', true);
+                $cc_raw      = get_post_meta($email_template_id, '_tmgmt_email_cc', true);
+                $bcc_raw     = get_post_meta($email_template_id, '_tmgmt_email_bcc', true);
+
+                $subject = !empty($subject_raw) ? TMGMT_Placeholder_Parser::parse($subject_raw, $event_id) : '';
+                $body    = !empty($body_raw)    ? TMGMT_Placeholder_Parser::parse($body_raw, $event_id)    : '';
+                $cc      = !empty($cc_raw)      ? TMGMT_Placeholder_Parser::parse($cc_raw, $event_id)      : '';
+                $bcc     = !empty($bcc_raw)     ? TMGMT_Placeholder_Parser::parse($bcc_raw, $event_id)     : '';
+
+                // Resolve recipient from contact chain.
+                $contact_data = TMGMT_Placeholder_Parser::get_contact_data_for_event($event_id);
+                $to = $contact_data['vertrag']['email'];
+
+                // Collect template attachments.
+                $tpl_attachments = get_post_meta($email_template_id, '_tmgmt_email_attachments', true);
+                if (is_array($tpl_attachments)) {
+                    foreach ($tpl_attachments as $att_id) {
+                        $att_post = get_post($att_id);
+                        if ($att_post) {
+                            $attachments[] = array(
+                                'id'   => (int) $att_id,
+                                'name' => $att_post->post_title,
+                            );
+                        }
+                    }
+                }
+            }
+        } else {
+            $no_template = true;
+        }
+
+        // Generate PDF preview.
+        $generator  = $this->make_contract_generator();
+        $preview    = $generator->render_preview($event_id, $template_id);
+
+        if (is_wp_error($preview)) {
+            return new WP_Error('pdf_error', $preview->get_error_message(), array('status' => 500));
+        }
+
+        // Collect all published contract templates.
+        $template_posts = get_posts(array(
+            'post_type'      => 'tmgmt_contract_tpl',
+            'post_status'    => 'publish',
+            'posts_per_page' => -1,
+            'orderby'        => 'title',
+            'order'          => 'ASC',
+        ));
+
+        $templates = array();
+        foreach ($template_posts as $tpl) {
+            $templates[] = array(
+                'id'    => (int) $tpl->ID,
+                'title' => $tpl->post_title,
+            );
+        }
+
+        $response = array(
+            'to'                   => $to,
+            'cc'                   => $cc,
+            'bcc'                  => $bcc,
+            'subject'              => $subject,
+            'body'                 => $body,
+            'attachments'          => $attachments,
+            'pdf_url'              => $preview['pdf_url'],
+            'templates'            => $templates,
+            'selected_template_id' => $template_id,
+        );
+
+        if ($no_template) {
+            $response['no_template'] = true;
+        }
+
+        return rest_ensure_response($response);
+    }
+
+    /**
+     * POST /events/{event_id}/contract-send
+     *
+     * Validates the request, delegates to TMGMT_Contract_Generator::generate_and_send()
+     * with the user-supplied overrides, and returns a success or error response.
+     *
+     * @param WP_REST_Request $request
+     * @return array|WP_Error
+     */
+    public function send_contract($request) {
+        $event_id = (int) $request['event_id'];
+        $params   = $request->get_json_params();
+        if (!$params) {
+            $params = $request->get_body_params();
+        }
+
+        // Validate required fields.
+        $missing = array();
+        if (empty($params['action_id'])) {
+            $missing[] = 'action_id';
+        }
+        if (empty($params['to'])) {
+            $missing[] = 'to';
+        }
+        if (empty($params['subject'])) {
+            $missing[] = 'subject';
+        }
+        if (!empty($missing)) {
+            return new WP_Error(
+                'missing_fields',
+                'Pflichtfelder fehlen: ' . implode(', ', $missing),
+                array('status' => 400)
+            );
+        }
+
+        // Validate event exists and is of correct type.
+        $event = get_post($event_id);
+        if (!$event || $event->post_type !== 'event') {
+            return new WP_Error('not_found', 'Event nicht gefunden.', array('status' => 404));
+        }
+
+        // Validate action exists and is of correct type.
+        $action_id = (int) $params['action_id'];
+        $action    = get_post($action_id);
+        if (!$action || $action->post_type !== 'tmgmt_action') {
+            return new WP_Error('not_found', 'Aktion nicht gefunden.', array('status' => 404));
+        }
+
+        // Build overrides from request body.
+        $overrides = array();
+        $override_keys = array('to', 'cc', 'bcc', 'subject', 'body', 'template_id');
+        foreach ($override_keys as $key) {
+            if (isset($params[$key])) {
+                $overrides[$key] = $key === 'body' ? wp_kses_post($params[$key]) : sanitize_text_field($params[$key]);
+            }
+        }
+
+        // Delegate to contract generator.
+        $generator = $this->make_contract_generator();
+        $result    = $generator->generate_and_send($event_id, $action_id, $overrides);
+
+        if (is_wp_error($result)) {
+            $code = $result->get_error_code();
+            $status = ($code === 'email_send_failed') ? 500 : 500;
+            return new WP_Error($code, $result->get_error_message(), array('status' => $status));
+        }
+
+        return rest_ensure_response(array(
+            'success' => true,
+            'message' => 'Vertrag gesendet.',
+        ));
+    }
+
+    /**
+     * Factory method for TMGMT_Contract_Generator. Override in tests.
+     *
+     * @return TMGMT_Contract_Generator
+     */
+    protected function make_contract_generator() {
+        return new TMGMT_Contract_Generator();
     }
 }

@@ -13,27 +13,34 @@ class TMGMT_Frontend_Dashboard {
         // We'll just register and enqueue if we are on a singular post/page for now, or always.
         // Better: Enqueue inside the shortcode callback? No, that's too late for header, but okay for footer.
         // Let's register here and enqueue in shortcode.
-        
+
         // Leaflet
         wp_register_style('leaflet-css', 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css');
         wp_register_script('leaflet-js', 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js', array(), '1.9.4', true);
 
+        // SweetAlert2
+        wp_register_script('sweetalert2', 'https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js', array(), '11', true);
+        wp_register_style('sweetalert2-css', 'https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css');
+
+        $bundle_path = TMGMT_PLUGIN_DIR . 'assets/dist/dashboard.iife.js';
+        $bundle_version = defined('WP_DEBUG') && WP_DEBUG ? filemtime($bundle_path) : TMGMT_VERSION;
+
         wp_register_script(
-            'tmgmt-frontend-js',
-            TMGMT_PLUGIN_URL . 'assets/js/frontend-dashboard.js',
-            array('jquery', 'leaflet-js'), // jQuery is useful for AJAX but we can use fetch. Let's keep it simple.
-            TMGMT_Assets::get_version('assets/js/frontend-dashboard.js'),
+            'tmgmt-dashboard-vue',
+            TMGMT_PLUGIN_URL . 'assets/dist/dashboard.iife.js',
+            array('leaflet-js', 'sweetalert2'),
+            $bundle_version,
             true
         );
 
         wp_register_style(
-            'tmgmt-frontend-css',
-            TMGMT_PLUGIN_URL . 'assets/css/frontend-dashboard.css',
-            array('leaflet-css'),
-            TMGMT_Assets::get_version('assets/css/frontend-dashboard.css')
+            'tmgmt-dashboard-vue-css',
+            TMGMT_PLUGIN_URL . 'assets/dist/dashboard.css',
+            array('leaflet-css', 'sweetalert2-css'),
+            $bundle_version
         );
 
-        wp_localize_script('tmgmt-frontend-js', 'tmgmtData', array(
+        wp_localize_script('tmgmt-dashboard-vue', 'tmgmtData', array(
             'apiUrl' => rest_url('tmgmt/v1/'),
             'nonce'  => wp_create_nonce('wp_rest'),
             'statuses' => TMGMT_Event_Status::get_all_statuses(),
@@ -84,38 +91,15 @@ class TMGMT_Frontend_Dashboard {
 
         wp_enqueue_style('leaflet-css');
         wp_enqueue_script('leaflet-js');
-        wp_enqueue_script('tmgmt-frontend-js');
-        wp_enqueue_style('tmgmt-frontend-css');
+        wp_enqueue_script('sweetalert2');
+        wp_enqueue_style('sweetalert2-css');
+        wp_enqueue_script('tmgmt-dashboard-vue');
+        wp_enqueue_style('tmgmt-dashboard-vue-css');
 
         ob_start();
         ?>
-        <div id="tmgmt-kanban-app">
+        <div id="tmgmt-dashboard-app">
             <div class="tmgmt-loading">Lade Dashboard...</div>
-        </div>
-
-        <!-- Detail Modal Template -->
-        <div id="tmgmt-modal" class="tmgmt-modal" style="display:none;">
-            <div class="tmgmt-modal-content">
-                <!-- Content injected by JS -->
-            </div>
-        </div>
-
-        <!-- Action Bottom Sheet -->
-        <div id="tmgmt-action-sheet" class="tmgmt-bottom-sheet" style="display:none;">
-            <div class="tmgmt-sheet-overlay"></div>
-            <div class="tmgmt-sheet-content">
-                <div class="tmgmt-sheet-header">
-                    <h3 id="tmgmt-sheet-title">Aktion ausführen</h3>
-                    <span class="tmgmt-close-sheet">&times;</span>
-                </div>
-                <div id="tmgmt-sheet-body">
-                    <!-- Dynamic Content -->
-                </div>
-                <div class="tmgmt-sheet-footer">
-                    <button id="tmgmt-sheet-cancel" class="tmgmt-btn">Abbrechen</button>
-                    <button id="tmgmt-sheet-confirm" class="tmgmt-btn tmgmt-btn-primary">Ausführen</button>
-                </div>
-            </div>
         </div>
         <?php
         return ob_get_clean();

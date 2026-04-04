@@ -64,7 +64,7 @@ if (!class_exists('TMGMT_Customer_Access_Manager')) {
 // Stub TMGMT_Communication_Manager if not already defined
 if (!class_exists('TMGMT_Communication_Manager')) {
     class TMGMT_Communication_Manager {
-        public function add_entry(int $event_id, string $type, string $message): void {}
+        public function add_entry($event_id, $type, $recipient = '', $subject = '', $content = '', $user_id = 0) { return 1; }
     }
 }
 
@@ -72,6 +72,22 @@ if (!class_exists('TMGMT_Communication_Manager')) {
 require_once dirname(__DIR__, 2) . '/includes/class-placeholder-parser.php';
 require_once dirname(__DIR__, 2) . '/includes/class-pdf-generator.php';
 require_once dirname(__DIR__, 2) . '/includes/class-contract-generator.php';
+
+// Testable subclass with spy SMTP sender to avoid PHPMailer dependency
+if (!class_exists('PdfValidity_SMTP_Spy')) {
+    class PdfValidity_SMTP_Spy {
+        public function send(array $params): array {
+            return ['success' => true, 'raw_email' => '', 'message_id' => ''];
+        }
+    }
+}
+if (!class_exists('PdfValidity_ContractGenerator')) {
+    class PdfValidity_ContractGenerator extends TMGMT_Contract_Generator {
+        protected function make_smtp_sender() { return new PdfValidity_SMTP_Spy(); }
+        protected function make_communication_manager() { return new TMGMT_Communication_Manager(); }
+        protected function make_log_manager() { return new TMGMT_Log_Manager(); }
+    }
+}
 
 /**
  * Property-Based Test: PDF-Datei ist gültig nach Generierung
@@ -100,7 +116,7 @@ class ContractPdfValidityTest extends \PHPUnit\Framework\TestCase
         update_option('date_format', 'Y-m-d');
         update_option('time_format', 'H:i');
 
-        $this->sut = new TMGMT_Contract_Generator();
+        $this->sut = new PdfValidity_ContractGenerator();
     }
 
     protected function tearDown(): void
@@ -228,7 +244,7 @@ class ContractPdfValidityTest extends \PHPUnit\Framework\TestCase
                 update_post_meta($actionId, '_tmgmt_action_contract_template_id', (string) $templateId);
 
                 // Execute the main method under test
-                $result = $this->sut->generate_and_send($eventId, $actionId);
+                $result = $this->sut->generate_and_send($eventId, $actionId, ['to' => $email]);
 
                 // 1. Must not return a WP_Error
                 $this->assertFalse(

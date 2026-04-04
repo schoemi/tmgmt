@@ -3,9 +3,29 @@
   "version": "1.0.0",
   "description": "End-to-end tests for TMGMT plugin",
   "scripts": {
-    "test": "playwright test"
+    "test": "playwright test",
+    "build": "vite build --config assets/vue/vite.config.js",
+    "dev": "vite --config assets/vue/vite.config.js",
+    "test:unit": "vitest run --config assets/vue/vite.config.js",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
   },
   "devDependencies": {
-    "@playwright/test": "^1.40.0"
+    "@playwright/test": "^1.40.0",
+    "@primeuix/themes": "^2.0.3",
+    "@storybook/addon-essentials": "^8.6.14",
+    "@storybook/blocks": "^8.6.14",
+    "@storybook/vue3-vite": "^8.6.18",
+    "@vitejs/plugin-vue": "^5.0.0",
+    "@vitest/ui": "^1.0.0",
+    "@vue/test-utils": "^2.4.0",
+    "fast-check": "^3.15.0",
+    "jsdom": "^24.0.0",
+    "pinia": "^2.1.0",
+    "primevue": "^4.5.4",
+    "storybook": "^8.6.18",
+    "vite": "^5.0.0",
+    "vitest": "^1.0.0",
+    "vue": "^3.4.0"
   }
 }

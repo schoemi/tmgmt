@@ -105,7 +105,7 @@ class TMGMT_Contract_Generator_Spy extends TMGMT_Contract_Generator {
     /** @var true|WP_Error */
     public static mixed $returnValue  = true;
 
-    public function generate_and_send(int $event_id, int $action_id): bool|WP_Error {
+    public function generate_and_send(int $event_id, int $action_id, array $overrides = []): bool|WP_Error {
         self::$called       = true;
         self::$lastEventId  = $event_id;
         self::$lastActionId = $action_id;

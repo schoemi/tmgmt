@@ -17,6 +17,19 @@ class TMGMT_Action_Handler {
             if ($post_type === 'event') {
                 // Enqueue editor scripts so we can use wp.editor in JS
                 wp_enqueue_editor();
+
+                // Contract send dialog
+                wp_enqueue_script(
+                    'tmgmt-contract-send-dialog',
+                    plugins_url('assets/js/contract-send-dialog.js', dirname(__FILE__)),
+                    array('jquery', 'jquery-ui-dialog'),
+                    '1.0.0',
+                    true
+                );
+                wp_localize_script('tmgmt-contract-send-dialog', 'tmgmtContractDialog', array(
+                    'restUrl' => rest_url('tmgmt/v1'),
+                    'nonce'   => wp_create_nonce('wp_rest'),
+                ));
             }
         }
     }
@@ -160,12 +173,17 @@ class TMGMT_Action_Handler {
 
         <script>
         jQuery(document).ready(function($) {
-            $('.tmgmt-trigger-action').on('click', function() {
+            $('.tmgmt-trigger-action').on('click', function(e) {
                 var btn = $(this);
                 var actionId = btn.data('id');
                 var type = btn.data('type');
                 var label = btn.data('label');
                 var eventId = <?php echo $post->ID; ?>;
+
+                // contract_generation is handled by contract-send-dialog.js
+                if (type === 'contract_generation') {
+                    return;
+                }
 
                 if (type === 'note') {
                     // Open Dialog
@@ -387,6 +405,55 @@ class TMGMT_Action_Handler {
             });
         });
         </script>
+
+        <div id="tmgmt-contract-send-dialog" style="display:none;" data-event-id="<?php echo esc_attr($post->ID); ?>">
+            <div class="tmgmt-contract-dialog-wrap" style="display:flex; gap:20px; min-height:500px;">
+                <!-- Left column: Email fields -->
+                <div class="tmgmt-contract-dialog-left" style="flex:1; min-width:0;">
+                    <div class="tmgmt-contract-template-row" id="tmgmt-contract-template-row" style="display:none; margin-bottom:12px;">
+                        <label for="tmgmt-contract-template-selector" style="display:block; font-weight:600; margin-bottom:4px;">Vorlage:</label>
+                        <select id="tmgmt-contract-template-selector" class="widefat"></select>
+                    </div>
+                    <p style="margin-top:0;">
+                        <label for="tmgmt-contract-to" style="display:block; font-weight:600; margin-bottom:4px;">Empfänger:</label>
+                        <input type="text" id="tmgmt-contract-to" class="widefat">
+                    </p>
+                    <p>
+                        <label for="tmgmt-contract-cc" style="display:block; font-weight:600; margin-bottom:4px;">CC:</label>
+                        <input type="text" id="tmgmt-contract-cc" class="widefat">
+                    </p>
+                    <p>
+                        <label for="tmgmt-contract-bcc" style="display:block; font-weight:600; margin-bottom:4px;">BCC:</label>
+                        <input type="text" id="tmgmt-contract-bcc" class="widefat">
+                    </p>
+                    <p>
+                        <label for="tmgmt-contract-subject" style="display:block; font-weight:600; margin-bottom:4px;">Betreff:</label>
+                        <input type="text" id="tmgmt-contract-subject" class="widefat">
+                    </p>
+                    <p>
+                        <label for="tmgmt-contract-body" style="display:block; font-weight:600; margin-bottom:4px;">Nachricht:</label>
+                        <textarea id="tmgmt-contract-body" rows="10" class="widefat"></textarea>
+                    </p>
+                    <div id="tmgmt-contract-attachments">
+                        <label style="display:block; font-weight:600; margin-bottom:4px;">Anhänge:</label>
+                        <ul id="tmgmt-contract-attachments-list" style="margin:0; padding:0 0 0 18px; list-style:disc;"></ul>
+                    </div>
+                </div>
+
+                <!-- Right column: PDF preview -->
+                <div class="tmgmt-contract-dialog-right" style="flex:1; min-width:0; position:relative; border:1px solid #ddd; background:#f9f9f9;">
+                    <div id="tmgmt-contract-loading" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.8); z-index:10;">
+                        <span class="spinner is-active" style="float:none; margin:0;"></span>
+                    </div>
+                    <iframe id="tmgmt-contract-pdf-preview" style="width:100%; height:100%; min-height:500px; border:none;"></iframe>
+                </div>
+            </div>
+
+            <div class="tmgmt-contract-dialog-buttons" style="margin-top:16px; text-align:right;">
+                <button type="button" id="tmgmt-contract-send-btn" class="button button-primary">Vertrag senden</button>
+                <button type="button" id="tmgmt-contract-cancel-btn" class="button button-secondary" style="margin-left:8px;">Abbrechen</button>
+            </div>
+        </div>
         <?php
     }
 

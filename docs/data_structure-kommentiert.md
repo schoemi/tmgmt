@@ -40,6 +40,7 @@
 |------|----------|-----|--------------|
 | Vertrag PDF Pfad | `_tmgmt_contract_pdf_path` | `string` | Absoluter Dateipfad des generierten Vertrags-PDFs |
 | Vertrag PDF URL | `_tmgmt_contract_pdf_url` | `string` | Öffentliche URL des generierten Vertrags-PDFs |
+| Vertrag Attachment | `_tmgmt_contract_attachment_id` | `int` | WP Attachment-ID des versendeten Vertrags-PDFs (automatisch bei Versand erstellt, `post_parent = event_id`) |
 | Unterschriebener Vertrag | `_tmgmt_signed_contract_attachment_id` | `int` | WP Attachment-ID des vom Kunden hochgeladenen, unterschriebenen Vertrags |
 
 ---
